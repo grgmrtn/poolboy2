@@ -90,10 +90,26 @@
     padding: 0 0.3rem;
   }
   .pick-btn:last-child { border-right: none; }
-  .pick-btn:hover   { background: var(--surface2); color: var(--text); }
-  .pick-btn.active-H { background: var(--home-bg, rgba(87,179,255,0.14));  color: var(--home-color, var(--blue)); }
-  .pick-btn.active-D { background: rgba(200,255,87,0.10); color: var(--accent); }
-  .pick-btn.active-A { background: var(--away-bg, rgba(255,87,87,0.14));   color: var(--away-color, var(--red)); }
+  .pick-btn:hover { background: var(--surface2); color: var(--text); }
+
+  /* Team-name pick buttons */
+  .pick-home, .pick-away {
+    flex: 1; display: flex; align-items: center; gap: 0.35rem;
+    padding: 0 0.7rem; min-width: 0; overflow: hidden;
+    text-align: left;
+  }
+  .pick-home { border-right: 1px solid var(--border); }
+  .pick-away { border-left: 1px solid var(--border); flex-direction: row-reverse; border-right: none; }
+  .pick-draw { width: 54px; flex-shrink: 0; font-size: 0.6rem; letter-spacing: 0.04em; border-right: none; }
+  .pick-team-name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; font-size: 0.7rem; font-weight: 600;
+  }
+  .pick-away .pick-team-name { text-align: right; }
+
+  .pick-home.active { background: var(--home-bg, rgba(87,179,255,0.14)); color: var(--home-color, var(--blue)); }
+  .pick-draw.active { background: rgba(200,255,87,0.10); color: var(--accent); }
+  .pick-away.active { background: var(--away-bg, rgba(255,87,87,0.14));  color: var(--away-color, var(--red)); }
   .pick-btn.saving   { opacity: 0.4; pointer-events: none; }
 
   .pill-score {
@@ -220,34 +236,44 @@
                 <div class="{{ pill_cls }}"
                      data-home-flag="{{ f.home_flag_code or 'un' }}"
                      data-away-flag="{{ f.away_flag_code or 'un' }}">
-                  <div class="pill-team home">
-                    <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
-                         alt="" onerror="this.style.display='none'" loading="lazy">
-                    <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
-                  </div>
 
-                  <div class="pill-centre">
-                    {% if is_completed %}
-                      <div class="pill-score">{{ f.home_score }}–{{ f.away_score }}</div>
-                    {% elif is_started %}
-                      <div class="pill-pending">Live</div>
-                    {% else %}
-                      <div class="pick-btn-group">
-                        <button class="pick-btn{% if my_pick == 'H' %} active-H{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">H</button>
-                        <button class="pick-btn{% if my_pick == 'D' %} active-D{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">D</button>
-                        <button class="pick-btn{% if my_pick == 'A' %} active-A{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">A</button>
-                      </div>
-                    {% endif %}
-                  </div>
+                  {% if is_completed or is_started %}
+                    {# Display-only: flag + abbr | score/live | abbr + flag #}
+                    <div class="pill-team home">
+                      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
+                           alt="" onerror="this.style.display='none'" loading="lazy">
+                      <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                    </div>
+                    <div class="pill-centre">
+                      {% if is_completed %}
+                        <div class="pill-score">{{ f.home_score }}–{{ f.away_score }}</div>
+                      {% else %}
+                        <div class="pill-pending">Live</div>
+                      {% endif %}
+                    </div>
+                    <div class="pill-team away">
+                      <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
+                           alt="" onerror="this.style.display='none'" loading="lazy">
+                    </div>
+                  {% else %}
+                    {# Clickable: full team name buttons #}
+                    <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
+                            onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
+                      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
+                           alt="" onerror="this.style.display='none'" loading="lazy">
+                      <span class="pick-team-name">{{ f.home_team or '?' }}</span>
+                    </button>
+                    <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
+                            onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
+                    <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
+                            onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
+                      <span class="pick-team-name">{{ f.away_team or '?' }}</span>
+                      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
+                           alt="" onerror="this.style.display='none'" loading="lazy">
+                    </button>
+                  {% endif %}
 
-                  <div class="pill-team away">
-                    <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
-                    <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
-                         alt="" onerror="this.style.display='none'" loading="lazy">
-                  </div>
                 </div><!-- /.match-pill -->
 
                 <!-- Current user pill (always shown, always first) -->
@@ -436,7 +462,7 @@
    */
   async function savePick(poolId, fixtureId, prediction, btn) {
     const row     = document.getElementById('fixture-' + fixtureId);
-    const buttons = row.querySelectorAll('.pick-btn');
+    const buttons = row.querySelectorAll('.pick-home, .pick-draw, .pick-away');
     buttons.forEach(b => b.classList.add('saving'));
 
     try {
@@ -449,8 +475,8 @@
 
       if (data.ok) {
         // Update pick buttons
-        buttons.forEach(b => b.classList.remove('active-H','active-A','active-D'));
-        btn.classList.add('active-' + prediction);
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
 
         // Update my player pill colour + choice text
         const pill   = document.getElementById('mypill-' + fixtureId);

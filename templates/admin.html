@@ -5,52 +5,59 @@
 <style>
   .admin-section { margin-bottom: 3rem; }
   .admin-section h2 {
-    font-size: 0.65rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1.25rem;
+    font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-dim); padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border); margin-bottom: 1.25rem;
   }
 
-  /* Scoring config: three numeric inputs side by side */
   .scoring-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
   .scoring-input { text-align: center; font-size: 1.2rem; font-weight: 700; color: var(--accent); }
 
-  /* Fixtures table */
   .fixture-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .fixture-table th {
-    text-align: left;
-    font-size: 0.62rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    padding: 0 0.75rem 0.5rem;
-    border-bottom: 1px solid var(--border);
+    text-align: left; font-size: 0.62rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-dim);
+    padding: 0 0.75rem 0.5rem; border-bottom: 1px solid var(--border);
   }
   .fixture-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .fixture-table tr:last-child td { border-bottom: none; }
   .fixture-table tr:hover td { background: var(--surface2); }
 
   .result-badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
   }
   .result-H { background: rgba(87,179,255,0.15); color: var(--blue); }
-  .result-A { background: rgba(255,87,87,0.15);  color: var(--red);  }
+  .result-A { background: rgba(255,87,87,0.15);  color: var(--red); }
   .result-D { background: rgba(200,255,87,0.15); color: var(--accent); }
 
   .score-inputs { display: flex; align-items: center; gap: 0.35rem; }
   .score-inputs input { width: 3rem; text-align: center; padding: 0.3rem; }
 
-  /* Pool creation */
   .create-pool-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
   @media (max-width:700px) { .create-pool-form { grid-template-columns: 1fr; } }
+
+  .pool-scoring-card { margin-bottom: 1rem; }
+  .round-label {
+    font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 0.6rem;
+  }
+  .round-row { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .round-row .scoring-grid { flex: 1; min-width: 200px; margin-bottom: 0; }
+
+  .users-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .users-table th {
+    text-align: left; font-size: 0.62rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-dim);
+    padding: 0 0.75rem 0.5rem; border-bottom: 1px solid var(--border);
+  }
+  .users-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .users-table tr:last-child td { border-bottom: none; }
+  .admin-badge {
+    display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+    background: rgba(200,255,87,0.12); color: var(--accent); border: 1px solid rgba(200,255,87,0.25);
+  }
 </style>
 {% endblock %}
 
@@ -58,56 +65,124 @@
 <div class="page">
   <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:0.3rem">Admin</h1>
   <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:2.5rem">
-    Configure scoring, enter results, and manage pools.
+    Scoring, results, pools, and users.
   </p>
 
-  <!-- ── Scoring config ─────────────────────────────────────────────── -->
+  <!-- ── Global scoring ─────────────────────────────────────────────── -->
   <div class="admin-section">
-    <h2>Scoring configuration</h2>
+    <h2>Global scoring defaults</h2>
     <div class="card" style="max-width:480px">
       <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1.25rem">
-        Points awarded when a user's prediction is correct.
-        Changes apply to new score calculations only — past scores are preserved.
+        Applied to any pool or round without a specific override.
       </p>
       <form method="POST" action="{{ url_for('save_scoring') }}">
         <div class="scoring-grid">
           <div class="form-group" style="margin:0">
-            <label class="form-label" for="pw">Win</label>
-            <input class="form-input scoring-input" type="number" id="pw" name="points_win"
+            <label class="form-label">Win</label>
+            <input class="form-input scoring-input" type="number" name="points_win"
               value="{{ config.points_win }}" min="0" max="99" required>
           </div>
           <div class="form-group" style="margin:0">
-            <label class="form-label" for="pd">Draw</label>
-            <input class="form-input scoring-input" type="number" id="pd" name="points_draw"
+            <label class="form-label">Draw</label>
+            <input class="form-input scoring-input" type="number" name="points_draw"
               value="{{ config.points_draw }}" min="0" max="99" required>
           </div>
           <div class="form-group" style="margin:0">
-            <label class="form-label" for="pl">Loss</label>
-            <input class="form-input scoring-input" type="number" id="pl" name="points_loss"
+            <label class="form-label">Loss</label>
+            <input class="form-input scoring-input" type="number" name="points_loss"
               value="{{ config.points_loss }}" min="0" max="99" required>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">Save scoring config</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save global defaults</button>
       </form>
     </div>
   </div>
 
+  <!-- ── Per-pool scoring ───────────────────────────────────────────── -->
+  {% if all_pools %}
+  <div class="admin-section">
+    <h2>Per-pool scoring</h2>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1.25rem">
+      Override points for group stage and knockout rounds per pool.
+      Leave unchanged to inherit the global defaults above.
+    </p>
+
+    {% for pool in all_pools %}
+    {% set gs = pool_scoring[pool.id].group_stage %}
+    {% set ko = pool_scoring[pool.id].knockout %}
+    <div class="card pool-scoring-card">
+      <div style="font-weight:700;font-size:0.88rem;margin-bottom:1.25rem">{{ pool.name }}</div>
+
+      <!-- Group Stage -->
+      <div class="round-label">Group Stage (Groups A – L)</div>
+      <form method="POST" action="{{ url_for('save_scoring') }}" class="round-row">
+        <input type="hidden" name="pool_id" value="{{ pool.id }}">
+        <input type="hidden" name="round_type" value="group_stage">
+        <div class="scoring-grid" style="flex:1">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Win</label>
+            <input class="form-input scoring-input" type="number" name="points_win"
+              value="{{ gs.points_win }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Draw</label>
+            <input class="form-input scoring-input" type="number" name="points_draw"
+              value="{{ gs.points_draw }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Loss</label>
+            <input class="form-input scoring-input" type="number" name="points_loss"
+              value="{{ gs.points_loss }}" min="0" max="99" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-ghost btn-sm" style="white-space:nowrap">Save group stage</button>
+      </form>
+
+      <!-- Knockout -->
+      <div class="round-label" style="margin-top:0.5rem">Knockout Rounds (R32 → Final)</div>
+      <form method="POST" action="{{ url_for('save_scoring') }}" class="round-row">
+        <input type="hidden" name="pool_id" value="{{ pool.id }}">
+        <input type="hidden" name="round_type" value="knockout">
+        <div class="scoring-grid" style="flex:1">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Win</label>
+            <input class="form-input scoring-input" type="number" name="points_win"
+              value="{{ ko.points_win }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Draw</label>
+            <input class="form-input scoring-input" type="number" name="points_draw"
+              value="{{ ko.points_draw }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Loss</label>
+            <input class="form-input scoring-input" type="number" name="points_loss"
+              value="{{ ko.points_loss }}" min="0" max="99" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-ghost btn-sm" style="white-space:nowrap">Save knockout</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- ── Fixtures & results ─────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>Fixtures — enter results</h2>
-    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem">
-      After a match ends, enter the final score below. The backend will
-      score all picks for that fixture automatically.
-    </p>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+      <p style="font-size:0.78rem;color:var(--text-muted);margin:0">
+        After a match ends, enter the final score. Picks are scored automatically.
+      </p>
+      <form method="POST" action="{{ url_for('admin_sync_fixtures') }}" style="flex-shrink:0">
+        <button type="submit" class="btn btn-ghost btn-sm">↻ Force fixture sync</button>
+      </form>
+    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table class="fixture-table">
         <thead>
           <tr>
-            <th>Stage</th>
-            <th>Match</th>
-            <th>Kick-off</th>
-            <th>Result</th>
-            <th>Enter score</th>
+            <th>Stage</th><th>Match</th><th>Kick-off</th><th>Result</th><th>Enter score</th>
           </tr>
         </thead>
         <tbody>
@@ -163,7 +238,6 @@
   <!-- ── Pool management ────────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>Pools</h2>
-
     {% if all_pools %}
     <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem">
       {% for pool in all_pools %}
@@ -180,7 +254,6 @@
     </div>
     {% endif %}
 
-    <!-- Create a new pool -->
     <div class="card" style="max-width:600px">
       <div class="section-label" style="margin-bottom:1rem">Create new pool</div>
       <form method="POST" action="{{ url_for('create_pool') }}">
@@ -204,6 +277,44 @@
         </div>
         <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.5rem">Create pool</button>
       </form>
+    </div>
+  </div>
+
+  <!-- ── Users ──────────────────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>Users</h2>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="users-table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u.display_name }}</td>
+            <td style="color:var(--text-muted)">{{ u.email }}</td>
+            <td>
+              {% if u.is_admin %}
+                <span class="admin-badge">admin</span>
+              {% else %}
+                <span style="color:var(--text-dim);font-size:0.72rem">user</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.id != current_user.id %}
+              <form method="POST" action="{{ url_for('toggle_admin', user_id=u.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-ghost btn-sm">
+                  {% if u.is_admin %}Remove admin{% else %}Make admin{% endif %}
+                </button>
+              </form>
+              {% else %}
+                <span style="color:var(--text-dim);font-size:0.72rem">(you)</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 

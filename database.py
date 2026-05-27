@@ -167,6 +167,20 @@ def init_db():
         )
     """)
 
+    # Migrations: add columns to existing tables that pre-date this schema version.
+    if _USE_POSTGRES:
+        for sql in [
+            "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS pool_id TEXT",
+            "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS round_type TEXT",
+        ]:
+            c.execute(sql)
+    else:
+        for col_def in ["pool_id TEXT", "round_type TEXT"]:
+            try:
+                c.execute(f"ALTER TABLE scoring_config ADD COLUMN {col_def}")
+            except Exception:
+                pass
+
     conn.commit()
     conn.close()
     print(f"[db] Database ready at {DB_PATH}")
@@ -429,31 +443,75 @@ def get_picks_for_user_in_pool(user_id, pool_id):
 
 # ── Scoring config helpers ─────────────────────────────────────────────────
 
-def get_active_scoring_config():
+_KNOCKOUT_STAGES = frozenset({
+    'Round of 32', 'Round of 16', 'Quarter-Finals',
+    'Semi-Finals', 'Third Place', 'Final',
+})
+
+def _round_type_for_stage(stage):
+    return 'knockout' if (stage or '') in _KNOCKOUT_STAGES else 'group_stage'
+
+
+def get_scoring_config(pool_id=None, stage=None):
     """
-    Return the most recently saved scoring config row.
-    Falls back to defaults (3/1/0) if no config has been saved yet.
+    Return the scoring config for a pool/stage combination.
+    Falls back: pool+round_type → pool (any round) → global → hardcoded defaults.
     """
+    round_type = _round_type_for_stage(stage)
     conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM scoring_config ORDER BY updated_at DESC LIMIT 1"
-    ).fetchone()
+
+    if pool_id:
+        row = conn.execute("""
+            SELECT * FROM scoring_config WHERE pool_id=? AND round_type=?
+            ORDER BY updated_at DESC LIMIT 1
+        """, (pool_id, round_type)).fetchone()
+        if row:
+            conn.close(); return dict(row)
+
+        row = conn.execute("""
+            SELECT * FROM scoring_config WHERE pool_id=? AND round_type IS NULL
+            ORDER BY updated_at DESC LIMIT 1
+        """, (pool_id,)).fetchone()
+        if row:
+            conn.close(); return dict(row)
+
+    row = conn.execute("""
+        SELECT * FROM scoring_config WHERE pool_id IS NULL AND round_type IS NULL
+        ORDER BY updated_at DESC LIMIT 1
+    """).fetchone()
     conn.close()
     if row:
         return dict(row)
     return {"points_win": 3, "points_draw": 1, "points_loss": 0}
 
 
-def save_scoring_config(config_id, points_win, points_draw, points_loss, updated_by):
-    """
-    Insert a new scoring config row (history is preserved, not overwritten).
-    The latest row by updated_at is always used for scoring.
-    """
+def get_active_scoring_config():
+    return get_scoring_config()
+
+
+def save_scoring_config(config_id, points_win, points_draw, points_loss, updated_by,
+                        pool_id=None, round_type=None):
     conn = get_db()
     conn.execute("""
-        INSERT INTO scoring_config (id, points_win, points_draw, points_loss, updated_by)
-        VALUES (?,?,?,?,?)
-    """, (config_id, points_win, points_draw, points_loss, updated_by))
+        INSERT INTO scoring_config (id, pool_id, round_type, points_win, points_draw, points_loss, updated_by)
+        VALUES (?,?,?,?,?,?,?)
+    """, (config_id, pool_id, round_type, points_win, points_draw, points_loss, updated_by))
+    conn.commit()
+    conn.close()
+
+
+# ── User helpers (extended) ────────────────────────────────────────────────
+
+def get_all_users():
+    conn = get_db()
+    users = conn.execute("SELECT * FROM users ORDER BY display_name").fetchall()
+    conn.close()
+    return [dict(u) for u in users]
+
+
+def set_user_admin(user_id, is_admin):
+    conn = get_db()
+    conn.execute("UPDATE users SET is_admin=? WHERE id=?", (is_admin, user_id))
     conn.commit()
     conn.close()
 
@@ -463,13 +521,7 @@ def save_scoring_config(config_id, points_win, points_draw, points_loss, updated
 def calculate_scores_for_fixture(fixture_id):
     """
     Score all picks for a completed fixture.
-
-    Steps:
-    1. Load the fixture's actual result ("H", "A", or "D").
-    2. Load the current scoring config (win/draw/loss point values).
-    3. For every pick on this fixture, compare the prediction to the result.
-    4. Write one row to score_log per pick (skipping any already scored).
-
+    Uses per-pool, per-round scoring config with fallback to global defaults.
     Idempotent — running it twice won't double-score anyone.
     Returns: number of picks that were newly scored.
     """
@@ -477,14 +529,14 @@ def calculate_scores_for_fixture(fixture_id):
     conn = get_db()
 
     fixture = conn.execute(
-        "SELECT result FROM fixtures WHERE id=?", (fixture_id,)
+        "SELECT result, stage FROM fixtures WHERE id=?", (fixture_id,)
     ).fetchone()
     if not fixture or not fixture["result"]:
         conn.close()
         return 0
 
     actual = fixture["result"]
-    config = get_active_scoring_config()
+    stage  = fixture["stage"] or ''
 
     picks_for_fixture = conn.execute(
         "SELECT * FROM picks WHERE fixture_id=?", (fixture_id,)
@@ -492,8 +544,7 @@ def calculate_scores_for_fixture(fixture_id):
 
     scored = 0
     for pick in picks_for_fixture:
-        # Correct prediction earns win points; everything else earns loss points.
-        # (A draw is only "correct" if you predicted a draw.)
+        config = get_scoring_config(pick["pool_id"], stage)
         points = config["points_win"] if pick["predicted_result"] == actual else config["points_loss"]
 
         try:

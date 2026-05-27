@@ -305,40 +305,77 @@ def submit_pick(pool_id):
 @app.route("/admin")
 @admin_required
 def admin_page():
-    """
-    Admin dashboard.
-    
-    Shows:
-    - Scoring config form (win/draw/loss points)
-    - All fixtures with a form to enter results
-    - All pools (with member counts)
-    """
-    config     = db.get_active_scoring_config()
-    fixtures   = db.get_fixtures()
-    all_pools  = db.get_all_public_pools()
+    config    = db.get_active_scoring_config()
+    fixtures  = db.get_fixtures()
+    all_pools = db.get_all_public_pools()
+    users     = db.get_all_users()
+
+    # Per-pool scoring: {pool_id: {"group_stage": cfg, "knockout": cfg}}
+    pool_scoring = {}
+    for pool in all_pools:
+        pool_scoring[pool["id"]] = {
+            "group_stage": db.get_scoring_config(pool["id"], "Group A"),
+            "knockout":    db.get_scoring_config(pool["id"], "Round of 16"),
+        }
 
     return render_template("admin.html",
         config=config,
         fixtures=fixtures,
         all_pools=all_pools,
+        users=users,
+        pool_scoring=pool_scoring,
     )
 
 
 @app.route("/admin/scoring", methods=["POST"])
 @admin_required
 def save_scoring():
-    """Save new scoring config values."""
-    user = current_user()
+    user      = current_user()
+    pool_id   = request.form.get("pool_id") or None
+    round_type = request.form.get("round_type") or None
     try:
-        win   = int(request.form["points_win"])
-        draw  = int(request.form["points_draw"])
-        loss  = int(request.form["points_loss"])
+        win  = int(request.form["points_win"])
+        draw = int(request.form["points_draw"])
+        loss = int(request.form["points_loss"])
     except (KeyError, ValueError):
         flash("Please enter valid integer point values.", "error")
         return redirect(url_for("admin_page"))
 
-    db.save_scoring_config(str(uuid.uuid4()), win, draw, loss, user["id"])
-    flash(f"Scoring updated: Win={win}, Draw={draw}, Loss={loss}", "success")
+    db.save_scoring_config(str(uuid.uuid4()), win, draw, loss, user["id"],
+                           pool_id=pool_id, round_type=round_type)
+    if pool_id:
+        pool  = db.get_pool_by_id(pool_id)
+        label = f"{pool['name']} — {'Group Stage' if round_type == 'group_stage' else 'Knockout'}"
+    else:
+        label = "Global default"
+    flash(f"Scoring updated ({label}): Win={win}, Draw={draw}, Loss={loss}", "success")
+    return redirect(url_for("admin_page"))
+
+
+@app.route("/admin/user/<user_id>/toggle-admin", methods=["POST"])
+@admin_required
+def toggle_admin(user_id):
+    me = current_user()
+    if user_id == me["id"]:
+        flash("You can't change your own admin status.", "error")
+        return redirect(url_for("admin_page"))
+    target = db.get_user_by_id(user_id)
+    if not target:
+        flash("User not found.", "error")
+        return redirect(url_for("admin_page"))
+    new_status = 0 if target["is_admin"] else 1
+    db.set_user_admin(user_id, new_status)
+    verb = "promoted to" if new_status else "removed from"
+    flash(f"{target['display_name']} {verb} admin.", "success")
+    return redirect(url_for("admin_page"))
+
+
+@app.route("/admin/sync-fixtures", methods=["POST"])
+@admin_required
+def admin_sync_fixtures():
+    db.set_meta("fixtures_last_fetched", "0")
+    fx.sync_fixtures()
+    flash("Fixtures re-synced.", "success")
     return redirect(url_for("admin_page"))
 
 
