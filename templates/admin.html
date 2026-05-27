@@ -192,6 +192,9 @@
       <form method="POST" action="{{ url_for('admin_sync_fixtures') }}" style="flex-shrink:0">
         <button type="submit" class="btn btn-ghost btn-sm">↻ Force fixture sync</button>
       </form>
+      <form method="POST" action="{{ url_for('admin_seed_euro2024') }}" style="flex-shrink:0">
+        <button type="submit" class="btn btn-ghost btn-sm">⚽ Seed Euro 2024 sim</button>
+      </form>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table class="fixture-table">

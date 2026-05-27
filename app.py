@@ -393,6 +393,24 @@ def admin_sync_fixtures():
     return redirect(url_for("admin_page"))
 
 
+@app.route("/admin/seed-euro2024", methods=["POST"])
+@admin_required
+def admin_seed_euro2024():
+    import seed_euro2024 as s
+    import io, sys
+    buf = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        s.main()
+    finally:
+        sys.stdout = old_stdout
+    output = buf.getvalue()
+    last_line = [l for l in output.strip().splitlines() if l][-1] if output.strip() else "Done."
+    flash(f"Euro 2024 sim seeded. {last_line}", "success")
+    return redirect(url_for("admin_page"))
+
+
 @app.route("/admin/fixture/<fixture_id>/result", methods=["POST"])
 @admin_required
 def set_fixture_result(fixture_id):
