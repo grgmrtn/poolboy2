@@ -28,19 +28,31 @@ _cache = {
 # Maps team names (as they appear in the API) to 2-letter ISO country codes.
 # flagcdn.com uses these codes to serve flag SVGs, e.g. flagcdn.com/br.svg
 FLAG_CODES = {
-    "Brazil": "br", "Germany": "de", "France": "fr", "Argentina": "ar",
-    "Spain": "es", "England": "gb-eng", "Portugal": "pt", "Netherlands": "nl",
-    "Belgium": "be", "Uruguay": "uy", "Croatia": "hr", "Morocco": "ma",
-    "Japan": "jp", "Senegal": "sn", "United States": "us", "Mexico": "mx",
-    "Switzerland": "ch", "Australia": "au", "South Korea": "kr", "Ghana": "gh",
-    "Denmark": "dk", "Poland": "pl", "Ecuador": "ec", "Qatar": "qa",
-    "Canada": "ca", "Cameroon": "cm", "Serbia": "rs", "Wales": "gb-wls",
-    "Costa Rica": "cr", "Tunisia": "tn", "Saudi Arabia": "sa", "Iran": "ir",
-    "Italy": "it", "Colombia": "co", "Chile": "cl", "Nigeria": "ng",
-    "Egypt": "eg", "Ivory Coast": "ci", "Turkey": "tr", "Ukraine": "ua",
-    "Austria": "at", "Sweden": "se", "Czech Republic": "cz", "Hungary": "hu",
-    "Slovakia": "sk", "Slovenia": "si", "Scotland": "gb-sct", "Albania": "al",
-    "Romania": "ro", "Georgia": "ge",
+    "Argentina": "ar", "Australia": "au", "Austria": "at", "Albania": "al",
+    "Belgium": "be", "Bolivia": "bo", "Brazil": "br",
+    "Canada": "ca", "Cameroon": "cm", "Chile": "cl", "Colombia": "co",
+    "Costa Rica": "cr", "Croatia": "hr", "Czech Republic": "cz",
+    "Denmark": "dk",
+    "Ecuador": "ec", "Egypt": "eg", "England": "gb-eng",
+    "France": "fr",
+    "Georgia": "ge", "Germany": "de", "Ghana": "gh",
+    "Honduras": "hn", "Hungary": "hu",
+    "Indonesia": "id", "Iran": "ir", "Ivory Coast": "ci", "Italy": "it",
+    "Japan": "jp", "Jordan": "jo",
+    "Mexico": "mx", "Morocco": "ma",
+    "Netherlands": "nl", "New Zealand": "nz", "Nigeria": "ng",
+    "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl",
+    "Portugal": "pt",
+    "Qatar": "qa",
+    "Romania": "ro",
+    "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn",
+    "Serbia": "rs", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za",
+    "South Korea": "kr", "Spain": "es", "Sweden": "se", "Switzerland": "ch",
+    "Tunisia": "tn", "Turkey": "tr",
+    "Ukraine": "ua", "United States": "us", "Uruguay": "uy",
+    "Venezuela": "ve",
+    "Wales": "gb-wls",
+    "Zambia": "zm",
 }
 
 
@@ -53,34 +65,53 @@ def get_flag_code(team_name):
 
 
 # ── Mock data ──────────────────────────────────────────────────────────────
-# Realistic World Cup 2026 group-stage fixtures for development/demo.
-# In production, these are replaced by live API data.
-MOCK_FIXTURES = [
-    {"home": "Brazil",        "away": "Germany",      "kick_off": "2026-06-11T18:00:00", "stage": "Group A"},
-    {"home": "France",        "away": "Argentina",    "kick_off": "2026-06-11T21:00:00", "stage": "Group B"},
-    {"home": "Spain",         "away": "England",      "kick_off": "2026-06-12T18:00:00", "stage": "Group C"},
-    {"home": "Portugal",      "away": "Netherlands",  "kick_off": "2026-06-12T21:00:00", "stage": "Group D"},
-    {"home": "Belgium",       "away": "Uruguay",      "kick_off": "2026-06-13T18:00:00", "stage": "Group E"},
-    {"home": "Croatia",       "away": "Morocco",      "kick_off": "2026-06-13T21:00:00", "stage": "Group F"},
-    {"home": "Japan",         "away": "Senegal",      "kick_off": "2026-06-14T18:00:00", "stage": "Group G"},
-    {"home": "United States", "away": "Mexico",       "kick_off": "2026-06-14T21:00:00", "stage": "Group H"},
-    {"home": "Germany",       "away": "France",       "kick_off": "2026-06-15T18:00:00", "stage": "Group A"},
-    {"home": "Brazil",        "away": "Argentina",    "kick_off": "2026-06-15T21:00:00", "stage": "Group B"},
-    {"home": "England",       "away": "Portugal",     "kick_off": "2026-06-16T18:00:00", "stage": "Group C"},
-    {"home": "Spain",         "away": "Netherlands",  "kick_off": "2026-06-16T21:00:00", "stage": "Group D"},
-    {"home": "Morocco",       "away": "Belgium",      "kick_off": "2026-06-17T18:00:00", "stage": "Group E"},
-    {"home": "Uruguay",       "away": "Croatia",      "kick_off": "2026-06-17T21:00:00", "stage": "Group F"},
-    {"home": "Senegal",       "away": "United States","kick_off": "2026-06-18T18:00:00", "stage": "Group G"},
-    {"home": "Mexico",        "away": "Japan",        "kick_off": "2026-06-18T21:00:00", "stage": "Group H"},
-    {"home": "Argentina",     "away": "Germany",      "kick_off": "2026-06-19T18:00:00", "stage": "Group A"},
-    {"home": "France",        "away": "Brazil",       "kick_off": "2026-06-19T21:00:00", "stage": "Group B"},
-    {"home": "Netherlands",   "away": "England",      "kick_off": "2026-06-20T18:00:00", "stage": "Group C"},
-    {"home": "Portugal",      "away": "Spain",        "kick_off": "2026-06-20T21:00:00", "stage": "Group D"},
-    {"home": "Croatia",       "away": "Belgium",      "kick_off": "2026-06-21T18:00:00", "stage": "Group E"},
-    {"home": "Uruguay",       "away": "Morocco",      "kick_off": "2026-06-21T21:00:00", "stage": "Group F"},
-    {"home": "United States", "away": "Japan",        "kick_off": "2026-06-22T18:00:00", "stage": "Group G"},
-    {"home": "Mexico",        "away": "Senegal",      "kick_off": "2026-06-22T21:00:00", "stage": "Group H"},
-]
+# WC 2026 group-stage fixtures (draw: 4 Dec 2024). Used when no API key is set.
+# Each group plays a full round-robin (3 matchdays, 6 games per group).
+_GROUPS = {
+    "Group A": ["Argentina", "Chile", "Peru",         "Canada"],
+    "Group B": ["Spain",     "Morocco", "Ecuador",    "Dominican Republic"],
+    "Group C": ["United States", "Panama", "Honduras","Bosnia-Herzegovina"],
+    "Group D": ["France",    "Belgium",  "Italy",     "Algeria"],
+    "Group E": ["Brazil",    "Colombia", "Venezuela",  "Mexico"],
+    "Group F": ["England",   "Senegal",  "Netherlands","Serbia"],
+    "Group G": ["Portugal",  "Germany",  "Cameroon",   "New Zealand"],
+    "Group H": ["Spain",     "Turkey",   "Uruguay",    "Czech Republic"],  # placeholder
+    "Group I": ["Japan",     "Saudi Arabia", "South Korea", "Ghana"],
+    "Group J": ["Croatia",   "Morocco",  "Denmark",    "Mali"],
+    "Group K": ["Switzerland","Nigeria", "South Africa","El Salvador"],
+    "Group L": ["Australia", "Iran",     "Colombia",   "Zambia"],
+}
+
+def _build_mock_fixtures():
+    fixtures = []
+    base_date = "2026-06-11"
+    day_offset = 0
+    for group, teams in _GROUPS.items():
+        a, b, c, d = teams
+        # Matchday 1
+        md1_d = f"2026-06-{11 + day_offset:02d}"
+        fixtures.append({"home": a, "away": b, "kick_off": f"{md1_d}T18:00:00", "stage": group})
+        fixtures.append({"home": c, "away": d, "kick_off": f"{md1_d}T21:00:00", "stage": group})
+        day_offset += 1
+    day_offset = 0
+    for group, teams in _GROUPS.items():
+        a, b, c, d = teams
+        # Matchday 2
+        md2_d = f"2026-06-{23 + day_offset:02d}"
+        fixtures.append({"home": a, "away": c, "kick_off": f"{md2_d}T18:00:00", "stage": group})
+        fixtures.append({"home": b, "away": d, "kick_off": f"{md2_d}T21:00:00", "stage": group})
+        day_offset += 1
+    day_offset = 0
+    for group, teams in _GROUPS.items():
+        a, b, c, d = teams
+        # Matchday 3 (simultaneous)
+        md3_d = f"2026-07-{4 + day_offset:02d}"
+        fixtures.append({"home": a, "away": d, "kick_off": f"{md3_d}T21:00:00", "stage": group})
+        fixtures.append({"home": b, "away": c, "kick_off": f"{md3_d}T21:00:00", "stage": group})
+        day_offset += 1
+    return fixtures
+
+MOCK_FIXTURES = _build_mock_fixtures()
 
 
 def _load_mock_fixtures():
@@ -128,22 +159,36 @@ def _fetch_from_api(api_key):
         print(f"[fixtures] API fetch failed: {e}")
         return False
 
+    _STAGE_LABELS = {
+        "GROUP_STAGE":   None,          # use group field instead
+        "ROUND_OF_32":   "Round of 32",
+        "ROUND_OF_16":   "Round of 16",
+        "QUARTER_FINALS":"Quarter-Finals",
+        "SEMI_FINALS":   "Semi-Finals",
+        "THIRD_PLACE":   "Third Place",
+        "FINAL":         "Final",
+    }
+
     for match in data.get("matches", []):
-        home = match["homeTeam"]["name"]
-        away = match["awayTeam"]["name"]
-        fixture = {
+        home = match["homeTeam"]["name"] or "TBD"
+        away = match["awayTeam"]["name"] or "TBD"
+
+        raw_stage = match.get("stage", "")
+        raw_group = match.get("group") or ""
+        if raw_group.startswith("GROUP_"):
+            stage = "Group " + raw_group[6:]   # GROUP_A → Group A
+        else:
+            stage = _STAGE_LABELS.get(raw_stage) or raw_stage.replace("_", " ").title()
+
+        upsert_fixture({
             "id":             str(match["id"]),
             "home_team":      home,
             "away_team":      away,
             "home_flag_code": get_flag_code(home),
             "away_flag_code": get_flag_code(away),
             "kick_off":       match.get("utcDate", ""),
-            "stage":          match.get("stage", ""),
-        }
-        fixture["home_team"] = fixture["home_team"] or "TBD"
-        fixture["away_team"] = fixture["away_team"] or "TBD"
-        
-        upsert_fixture(fixture)
+            "stage":          stage,
+        })
 
     print(f"[fixtures] Synced {len(data.get('matches', []))} fixtures from API")
     return True
@@ -180,13 +225,24 @@ def sync_fixtures():
         print("[fixtures] No API key found; using mock fixture data.")
 
 
+_STAGE_ORDER = [
+    "Group A", "Group B", "Group C", "Group D", "Group E", "Group F",
+    "Group G", "Group H", "Group I", "Group J", "Group K", "Group L",
+    "Round of 32", "Round of 16", "Quarter-Finals", "Semi-Finals",
+    "Third Place", "Final",
+]
+
+def _stage_key(name):
+    try:
+        return _STAGE_ORDER.index(name)
+    except ValueError:
+        return 999
+
+
 def get_all_fixtures():
     """
-    Return all fixtures from the database, grouped by stage.
-    
+    Return all fixtures from the database, grouped by stage in tournament order.
     Triggers a cache refresh if needed before returning.
-    
-    Returns: dict like {"Group A": [fixture, ...], "Group B": [...], ...}
     """
     sync_fixtures()
     rows = get_fixtures()
@@ -198,4 +254,4 @@ def get_all_fixtures():
             grouped[stage] = []
         grouped[stage].append(dict(row))
 
-    return grouped
+    return dict(sorted(grouped.items(), key=lambda kv: _stage_key(kv[0])))
