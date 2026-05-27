@@ -3,341 +3,408 @@
 
 {% block extra_head %}
 <style>
+  /* ── Stage nav ───────────────────────────────────────────────────── */
+  .stage-nav {
+    position: sticky; top: 56px; z-index: 90;
+    background: rgba(10,10,15,0.96);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    display: flex; overflow-x: auto; scrollbar-width: none;
+    padding: 0 1.5rem; gap: 0;
+  }
+  .stage-nav::-webkit-scrollbar { display: none; }
+  .stage-tab {
+    flex-shrink: 0;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.62rem; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .stage-tab:hover { color: var(--text); text-decoration: none; }
+  .stage-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
     display: grid;
-    grid-template-columns: 1fr 240px;
-    gap: 2rem;
-    align-items: start;
+    grid-template-columns: 1fr 220px;
+    gap: 2rem; align-items: start;
   }
-  @media (max-width: 860px) { .pool-layout { grid-template-columns: 1fr; } }
-  .sticky-sidebar { position: sticky; top: 72px; }
+  @media (max-width: 820px) { .pool-layout { grid-template-columns: 1fr; } }
+  .sticky-sidebar { position: sticky; top: 106px; } /* 56px nav + 50px stage-nav */
 
   .stage-heading {
-    font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--text-dim); margin: 2rem 0 0.6rem;
-    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-dim); margin: 2rem 0 0.5rem;
+    padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
   }
 
   /* ── Fixture row ─────────────────────────────────────────────────── */
   .fixture-row {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin-bottom: 0.55rem;
+    display: flex; align-items: flex-start;
+    gap: 0.55rem; margin-bottom: 0.45rem;
   }
-
-  /* Left meta column */
   .fixture-meta-col {
-    flex-shrink: 0;
-    width: 50px;
-    text-align: center;
+    flex-shrink: 0; width: 44px; text-align: center; padding-top: 12px;
   }
-  .meta-date  { font-size: 0.8rem;  color: var(--text); font-weight: 600; line-height: 1.2; }
-  .meta-time  { font-size: 0.65rem; color: var(--text-muted); }
-  .meta-group { font-size: 0.58rem; color: var(--accent); letter-spacing: 0.06em; margin-top: 0.2rem; text-transform: uppercase; }
+  .meta-date  { font-size: 0.72rem; color: var(--text); font-weight: 600; line-height: 1.2; }
+  .meta-time  { font-size: 0.6rem;  color: var(--text-muted); }
+  .meta-group { font-size: 0.55rem; color: var(--accent); letter-spacing: 0.06em;
+                margin-top: 0.15rem; text-transform: uppercase; }
 
-  /* Pills container — horizontal flex */
+  /* ── Fixture content col (pill row + optional score below) ───────── */
+  .fixture-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+
   .fixture-pills {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    min-width: 0;
-    scrollbar-width: none;
+    display: flex; align-items: center;
+    gap: 0.3rem; overflow-x: auto; scrollbar-width: none;
   }
   .fixture-pills::-webkit-scrollbar { display: none; }
 
-  /* ── Match pill ──────────────────────────────────────────────────── */
+  /* Score line below completed pills */
+  .fixture-score {
+    font-size: 0.62rem; color: var(--text-muted);
+    letter-spacing: 0.04em; padding-left: 2px;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .score-result { font-weight: 600; }
+  .score-pts    { color: var(--accent); font-weight: 700; }
+  .score-pts-zero { color: var(--text-dim); }
+
+  /* ── Match pill — FIXED width so all rows align ──────────────────── */
   .match-pill {
-    display: flex;
-    align-items: stretch;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    height: 44px;
-    flex-shrink: 0;
+    display: flex; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    height: 44px; flex-shrink: 0; width: 220px;
     transition: border-color 0.15s;
   }
-  .match-pill.has-pick    { border-color: rgba(200,255,87,0.18); }
-  .match-pill.completed   { border-color: rgba(255,190,87,0.15); }
-  .match-pill.scored-win  { border-color: rgba(200,255,87,0.30); }
-  .match-pill.scored-loss { border-color: rgba(255,87,87,0.15); }
+  .match-pill.has-pick    { border-color: rgba(200,255,87,0.20); }
+  .match-pill.completed   { border-color: rgba(255,190,87,0.18); }
+  .match-pill.scored-win  { border-color: rgba(200,255,87,0.32); }
+  .match-pill.scored-loss { border-color: rgba(255,87,87,0.18); }
 
-  .pill-team {
-    display: flex; align-items: center; gap: 0.35rem;
-    padding: 0 0.7rem; flex-shrink: 0;
+  /* Shared: team side fixed width */
+  .pill-side {
+    width: 80px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0 0.6rem;
   }
-  .pill-team.home { border-right: 1px solid var(--border); }
-  .pill-team.away { border-left:  1px solid var(--border); flex-direction: row-reverse; }
-  .team-abbr { font-size: 0.72rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
-  .flag { width: 20px; height: 14px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+  .pill-side.home { border-right: 1px solid var(--border); }
+  .pill-side.away { border-left: 1px solid var(--border); flex-direction: row-reverse; }
 
+  /* Fixed-width center */
   .pill-centre {
-    display: flex; align-items: stretch; justify-content: center;
-    min-width: 90px;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
   }
-  .pick-btn-group { display: flex; width: 100%; }
+
+  .team-abbr { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
+  .flag { width: 18px; height: 13px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+
+  /* ── Pick buttons (inside pill, pickable state) ───────────────────── */
   .pick-btn {
-    flex: 1; background: transparent; border: none;
+    background: transparent; border: none; cursor: pointer;
+    font-family: var(--mono); transition: all 0.12s;
+    display: flex; align-items: center;
+  }
+  /* Home / Away buttons reuse pill-side sizing */
+  .pick-home {
+    width: 80px; flex-shrink: 0; gap: 0.3rem; padding: 0 0.6rem;
     border-right: 1px solid var(--border);
-    color: var(--text-dim); font-family: var(--mono);
-    font-size: 0.63rem; font-weight: 500; letter-spacing: 0.05em;
-    text-transform: uppercase; cursor: pointer; transition: all 0.12s;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0 0.3rem;
+    height: 100%; justify-content: flex-start;
   }
-  .pick-btn:last-child { border-right: none; }
-  .pick-btn:hover { background: var(--surface2); color: var(--text); }
+  .pick-away {
+    width: 80px; flex-shrink: 0; gap: 0.3rem; padding: 0 0.6rem;
+    border-left: 1px solid var(--border);
+    flex-direction: row-reverse; height: 100%;
+    justify-content: flex-start;
+  }
+  .pick-home .team-abbr,
+  .pick-away .team-abbr { color: var(--text-muted); }
 
-  /* Team-name pick buttons */
-  .pick-home, .pick-away {
-    flex: 1; display: flex; align-items: center; gap: 0.35rem;
-    padding: 0 0.7rem; min-width: 0; overflow: hidden;
-    text-align: left;
+  .pick-draw {
+    flex: 1; height: 100%; justify-content: center;
+    font-size: 0.58rem; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-dim);
   }
-  .pick-home { border-right: 1px solid var(--border); }
-  .pick-away { border-left: 1px solid var(--border); flex-direction: row-reverse; border-right: none; }
-  .pick-draw { width: 54px; flex-shrink: 0; font-size: 0.6rem; letter-spacing: 0.04em; border-right: none; }
-  .pick-team-name {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    flex: 1; font-size: 0.7rem; font-weight: 600;
-  }
-  .pick-away .pick-team-name { text-align: right; }
 
-  .pick-home.active { background: var(--home-bg, rgba(87,179,255,0.14)); color: var(--home-color, var(--blue)); }
+  .pick-btn:hover .team-abbr { color: var(--text); }
+  .pick-draw:hover { background: var(--surface2); color: var(--text); }
+
+  .pick-home.active { background: var(--home-bg); }
+  .pick-home.active .team-abbr { color: var(--home-color, var(--blue)); }
   .pick-draw.active { background: rgba(200,255,87,0.10); color: var(--accent); }
-  .pick-away.active { background: var(--away-bg, rgba(255,87,87,0.14));  color: var(--away-color, var(--red)); }
-  .pick-btn.saving   { opacity: 0.4; pointer-events: none; }
+  .pick-away.active { background: var(--away-bg); }
+  .pick-away.active .team-abbr { color: var(--away-color, var(--red)); }
 
-  .pill-score {
+  /* Result indicator shown in pill centre when completed */
+  .pill-result {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
+    width: 24px; height: 24px; border-radius: 4px;
     display: flex; align-items: center; justify-content: center;
-    width: 100%; font-size: 1rem; font-weight: 700;
-    color: var(--amber); letter-spacing: 0.06em; padding: 0 0.75rem;
   }
-  .pill-pending {
-    display: flex; align-items: center; justify-content: center;
-    width: 100%; font-size: 0.6rem; letter-spacing: 0.1em;
-    color: var(--amber); text-transform: uppercase; padding: 0 0.5rem;
+  .pill-result.H { background: rgba(87,179,255,0.15); color: var(--blue); }
+  .pill-result.D { background: rgba(200,255,87,0.12); color: var(--accent); }
+  .pill-result.A { background: rgba(255,87,87,0.13); color: var(--red); }
+  .pill-result.pending {
+    font-size: 0.52rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--amber); background: rgba(255,190,87,0.10);
+    width: auto; padding: 0 0.3rem;
   }
 
   /* ── Player pill ─────────────────────────────────────────────────── */
   .player-pill {
     display: flex; align-items: center; gap: 0.3rem;
-    padding: 0 0.6rem; height: 44px;
+    padding: 0 0.55rem; height: 44px;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); flex-shrink: 0;
-    font-size: 0.7rem; color: var(--text-dim);
-    white-space: nowrap;
-    transition: border-color 0.15s, opacity 0.2s;
+    font-size: 0.68rem; color: var(--text-dim);
+    white-space: nowrap; transition: border-color 0.15s;
   }
-  /* Hidden when checkbox unchecked */
   .player-pill.player-hidden { display: none; }
-
-  .player-pill.is-me         { border-color: rgba(200,255,87,0.20); color: var(--text); }
-  .player-pill.is-me.pick-H  { border-color: var(--home-color, var(--blue));   color: var(--home-color, var(--blue)); }
-  .player-pill.is-me.pick-D  { border-color: var(--accent); color: var(--accent); }
-  .player-pill.is-me.pick-A  { border-color: var(--away-color, var(--red));    color: var(--away-color, var(--red)); }
-  .player-pill.scored-pos    { border-color: rgba(200,255,87,0.4); color: var(--accent); }
-  .player-pill.scored-zero   { color: var(--text-dim); }
+  .player-pill.is-me { border-color: rgba(200,255,87,0.20); color: var(--text); }
+  .player-pill.is-me.pick-H { border-color: var(--home-color, var(--blue));   color: var(--home-color, var(--blue)); }
+  .player-pill.is-me.pick-D { border-color: var(--accent); color: var(--accent); }
+  .player-pill.is-me.pick-A { border-color: var(--away-color, var(--red));    color: var(--away-color, var(--red)); }
+  .player-pill.scored-pos   { border-color: rgba(200,255,87,0.35); color: var(--accent); }
+  .player-pill.scored-zero  { color: var(--text-dim); }
 
   .pill-name   { font-weight: 500; }
-  .pill-choice { font-size: 0.62rem; opacity: 0.75; }
-  .pill-pts    { font-weight: 700; font-size: 0.72rem; }
-  .pill-no-pick{ font-style: italic; opacity: 0.4; font-size: 0.62rem; }
+  .pill-choice { font-size: 0.6rem; opacity: 0.75; }
+  .pill-pts    { font-weight: 700; font-size: 0.7rem; }
+  .pill-no-pick{ font-style: italic; opacity: 0.4; font-size: 0.6rem; }
 
   .saved-flash {
-    font-size: 0.6rem; color: var(--accent); letter-spacing: 0.08em;
+    font-size: 0.58rem; color: var(--accent); letter-spacing: 0.08em;
     opacity: 0; transition: opacity 0.3s; flex-shrink: 0;
   }
   .saved-flash.show { opacity: 1; }
 
-  /* ── Leaderboard + checkboxes ────────────────────────────────────── */
+  /* ── Leaderboard ─────────────────────────────────────────────────── */
   .lb-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
   }
   .lb-row:last-child { border-bottom: none; }
-  .lb-rank { color: var(--text-dim); width: 1.2rem; font-size: 0.75rem; }
+  .lb-rank { color: var(--text-dim); width: 1.1rem; font-size: 0.72rem; }
   .lb-me   { color: var(--accent); }
-  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 28px; text-align: right; }
+  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 26px; text-align: right; }
   .lb-check {
-    width: 15px; height: 15px; accent-color: var(--accent);
-    cursor: pointer; flex-shrink: 0; margin-left: 0.4rem;
+    width: 14px; height: 14px; accent-color: var(--accent);
+    cursor: pointer; flex-shrink: 0; margin-left: 0.35rem;
   }
-  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.4rem; }
+  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.35rem; }
+
+  /* ── Mobile tweaks ───────────────────────────────────────────────── */
+  @media (max-width: 500px) {
+    .fixture-meta-col { width: 36px; }
+    .match-pill { width: 200px; }
+    .pill-side, .pick-home, .pick-away { width: 70px; padding: 0 0.45rem; }
+    .team-abbr { font-size: 0.75rem; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- ── Stage navigation ───────────────────────────────────────────── -->
+{% set SHORT = {
+  'Round of 32': 'R32', 'Round of 16': 'R16',
+  'Quarter-Finals': 'QF', 'Semi-Finals': 'SF',
+  'Third Place': '3P', 'Final': 'Final'
+} %}
+<nav class="stage-nav" id="stage-nav">
+  {% for stage in grouped_fixtures %}
+    <a class="stage-tab" href="#stage-{{ loop.index0 }}"
+       data-stage="{{ loop.index0 }}">
+      {{ SHORT.get(stage, stage.replace('Group ', '')) }}
+    </a>
+  {% endfor %}
+</nav>
+
 <div class="page">
 
-  <div style="margin-bottom:2rem">
+  <div style="margin-bottom:1.5rem">
     <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
-    <h1 style="font-size:1.4rem;font-weight:700;margin-top:0.5rem">{{ pool.name }}</h1>
+    <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     {% if pool.description %}
-      <p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.25rem">{{ pool.description }}</p>
+      <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem">{{ pool.description }}</p>
     {% endif %}
   </div>
 
   <div class="pool-layout">
 
-    <!-- ── Fixtures ──────────────────────────────────────────────────── -->
+    <!-- ── Fixtures ──────────────────────────────────────────────── -->
     <div>
       {% if grouped_fixtures %}
         {% for stage, fixtures in grouped_fixtures.items() %}
-          <div class="stage-heading">{{ stage }}</div>
 
-          {% for f in fixtures %}
-            {% set is_started   = f.kick_off and f.kick_off < now_iso %}
-            {% set is_completed = f.result is not none and f.result != '' %}
-            {% set my_pick      = existing_picks.get(f.id) %}
-            {% set my_pts       = pick_scores.get(f.id) %}
-            {% set is_correct   = my_pick and is_completed and my_pick == f.result %}
-            {% set others       = all_picks_by_fixture.get(f.id, []) %}
+          <div class="stage-section" id="stage-{{ loop.index0 }}" data-idx="{{ loop.index0 }}">
+            <div class="stage-heading">{{ stage }}</div>
 
-            {% if is_completed %}
-              {% if my_pts is not none %}
-                {% set pill_cls = 'match-pill completed ' + ('scored-win' if is_correct else 'scored-loss') %}
-              {% else %}
-                {% set pill_cls = 'match-pill completed' %}
-              {% endif %}
-            {% elif my_pick %}
-              {% set pill_cls = 'match-pill has-pick' %}
-            {% else %}
-              {% set pill_cls = 'match-pill' %}
-            {% endif %}
+            {% for f in fixtures %}
+              {% set is_started   = f.kick_off and f.kick_off < now_iso %}
+              {% set is_completed = f.result is not none and f.result != '' %}
+              {% set my_pick      = existing_picks.get(f.id) %}
+              {% set my_pts       = pick_scores.get(f.id) %}
+              {% set others       = all_picks_by_fixture.get(f.id, []) %}
 
-            {% if f.kick_off %}
-              {% set mo  = f.kick_off[5:7]|int %}
-              {% set dy  = f.kick_off[8:10]|int %}
-              {% set ko_time = f.kick_off[11:16] %}
-            {% endif %}
-
-            <div class="fixture-row" id="fixture-{{ f.id }}">
-
-              <!-- Left meta -->
-              <div class="fixture-meta-col">
-                {% if f.kick_off %}
-                  <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
-                  <div class="meta-time">{{ ko_time }}</div>
+              {% if is_completed %}
+                {% if my_pts is not none %}
+                  {% set pill_cls = 'match-pill completed ' + ('scored-win' if my_pick == f.result else 'scored-loss') %}
                 {% else %}
-                  <div class="meta-date" style="color:var(--text-dim)">TBC</div>
+                  {% set pill_cls = 'match-pill completed' %}
                 {% endif %}
-                <div class="meta-group">{{ f.stage.replace('Group ','') if f.stage else '—' }}</div>
-              </div>
+              {% elif my_pick %}
+                {% set pill_cls = 'match-pill has-pick' %}
+              {% else %}
+                {% set pill_cls = 'match-pill' %}
+              {% endif %}
 
-              <!-- Horizontal pills -->
-              <div class="fixture-pills">
+              {% if f.kick_off %}
+                {% set mo     = f.kick_off[5:7]|int %}
+                {% set dy     = f.kick_off[8:10]|int %}
+                {% set ko_time = f.kick_off[11:16] %}
+              {% endif %}
 
-                <!-- Match pill -->
-                <div class="{{ pill_cls }}"
-                     data-home-flag="{{ f.home_flag_code or 'un' }}"
-                     data-away-flag="{{ f.away_flag_code or 'un' }}">
+              <div class="fixture-row" id="fixture-{{ f.id }}">
 
-                  {% if is_completed or is_started %}
-                    {# Display-only: flag + abbr | score/live | abbr + flag #}
-                    <div class="pill-team home">
-                      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
-                           alt="" onerror="this.style.display='none'" loading="lazy">
-                      <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
-                    </div>
-                    <div class="pill-centre">
-                      {% if is_completed %}
-                        <div class="pill-score">{{ f.home_score }}–{{ f.away_score }}</div>
+                <!-- Date/time meta -->
+                <div class="fixture-meta-col">
+                  {% if f.kick_off %}
+                    <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
+                    <div class="meta-time">{{ ko_time }}</div>
+                  {% else %}
+                    <div class="meta-date" style="color:var(--text-dim)">TBC</div>
+                  {% endif %}
+                  <div class="meta-group">{{ f.stage.replace('Group ','') if f.stage else '—' }}</div>
+                </div>
+
+                <!-- Pill column: pick row + score line -->
+                <div class="fixture-col">
+
+                  <div class="fixture-pills">
+
+                    <!-- Match pill -->
+                    <div class="{{ pill_cls }}"
+                         data-home-flag="{{ f.home_flag_code or 'un' }}"
+                         data-away-flag="{{ f.away_flag_code or 'un' }}">
+
+                      {% if is_completed or is_started %}
+                        <!-- Display-only: flag + ABR | result/live | ABR + flag -->
+                        <div class="pill-side home">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
+                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                        </div>
+                        <div class="pill-centre">
+                          {% if is_completed %}
+                            <div class="pill-result {{ f.result }}">{{ f.result }}</div>
+                          {% else %}
+                            <div class="pill-result pending">Live</div>
+                          {% endif %}
+                        </div>
+                        <div class="pill-side away">
+                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
+                               alt="" onerror="this.style.display='none'" loading="lazy">
+                        </div>
+
                       {% else %}
-                        <div class="pill-pending">Live</div>
+                        <!-- Pickable: team-name buttons with 3-letter abbr -->
+                        <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
+                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                        </button>
+                        <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
+                        <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
+                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
+                               alt="" onerror="this.style.display='none'" loading="lazy">
+                        </button>
+                      {% endif %}
+
+                    </div><!-- /.match-pill -->
+
+                    <!-- My pick pill -->
+                    {% if is_completed %}
+                      {% set pts_cls = 'scored-pos' if (my_pts is not none and my_pts > 0) else 'scored-zero' %}
+                      <div class="player-pill is-me {{ pts_cls }}" data-player="{{ current_user.email }}">
+                        <span class="pill-name">{{ current_user.display_name }}</span>
+                        {% if my_pick %}<span class="pill-choice">{{ my_pick }}</span>{% endif %}
+                        {% if my_pts is not none %}<span class="pill-pts">+{{ my_pts }}</span>{% endif %}
+                        {% if not my_pick %}<span class="pill-no-pick">–</span>{% endif %}
+                      </div>
+                    {% else %}
+                      <div class="player-pill is-me{% if my_pick %} pick-{{ my_pick }}{% endif %}"
+                           id="mypill-{{ f.id }}" data-player="{{ current_user.email }}">
+                        <span class="pill-name">{{ current_user.display_name }}</span>
+                        <span id="mypill-choice-{{ f.id }}" class="pill-choice">
+                          {%- if my_pick %}<span>{{ my_pick }}</span>{% else %}<span class="pill-no-pick">–</span>{% endif -%}
+                        </span>
+                      </div>
+                      <span class="saved-flash" id="status-{{ f.id }}">✓</span>
+                    {% endif %}
+
+                    <!-- Other players -->
+                    {% for o in others %}
+                      {% if o.email != current_user.email %}
+                        {% if is_completed %}
+                          {% set opt_cls = 'scored-pos' if (o.points_awarded and o.points_awarded > 0) else 'scored-zero' %}
+                          <div class="player-pill {{ opt_cls }}" data-player="{{ o.email }}">
+                            <span class="pill-name">{{ o.display_name }}</span>
+                            {% if o.predicted_result %}<span class="pill-choice">{{ o.predicted_result }}</span>{% endif %}
+                            {% if o.points_awarded is not none %}<span class="pill-pts">+{{ o.points_awarded }}</span>{% endif %}
+                          </div>
+                        {% else %}
+                          <div class="player-pill" data-player="{{ o.email }}">
+                            <span class="pill-name">{{ o.display_name }}</span>
+                            <span class="pill-choice">{% if o.predicted_result %}·{% else %}<span class="pill-no-pick">–</span>{% endif %}</span>
+                          </div>
+                        {% endif %}
+                      {% endif %}
+                    {% endfor %}
+
+                  </div><!-- /.fixture-pills -->
+
+                  <!-- Score line beneath the pill row -->
+                  {% if is_completed %}
+                    <div class="fixture-score">
+                      <span class="score-result">
+                        {{ f.home_score }}–{{ f.away_score }}
+                        &nbsp;·&nbsp;
+                        {% if f.result == 'H' %}{{ (f.home_team or 'Home')[:10] }} win
+                        {% elif f.result == 'A' %}{{ (f.away_team or 'Away')[:10] }} win
+                        {% else %}Draw{% endif %}
+                      </span>
+                      {% if my_pts is not none %}
+                        <span class="{% if my_pts > 0 %}score-pts{% else %}score-pts-zero{% endif %}">
+                          +{{ my_pts }} pt{{ 's' if my_pts != 1 else '' }}
+                        </span>
                       {% endif %}
                     </div>
-                    <div class="pill-team away">
-                      <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
-                      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
-                           alt="" onerror="this.style.display='none'" loading="lazy">
-                    </div>
-                  {% else %}
-                    {# Clickable: full team name buttons #}
-                    <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
-                            onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
-                      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
-                           alt="" onerror="this.style.display='none'" loading="lazy">
-                      <span class="pick-team-name">{{ f.home_team or '?' }}</span>
-                    </button>
-                    <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
-                            onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
-                    <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
-                            onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
-                      <span class="pick-team-name">{{ f.away_team or '?' }}</span>
-                      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
-                           alt="" onerror="this.style.display='none'" loading="lazy">
-                    </button>
                   {% endif %}
 
-                </div><!-- /.match-pill -->
+                </div><!-- /.fixture-col -->
 
-                <!-- Current user pill (always shown, always first) -->
-                {% if is_completed %}
-                  {% set pts_cls = 'scored-pos' if (my_pts and my_pts > 0) else 'scored-zero' %}
-                  <div class="player-pill is-me {{ pts_cls }}" data-player="{{ current_user.email }}">
-                    <span class="pill-name">{{ current_user.display_name }}</span>
-                    {% if my_pick %}
-                      <span class="pill-choice">{{ my_pick }}</span>
-                      {% if my_pts is not none %}<span class="pill-pts">+{{ my_pts }}</span>{% endif %}
-                    {% else %}
-                      <span class="pill-no-pick">–</span>
-                    {% endif %}
-                  </div>
-                {% else %}
-                  <div class="player-pill is-me{% if my_pick %} pick-{{ my_pick }}{% endif %}"
-                       id="mypill-{{ f.id }}" data-player="{{ current_user.email }}">
-                    <span class="pill-name">{{ current_user.display_name }}</span>
-                    <span id="mypill-choice-{{ f.id }}" class="pill-choice">
-                      {%- if my_pick == 'H' %}H{% elif my_pick == 'A' %}A{% elif my_pick == 'D' %}D{% else %}<span class="pill-no-pick">–</span>{% endif -%}
-                    </span>
-                  </div>
-                  <span class="saved-flash" id="status-{{ f.id }}">✓</span>
-                {% endif %}
-
-                <!-- Other players -->
-                {% for o in others %}
-                  {% if o.email != current_user.email %}
-                    {#
-                      Pill is visible by default for top-3 leaderboard players.
-                      JS will hide/show based on checkbox state.
-                      We tag each pill with data-player=email for JS targeting.
-                    #}
-                    {% if is_completed %}
-                      {% set opt_cls = 'scored-pos' if (o.points_awarded and o.points_awarded > 0) else 'scored-zero' %}
-                      <div class="player-pill {{ opt_cls }}" data-player="{{ o.email }}">
-                        <span class="pill-name">{{ o.display_name }}</span>
-                        {% if o.predicted_result %}
-                          <span class="pill-choice">{{ o.predicted_result }}</span>
-                          {% if o.points_awarded is not none %}<span class="pill-pts">+{{ o.points_awarded }}</span>{% endif %}
-                        {% else %}
-                          <span class="pill-no-pick">–</span>
-                        {% endif %}
-                      </div>
-                    {% else %}
-                      <div class="player-pill" data-player="{{ o.email }}">
-                        <span class="pill-name">{{ o.display_name }}</span>
-                        <span class="pill-choice">{% if o.predicted_result %}·{% else %}<span class="pill-no-pick">–</span>{% endif %}</span>
-                      </div>
-                    {% endif %}
-                  {% endif %}
-                {% endfor %}
-
-              </div><!-- /.fixture-pills -->
-            </div><!-- /.fixture-row -->
-          {% endfor %}
+              </div><!-- /.fixture-row -->
+            {% endfor %}
+          </div><!-- /.stage-section -->
 
         {% endfor %}
       {% else %}
-        <div class="empty-state">No fixtures loaded yet.</div>
+        <div style="color:var(--text-dim);font-size:0.82rem">No fixtures loaded yet.</div>
       {% endif %}
     </div>
 
-    <!-- ── Leaderboard + visibility controls ─────────────────────── -->
+    <!-- ── Leaderboard sidebar ──────────────────────────────────── -->
     <div class="sticky-sidebar">
       <div class="card">
         <div class="section-label" style="margin-bottom:0.75rem">Leaderboard</div>
@@ -347,17 +414,13 @@
             <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
             <span class="lb-pts">{{ row.total_points }}</span>
             {% if row.email != current_user.email %}
-              {# Top 3 non-me players checked by default #}
               {% set default_checked = loop.index <= 3 %}
-              <input type="checkbox"
-                     class="lb-check"
-                     data-player="{{ row.email }}"
+              <input type="checkbox" class="lb-check" data-player="{{ row.email }}"
                      {% if default_checked %}checked{% endif %}
                      onchange="togglePlayer('{{ row.email }}', this.checked)"
                      title="Show {{ row.display_name }}'s picks">
             {% else %}
-              {# Current user always visible — no checkbox #}
-              <span style="width:15px;margin-left:0.4rem"></span>
+              <span style="width:14px;margin-left:0.35rem"></span>
             {% endif %}
           </div>
         {% endfor %}
@@ -367,14 +430,13 @@
       </div>
     </div>
 
-  </div>
-</div>
+  </div><!-- /.pool-layout -->
+</div><!-- /.page -->
 
 <script>
-  // Primary colours representing each country (keyed by flagcdn code).
+  // ── Country colours (flag code → hex) ──────────────────────────────
   const COUNTRY_COLORS = {
-    'ar':'#74ACDF','au':'#00008B','at':'#ED2939','al':'#E41E20',
-    'dz':'#006233',
+    'ar':'#74ACDF','au':'#00008B','at':'#ED2939','al':'#E41E20','dz':'#006233',
     'be':'#EF3340','bo':'#D52B1E','ba':'#002395','br':'#009C3B',
     'ca':'#FF0000','cm':'#007A5E','cv':'#003893','cl':'#D52B1E','co':'#FCD116',
     'cd':'#007FFF','cr':'#002B7F','hr':'#FF0000','cw':'#002B7F','cz':'#D7141A',
@@ -387,18 +449,14 @@
     'jp':'#BC002D','jo':'#007A3D',
     'mx':'#006847','ma':'#C1272D',
     'nl':'#FF6600','nz':'#00247D','ng':'#008751','no':'#EF2B2D',
-    'pa':'#005293','py':'#D52B1E','pe':'#D91023','pl':'#DC143C',
-    'pt':'#006600',
-    'qa':'#8D1B3D',
-    'ro':'#002B7F',
-    'sa':'#006C35','gb-sct':'#003087','sn':'#00853F',
-    'rs':'#C6363C','sk':'#0B4EA2','si':'#003DA5','za':'#007749',
-    'kr':'#003478','es':'#AA151B','se':'#006AA7','ch':'#FF0000',
+    'pa':'#005293','py':'#D52B1E','pe':'#D91023','pl':'#DC143C','pt':'#006600',
+    'qa':'#8D1B3D','ro':'#002B7F',
+    'sa':'#006C35','gb-sct':'#003087','sn':'#00853F','rs':'#C6363C',
+    'sk':'#0B4EA2','si':'#003DA5','za':'#007749','kr':'#003478',
+    'es':'#AA151B','se':'#006AA7','ch':'#FF0000',
     'tn':'#E70013','tr':'#E30A17',
     'ua':'#FFD700','us':'#002868','uy':'#5EB6E4','uz':'#1EB53A',
-    've':'#CF142B',
-    'gb-wls':'#C8102E',
-    'zm':'#198A00',
+    've':'#CF142B','gb-wls':'#C8102E','zm':'#198A00',
   };
 
   function hexToRgba(hex, alpha) {
@@ -408,9 +466,8 @@
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
+  // ── Initialise country colours + player pill visibility ─────────────
   document.addEventListener('DOMContentLoaded', () => {
-    // Apply country colours as CSS custom props on each fixture row,
-    // so pick buttons and player pills can inherit them.
     document.querySelectorAll('.fixture-row').forEach(row => {
       const pill = row.querySelector('.match-pill');
       if (!pill) return;
@@ -422,7 +479,6 @@
       row.style.setProperty('--away-bg',    hexToRgba(ac, 0.13));
     });
 
-    // Hide pills whose leaderboard checkbox is unchecked.
     document.querySelectorAll('.lb-check').forEach(cb => {
       if (!cb.checked) hidePills(cb.dataset.player);
     });
@@ -438,32 +494,59 @@
     });
   });
 
-  /** Show or hide all pills for a given player email across all fixtures. */
-  function togglePlayer(email, visible) {
-    if (visible) {
-      showPills(email);
-    } else {
-      hidePills(email);
-    }
+  // ── Stage nav: highlight active section on scroll ───────────────────
+  const stageSections = document.querySelectorAll('.stage-section');
+  const stageTabs     = document.querySelectorAll('.stage-tab');
+
+  if (stageSections.length) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const idx = entry.target.dataset.idx;
+          stageTabs.forEach(t => t.classList.remove('active'));
+          const tab = document.querySelector(`.stage-tab[data-stage="${idx}"]`);
+          if (tab) {
+            tab.classList.add('active');
+            // Keep active tab visible in the nav bar
+            tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          }
+        }
+      });
+    }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
+
+    stageSections.forEach(s => io.observe(s));
+    // Activate first tab immediately
+    if (stageTabs.length) stageTabs[0].classList.add('active');
   }
 
+  // Smooth-scroll on tab click (account for sticky nav heights)
+  stageTabs.forEach(tab => {
+    tab.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById('stage-' + tab.dataset.stage);
+      if (!target) return;
+      const offset = 56 + 42; // navbar + stage-nav heights
+      const top = target.getBoundingClientRect().top + window.scrollY - offset - 8;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  });
+
+  // ── Player pill toggle ───────────────────────────────────────────────
+  function togglePlayer(email, visible) { visible ? showPills(email) : hidePills(email); }
   function showPills(email) {
     document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
       .forEach(p => p.classList.remove('player-hidden'));
   }
-
   function hidePills(email) {
     document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
       .forEach(p => p.classList.add('player-hidden'));
   }
 
-  /**
-   * savePick — saves a pick via fetch() and updates the UI live.
-   */
+  // ── Save pick via AJAX ───────────────────────────────────────────────
   async function savePick(poolId, fixtureId, prediction, btn) {
     const row     = document.getElementById('fixture-' + fixtureId);
     const buttons = row.querySelectorAll('.pick-home, .pick-draw, .pick-away');
-    buttons.forEach(b => b.classList.add('saving'));
+    buttons.forEach(b => { b.style.opacity = '0.4'; b.style.pointerEvents = 'none'; });
 
     try {
       const res  = await fetch(`/pool/${poolId}/pick`, {
@@ -474,11 +557,9 @@
       const data = await res.json();
 
       if (data.ok) {
-        // Update pick buttons
         buttons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        // Update my player pill colour + choice text
         const pill   = document.getElementById('mypill-' + fixtureId);
         const choice = document.getElementById('mypill-choice-' + fixtureId);
         if (pill) {
@@ -486,21 +567,18 @@
           pill.classList.add('pick-' + prediction);
         }
         if (choice) {
-          choice.className = 'pill-choice';
-          choice.textContent = prediction; // H, D, or A
+          choice.innerHTML = `<span>${prediction}</span>`;
         }
 
-        // Flash saved indicator
         const flash = document.getElementById('status-' + fixtureId);
         if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
-
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
       }
-    } catch (err) {
+    } catch {
       alert('Network error — please try again.');
     } finally {
-      buttons.forEach(b => b.classList.remove('saving'));
+      buttons.forEach(b => { b.style.opacity = ''; b.style.pointerEvents = ''; });
     }
   }
 </script>
