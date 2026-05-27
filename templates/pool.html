@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }} — WC26 Pool{% endblock %}
+
+{% block extra_head %}
+<style>
+  .pool-layout {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .pool-layout { grid-template-columns: 1fr; } }
+  .sticky-sidebar { position: sticky; top: 72px; }
+
+  .stage-heading {
+    font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-dim); margin: 2rem 0 0.6rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Fixture row ─────────────────────────────────────────────────── */
+  .fixture-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.55rem;
+  }
+
+  /* Left meta column */
+  .fixture-meta-col {
+    flex-shrink: 0;
+    width: 50px;
+    text-align: center;
+  }
+  .meta-date  { font-size: 0.8rem;  color: var(--text); font-weight: 600; line-height: 1.2; }
+  .meta-time  { font-size: 0.65rem; color: var(--text-muted); }
+  .meta-group { font-size: 0.58rem; color: var(--accent); letter-spacing: 0.06em; margin-top: 0.2rem; text-transform: uppercase; }
+
+  /* Pills container — horizontal flex */
+  .fixture-pills {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-width: 0;
+    scrollbar-width: none;
+  }
+  .fixture-pills::-webkit-scrollbar { display: none; }
+
+  /* ── Match pill ──────────────────────────────────────────────────── */
+  .match-pill {
+    display: flex;
+    align-items: stretch;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    height: 44px;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+  .match-pill.has-pick    { border-color: rgba(200,255,87,0.35); }
+  .match-pill.completed   { border-color: rgba(255,190,87,0.3); }
+  .match-pill.scored-win  { border-color: rgba(200,255,87,0.55); }
+  .match-pill.scored-loss { border-color: rgba(255,87,87,0.3); }
+
+  .pill-team {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0 0.7rem; flex-shrink: 0;
+  }
+  .pill-team.home { border-right: 1px solid var(--border); }
+  .pill-team.away { border-left:  1px solid var(--border); flex-direction: row-reverse; }
+  .team-abbr { font-size: 0.72rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
+  .flag { width: 20px; height: 14px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+
+  .pill-centre {
+    display: flex; align-items: stretch; justify-content: center;
+    min-width: 90px;
+  }
+  .pick-btn-group { display: flex; width: 100%; }
+  .pick-btn {
+    flex: 1; background: transparent; border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim); font-family: var(--mono);
+    font-size: 0.63rem; font-weight: 500; letter-spacing: 0.05em;
+    text-transform: uppercase; cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 0.3rem;
+  }
+  .pick-btn:last-child { border-right: none; }
+  .pick-btn:hover   { background: var(--surface2); color: var(--text); }
+  .pick-btn.active-H { background: rgba(87,179,255,0.18); color: var(--blue); }
+  .pick-btn.active-D { background: rgba(200,255,87,0.15); color: var(--accent); }
+  .pick-btn.active-A { background: rgba(255,87,87,0.15);  color: var(--red); }
+  .pick-btn.saving   { opacity: 0.4; pointer-events: none; }
+
+  .pill-score {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; font-size: 1rem; font-weight: 700;
+    color: var(--amber); letter-spacing: 0.06em; padding: 0 0.75rem;
+  }
+  .pill-pending {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; font-size: 0.6rem; letter-spacing: 0.1em;
+    color: var(--amber); text-transform: uppercase; padding: 0 0.5rem;
+  }
+
+  /* ── Player pill ─────────────────────────────────────────────────── */
+  .player-pill {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0 0.6rem; height: 44px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+    font-size: 0.7rem; color: var(--text-dim);
+    white-space: nowrap;
+    transition: border-color 0.15s, opacity 0.2s;
+  }
+  /* Hidden when checkbox unchecked */
+  .player-pill.player-hidden { display: none; }
+
+  .player-pill.is-me         { border-color: rgba(200,255,87,0.35); color: var(--text); }
+  .player-pill.is-me.pick-H  { border-color: var(--blue);   color: var(--blue); }
+  .player-pill.is-me.pick-D  { border-color: var(--accent); color: var(--accent); }
+  .player-pill.is-me.pick-A  { border-color: var(--red);    color: var(--red); }
+  .player-pill.scored-pos    { border-color: rgba(200,255,87,0.4); color: var(--accent); }
+  .player-pill.scored-zero   { color: var(--text-dim); }
+
+  .pill-name   { font-weight: 500; }
+  .pill-choice { font-size: 0.62rem; opacity: 0.75; }
+  .pill-pts    { font-weight: 700; font-size: 0.72rem; }
+  .pill-no-pick{ font-style: italic; opacity: 0.4; font-size: 0.62rem; }
+
+  .saved-flash {
+    font-size: 0.6rem; color: var(--accent); letter-spacing: 0.08em;
+    opacity: 0; transition: opacity 0.3s; flex-shrink: 0;
+  }
+  .saved-flash.show { opacity: 1; }
+
+  /* ── Leaderboard + checkboxes ────────────────────────────────────── */
+  .lb-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-rank { color: var(--text-dim); width: 1.2rem; font-size: 0.75rem; }
+  .lb-me   { color: var(--accent); }
+  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 28px; text-align: right; }
+  .lb-check {
+    width: 15px; height: 15px; accent-color: var(--accent);
+    cursor: pointer; flex-shrink: 0; margin-left: 0.4rem;
+  }
+  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div style="margin-bottom:2rem">
+    <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
+    <h1 style="font-size:1.4rem;font-weight:700;margin-top:0.5rem">{{ pool.name }}</h1>
+    {% if pool.description %}
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.25rem">{{ pool.description }}</p>
+    {% endif %}
+  </div>
+
+  <div class="pool-layout">
+
+    <!-- ── Fixtures ──────────────────────────────────────────────────── -->
+    <div>
+      {% if grouped_fixtures %}
+        {% for stage, fixtures in grouped_fixtures.items() %}
+          <div class="stage-heading">{{ stage }}</div>
+
+          {% for f in fixtures %}
+            {% set is_started   = f.kick_off and f.kick_off < now_iso %}
+            {% set is_completed = f.result is not none and f.result != '' %}
+            {% set my_pick      = existing_picks.get(f.id) %}
+            {% set my_pts       = pick_scores.get(f.id) %}
+            {% set is_correct   = my_pick and is_completed and my_pick == f.result %}
+            {% set others       = all_picks_by_fixture.get(f.id, []) %}
+
+            {% if is_completed %}
+              {% if my_pts is not none %}
+                {% set pill_cls = 'match-pill completed ' + ('scored-win' if is_correct else 'scored-loss') %}
+              {% else %}
+                {% set pill_cls = 'match-pill completed' %}
+              {% endif %}
+            {% elif my_pick %}
+              {% set pill_cls = 'match-pill has-pick' %}
+            {% else %}
+              {% set pill_cls = 'match-pill' %}
+            {% endif %}
+
+            {% if f.kick_off %}
+              {% set mo  = f.kick_off[5:7]|int %}
+              {% set dy  = f.kick_off[8:10]|int %}
+              {% set ko_time = f.kick_off[11:16] %}
+            {% endif %}
+
+            <div class="fixture-row" id="fixture-{{ f.id }}">
+
+              <!-- Left meta -->
+              <div class="fixture-meta-col">
+                {% if f.kick_off %}
+                  <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
+                  <div class="meta-time">{{ ko_time }}</div>
+                {% else %}
+                  <div class="meta-date" style="color:var(--text-dim)">TBC</div>
+                {% endif %}
+                <div class="meta-group">{{ f.stage.replace('Group ','') if f.stage else '—' }}</div>
+              </div>
+
+              <!-- Horizontal pills -->
+              <div class="fixture-pills">
+
+                <!-- Match pill -->
+                <div class="{{ pill_cls }}">
+                  <div class="pill-team home">
+                    <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
+                         alt="" onerror="this.style.display='none'" loading="lazy">
+                    <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                  </div>
+
+                  <div class="pill-centre">
+                    {% if is_completed %}
+                      <div class="pill-score">{{ f.home_score }}–{{ f.away_score }}</div>
+                    {% elif is_started %}
+                      <div class="pill-pending">Live</div>
+                    {% else %}
+                      <div class="pick-btn-group">
+                        <button class="pick-btn{% if my_pick == 'H' %} active-H{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">H</button>
+                        <button class="pick-btn{% if my_pick == 'D' %} active-D{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">D</button>
+                        <button class="pick-btn{% if my_pick == 'A' %} active-A{% endif %}"
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">A</button>
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="pill-team away">
+                    <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                    <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
+                         alt="" onerror="this.style.display='none'" loading="lazy">
+                  </div>
+                </div><!-- /.match-pill -->
+
+                <!-- Current user pill (always shown, always first) -->
+                {% if is_completed %}
+                  {% set pts_cls = 'scored-pos' if (my_pts and my_pts > 0) else 'scored-zero' %}
+                  <div class="player-pill is-me {{ pts_cls }}" data-player="{{ current_user.email }}">
+                    <span class="pill-name">{{ current_user.display_name }}</span>
+                    {% if my_pick %}
+                      <span class="pill-choice">{{ my_pick }}</span>
+                      {% if my_pts is not none %}<span class="pill-pts">+{{ my_pts }}</span>{% endif %}
+                    {% else %}
+                      <span class="pill-no-pick">–</span>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <div class="player-pill is-me{% if my_pick %} pick-{{ my_pick }}{% endif %}"
+                       id="mypill-{{ f.id }}" data-player="{{ current_user.email }}">
+                    <span class="pill-name">{{ current_user.display_name }}</span>
+                    <span id="mypill-choice-{{ f.id }}" class="pill-choice">
+                      {%- if my_pick == 'H' %}H{% elif my_pick == 'A' %}A{% elif my_pick == 'D' %}D{% else %}<span class="pill-no-pick">–</span>{% endif -%}
+                    </span>
+                  </div>
+                  <span class="saved-flash" id="status-{{ f.id }}">✓</span>
+                {% endif %}
+
+                <!-- Other players -->
+                {% for o in others %}
+                  {% if o.email != current_user.email %}
+                    {#
+                      Pill is visible by default for top-3 leaderboard players.
+                      JS will hide/show based on checkbox state.
+                      We tag each pill with data-player=email for JS targeting.
+                    #}
+                    {% if is_completed %}
+                      {% set opt_cls = 'scored-pos' if (o.points_awarded and o.points_awarded > 0) else 'scored-zero' %}
+                      <div class="player-pill {{ opt_cls }}" data-player="{{ o.email }}">
+                        <span class="pill-name">{{ o.display_name }}</span>
+                        {% if o.predicted_result %}
+                          <span class="pill-choice">{{ o.predicted_result }}</span>
+                          {% if o.points_awarded is not none %}<span class="pill-pts">+{{ o.points_awarded }}</span>{% endif %}
+                        {% else %}
+                          <span class="pill-no-pick">–</span>
+                        {% endif %}
+                      </div>
+                    {% else %}
+                      <div class="player-pill" data-player="{{ o.email }}">
+                        <span class="pill-name">{{ o.display_name }}</span>
+                        <span class="pill-choice">{% if o.predicted_result %}·{% else %}<span class="pill-no-pick">–</span>{% endif %}</span>
+                      </div>
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+
+              </div><!-- /.fixture-pills -->
+            </div><!-- /.fixture-row -->
+          {% endfor %}
+
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">No fixtures loaded yet.</div>
+      {% endif %}
+    </div>
+
+    <!-- ── Leaderboard + visibility controls ─────────────────────── -->
+    <div class="sticky-sidebar">
+      <div class="card">
+        <div class="section-label" style="margin-bottom:0.75rem">Leaderboard</div>
+        {% for row in leaderboard %}
+          <div class="lb-row{% if row.email == current_user.email %} lb-me{% endif %}">
+            <span class="lb-rank">{{ loop.index }}</span>
+            <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
+            <span class="lb-pts">{{ row.total_points }}</span>
+            {% if row.email != current_user.email %}
+              {# Top 3 non-me players checked by default #}
+              {% set default_checked = loop.index <= 3 %}
+              <input type="checkbox"
+                     class="lb-check"
+                     data-player="{{ row.email }}"
+                     {% if default_checked %}checked{% endif %}
+                     onchange="togglePlayer('{{ row.email }}', this.checked)"
+                     title="Show {{ row.display_name }}'s picks">
+            {% else %}
+              {# Current user always visible — no checkbox #}
+              <span style="width:15px;margin-left:0.4rem"></span>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {% if not leaderboard %}
+          <div style="color:var(--text-dim);font-size:0.78rem">No scores yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /**
+   * On page load, hide any player pills whose checkbox is unchecked.
+   * The top 3 leaderboard players are checked by default (set in HTML),
+   * everyone else starts hidden.
+   */
+  document.addEventListener('DOMContentLoaded', () => {
+    // Find all checkboxes and apply their initial state
+    document.querySelectorAll('.lb-check').forEach(cb => {
+      if (!cb.checked) {
+        hidePills(cb.dataset.player);
+      }
+    });
+
+    // Also hide anyone not in the leaderboard panel at all
+    // (players who have picks but aren't visible in the sidebar)
+    const visibleEmails = new Set(
+      [...document.querySelectorAll('.lb-check')].map(c => c.dataset.player)
+    );
+    // For players not in the checkbox list, hide their pills too
+    document.querySelectorAll('.player-pill[data-player]').forEach(pill => {
+      const email = pill.dataset.player;
+      if (email && !visibleEmails.has(email) && !pill.classList.contains('is-me')) {
+        pill.classList.add('player-hidden');
+      }
+    });
+  });
+
+  /** Show or hide all pills for a given player email across all fixtures. */
+  function togglePlayer(email, visible) {
+    if (visible) {
+      showPills(email);
+    } else {
+      hidePills(email);
+    }
+  }
+
+  function showPills(email) {
+    document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
+      .forEach(p => p.classList.remove('player-hidden'));
+  }
+
+  function hidePills(email) {
+    document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
+      .forEach(p => p.classList.add('player-hidden'));
+  }
+
+  /**
+   * savePick — saves a pick via fetch() and updates the UI live.
+   */
+  async function savePick(poolId, fixtureId, prediction, btn) {
+    const row     = document.getElementById('fixture-' + fixtureId);
+    const buttons = row.querySelectorAll('.pick-btn');
+    buttons.forEach(b => b.classList.add('saving'));
+
+    try {
+      const res  = await fetch(`/pool/${poolId}/pick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixture_id: fixtureId, prediction })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        // Update pick buttons
+        buttons.forEach(b => b.classList.remove('active-H','active-A','active-D'));
+        btn.classList.add('active-' + prediction);
+
+        // Update my player pill colour + choice text
+        const pill   = document.getElementById('mypill-' + fixtureId);
+        const choice = document.getElementById('mypill-choice-' + fixtureId);
+        if (pill) {
+          pill.classList.remove('pick-H','pick-A','pick-D');
+          pill.classList.add('pick-' + prediction);
+        }
+        if (choice) {
+          choice.className = 'pill-choice';
+          choice.textContent = prediction; // H, D, or A
+        }
+
+        // Flash saved indicator
+        const flash = document.getElementById('status-' + fixtureId);
+        if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+
+      } else {
+        alert('Could not save: ' + (data.error || 'unknown error'));
+      }
+    } catch (err) {
+      alert('Network error — please try again.');
+    } finally {
+      buttons.forEach(b => b.classList.remove('saving'));
+    }
+  }
+</script>
+{% endblock content %}

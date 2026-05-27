@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Home — WC26 Pool{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Pool cards ──────────────────────────────────────────────────── */
+  .pool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    transition: border-color 0.15s, background 0.15s;
+    text-decoration: none;
+    color: inherit;
+  }
+  .pool-card:hover { border-color: var(--border-hi); background: var(--surface2); text-decoration: none; }
+  .pool-card.mine  { border-left: 3px solid var(--accent); }
+  .pool-card-name  { font-size: 0.95rem; font-weight: 500; color: var(--text); }
+  .pool-card-desc  { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+  /* Score badge per pool */
+  .pool-score {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .pool-score-label { font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.1em; }
+
+  /* Empty state */
+  .empty-state {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    letter-spacing: 0.04em;
+  }
+
+  /* Page heading */
+  .page-heading {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.4rem;
+  }
+  .page-sub {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-bottom: 2.5rem;
+  }
+
+  /* Public pool join form inline */
+  .join-form { display: inline; }
+  .join-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div class="page-heading">Welcome back, {{ current_user.display_name }}.</div>
+  <div class="page-sub">Your picks, your pools.</div>
+
+  <!-- ── My pools ──────────────────────────────────────────────────── -->
+  <div class="section-label">Your pools</div>
+
+  {% if my_pools %}
+    <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:2.5rem">
+      {% for pool in my_pools %}
+        <a class="pool-card mine" href="{{ url_for('pool_page', pool_id=pool.id) }}">
+          <div>
+            <div class="pool-card-name">{{ pool.name }}</div>
+            {% if pool.description %}
+              <div class="pool-card-desc">{{ pool.description }}</div>
+            {% endif %}
+          </div>
+          <div style="text-align:right">
+            <div class="pool-score">
+              {{ current_user.total_score }} <span style="font-size:0.7rem;font-weight:400;color:var(--text-dim)">pts</span>
+            </div>
+            <div class="pool-score-label">YOUR SCORE</div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state" style="margin-bottom:2.5rem">
+      You haven't joined any pools yet.<br>Browse the public pools below to get started.
+    </div>
+  {% endif %}
+
+  <!-- ── Public pools ───────────────────────────────────────────────── -->
+  {% if public_pools %}
+    <div class="section-label">Available pools</div>
+    <div style="display:flex;flex-direction:column;gap:0.6rem">
+      {% for pool in public_pools %}
+        <div class="pool-card">
+          <div>
+            <div class="pool-card-name">{{ pool.name }}</div>
+            {% if pool.description %}
+              <div class="pool-card-desc">{{ pool.description }}</div>
+            {% endif %}
+          </div>
+          <!-- POST form for joining — no JavaScript needed -->
+          <form class="join-form" method="POST" action="{{ url_for('join_pool', pool_id=pool.id) }}">
+            <button type="submit" class="btn btn-ghost btn-sm join-btn">Join →</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not my_pools and not public_pools %}
+    <div class="empty-state">
+      No pools are available right now. Ask an admin to create one.
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

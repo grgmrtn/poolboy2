@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Admin — WC26 Pool{% endblock %}
+
+{% block extra_head %}
+<style>
+  .admin-section { margin-bottom: 3rem; }
+  .admin-section h2 {
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+  }
+
+  /* Scoring config: three numeric inputs side by side */
+  .scoring-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
+  .scoring-input { text-align: center; font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+
+  /* Fixtures table */
+  .fixture-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .fixture-table th {
+    text-align: left;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 0 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .fixture-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .fixture-table tr:last-child td { border-bottom: none; }
+  .fixture-table tr:hover td { background: var(--surface2); }
+
+  .result-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .result-H { background: rgba(87,179,255,0.15); color: var(--blue); }
+  .result-A { background: rgba(255,87,87,0.15);  color: var(--red);  }
+  .result-D { background: rgba(200,255,87,0.15); color: var(--accent); }
+
+  .score-inputs { display: flex; align-items: center; gap: 0.35rem; }
+  .score-inputs input { width: 3rem; text-align: center; padding: 0.3rem; }
+
+  /* Pool creation */
+  .create-pool-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
+  @media (max-width:700px) { .create-pool-form { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:0.3rem">Admin</h1>
+  <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:2.5rem">
+    Configure scoring, enter results, and manage pools.
+  </p>
+
+  <!-- ── Scoring config ─────────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>Scoring configuration</h2>
+    <div class="card" style="max-width:480px">
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1.25rem">
+        Points awarded when a user's prediction is correct.
+        Changes apply to new score calculations only — past scores are preserved.
+      </p>
+      <form method="POST" action="{{ url_for('save_scoring') }}">
+        <div class="scoring-grid">
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pw">Win</label>
+            <input class="form-input scoring-input" type="number" id="pw" name="points_win"
+              value="{{ config.points_win }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pd">Draw</label>
+            <input class="form-input scoring-input" type="number" id="pd" name="points_draw"
+              value="{{ config.points_draw }}" min="0" max="99" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pl">Loss</label>
+            <input class="form-input scoring-input" type="number" id="pl" name="points_loss"
+              value="{{ config.points_loss }}" min="0" max="99" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save scoring config</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Fixtures & results ─────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>Fixtures — enter results</h2>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem">
+      After a match ends, enter the final score below. The backend will
+      score all picks for that fixture automatically.
+    </p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="fixture-table">
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Match</th>
+            <th>Kick-off</th>
+            <th>Result</th>
+            <th>Enter score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in fixtures %}
+          <tr>
+            <td style="color:var(--text-dim)">{{ f.stage }}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="{{ f.home_team }}" loading="lazy">
+                {{ f.home_team }}
+                <span style="color:var(--text-dim)">vs</span>
+                {{ f.away_team }}
+                <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="{{ f.away_team }}" loading="lazy">
+              </div>
+            </td>
+            <td style="color:var(--text-muted);white-space:nowrap">
+              {{ (f.kick_off or 'TBC')[:16].replace('T',' ') }}
+            </td>
+            <td>
+              {% if f.result %}
+                <span class="result-badge result-{{ f.result }}">
+                  {{ f.home_score }}–{{ f.away_score }}
+                  ({% if f.result == 'H' %}Home{% elif f.result == 'A' %}Away{% else %}Draw{% endif %})
+                </span>
+              {% else %}
+                <span style="color:var(--text-dim);font-size:0.72rem">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="POST" action="{{ url_for('set_fixture_result', fixture_id=f.id) }}">
+                <div class="score-inputs">
+                  <input class="form-input" type="number" name="home_score" min="0" max="99"
+                    placeholder="H" value="{{ f.home_score if f.home_score is not none else '' }}">
+                  <span style="color:var(--text-dim)">–</span>
+                  <input class="form-input" type="number" name="away_score" min="0" max="99"
+                    placeholder="A" value="{{ f.away_score if f.away_score is not none else '' }}">
+                  <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not fixtures %}
+          <tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:2rem">
+            No fixtures loaded yet.
+          </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pool management ────────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>Pools</h2>
+
+    {% if all_pools %}
+    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem">
+      {% for pool in all_pools %}
+      <div class="card card-sm" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <strong>{{ pool.name }}</strong>
+          {% if pool.description %}
+          <span style="color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">— {{ pool.description }}</span>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('pool_page', pool_id=pool.id) }}" class="btn btn-ghost btn-sm">View →</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Create a new pool -->
+    <div class="card" style="max-width:600px">
+      <div class="section-label" style="margin-bottom:1rem">Create new pool</div>
+      <form method="POST" action="{{ url_for('create_pool') }}">
+        <div class="create-pool-form">
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pname">Pool name</label>
+            <input class="form-input" type="text" id="pname" name="name" placeholder="e.g. Office Pool 2026" required>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pdesc">Description (optional)</label>
+            <input class="form-input" type="text" id="pdesc" name="description" placeholder="One-line description">
+          </div>
+          <div>
+            <label class="form-label" for="ppub">Public</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;height:40px">
+              <input type="checkbox" id="ppub" name="is_public" value="1" checked
+                style="width:16px;height:16px;accent-color:var(--accent)">
+              <label for="ppub" style="font-size:0.78rem;color:var(--text-muted)">Visible to all</label>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.5rem">Create pool</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
