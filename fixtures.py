@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 import requests
-from database import upsert_fixture, get_fixtures
+from database import upsert_fixture, get_fixtures, get_meta, set_meta
 
 # ── Cache ──────────────────────────────────────────────────────────────────
 # Simple in-memory cache: stores the last fetch time and the data.
@@ -196,32 +196,40 @@ def _fetch_from_api(api_key):
 
 def sync_fixtures():
     """
-    Main entry point: refresh fixtures if the cache has expired.
-    
-    Priority:
-    1. If FOOTBALL_DATA_API_KEY env var is set, fetch from the live API.
-    2. Otherwise, load mock data (great for development).
-    
-    The cache TTL prevents this from making an API call on every page load.
-    'api_key = os.environ.get("FOOTBALL_DATA_API_KEY", "")
+    Refresh fixtures if the TTL has expired.
+
+    Check order (fastest to slowest):
+    1. In-memory cache — zero overhead, resets on process restart.
+    2. Database meta row — survives redeploys and is shared across instances.
+    3. API / mock — only called when both caches are stale.
     """
     now = time.time()
-    elapsed = now - _cache["last_fetched"]
+    ttl = _cache["ttl_seconds"]
 
-    if elapsed < _cache["ttl_seconds"]:
-        return  # Cache is still fresh, nothing to do
+    # Fast path: in-memory cache still warm.
+    if now - _cache["last_fetched"] < ttl:
+        return
 
-    
+    # DB path: check persistent timestamp (survives redeploys).
+    try:
+        db_ts = float(get_meta("fixtures_last_fetched") or 0)
+    except (TypeError, ValueError):
+        db_ts = 0
+
+    if now - db_ts < ttl:
+        _cache["last_fetched"] = db_ts  # warm the in-memory cache
+        return
+
     api_key = os.environ.get("FOOTBALL_DATA_API_KEY", "")
-
     if api_key:
         success = _fetch_from_api(api_key)
         if success:
             _cache["last_fetched"] = now
+            set_meta("fixtures_last_fetched", str(now))
     else:
-        # No API key — use mock data
         _load_mock_fixtures()
         _cache["last_fetched"] = now
+        set_meta("fixtures_last_fetched", str(now))
         print("[fixtures] No API key found; using mock fixture data.")
 
 

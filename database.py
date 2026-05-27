@@ -160,9 +160,35 @@ def init_db():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
     print(f"[db] Database ready at {DB_PATH}")
+
+
+# ── Meta helpers ───────────────────────────────────────────────────────────
+
+def get_meta(key):
+    conn = get_db()
+    row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else None
+
+
+def set_meta(key, value):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO meta (key, value) VALUES (?,?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    """, (key, value))
+    conn.commit()
+    conn.close()
 
 
 # ── User helpers ───────────────────────────────────────────────────────────
