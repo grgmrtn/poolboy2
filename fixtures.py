@@ -165,7 +165,9 @@ def _fetch_from_api(api_key):
     _STAGE_LABELS = {
         "GROUP_STAGE":   None,          # use group field instead
         "ROUND_OF_32":   "Round of 32",
+        "LAST_32":       "Round of 32",
         "ROUND_OF_16":   "Round of 16",
+        "LAST_16":       "Round of 16",
         "QUARTER_FINALS":"Quarter-Finals",
         "SEMI_FINALS":   "Semi-Finals",
         "THIRD_PLACE":   "Third Place",
@@ -243,9 +245,24 @@ _STAGE_ORDER = [
     "Third Place", "Final",
 ]
 
+# Normalize raw API codes or legacy DB values → canonical display names
+_STAGE_ALIASES = {
+    "LAST_32":       "Round of 32",
+    "ROUND_OF_32":   "Round of 32",
+    "LAST_16":       "Round of 16",
+    "ROUND_OF_16":   "Round of 16",
+    "QUARTER_FINALS":"Quarter-Finals",
+    "SEMI_FINALS":   "Semi-Finals",
+    "THIRD_PLACE":   "Third Place",
+    "FINAL":         "Final",
+}
+
+def _normalize_stage(name):
+    return _STAGE_ALIASES.get(name, name)
+
 def _stage_key(name):
     try:
-        return _STAGE_ORDER.index(name)
+        return _STAGE_ORDER.index(_normalize_stage(name))
     except ValueError:
         return 999
 
@@ -260,7 +277,7 @@ def get_all_fixtures():
 
     grouped = {}
     for row in rows:
-        stage = row["stage"] or "Other"
+        stage = _normalize_stage(row["stage"] or "Other")
         if stage not in grouped:
             grouped[stage] = []
         grouped[stage].append(dict(row))
