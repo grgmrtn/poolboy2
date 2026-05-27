@@ -267,19 +267,51 @@ def _stage_key(name):
         return 999
 
 
+_KO_STAGES = ["Round of 32", "Round of 16", "Quarter-Finals", "Semi-Finals", "Third Place", "Final"]
+
 def get_all_fixtures():
     """
-    Return all fixtures from the database, grouped by stage in tournament order.
-    Triggers a cache refresh if needed before returning.
+    Return all fixtures from the database grouped for display.
+
+    Group-stage fixtures are bucketed into Matchday 1/2/3 (sorted by kick_off
+    within each group to assign position: games 1-2 = MD1, 3-4 = MD2, 5-6 = MD3).
+    Knockout fixtures follow in tournament order.
     """
     sync_fixtures()
     rows = get_fixtures()
 
-    grouped = {}
+    group_buckets = {}  # "Group A" → [fixtures sorted by kick_off]
+    ko_buckets    = {}  # "Round of 16" → [fixtures]
+    other         = {}
+
     for row in rows:
         stage = _normalize_stage(row["stage"] or "Other")
-        if stage not in grouped:
-            grouped[stage] = []
-        grouped[stage].append(dict(row))
+        d = dict(row)
+        if stage.startswith("Group "):
+            group_buckets.setdefault(stage, []).append(d)
+        elif stage in _KO_STAGES:
+            ko_buckets.setdefault(stage, []).append(d)
+        else:
+            other.setdefault(stage, []).append(d)
 
-    return dict(sorted(grouped.items(), key=lambda kv: _stage_key(kv[0])))
+    # Assign matchday within each group (sorted by kick_off, 2 games per matchday)
+    md_buckets = {}
+    for group_name in sorted(group_buckets, key=_stage_key):
+        sorted_fixtures = sorted(group_buckets[group_name], key=lambda f: f.get("kick_off") or "")
+        for i, fix in enumerate(sorted_fixtures):
+            md = f"Matchday {i // 2 + 1}"
+            md_buckets.setdefault(md, []).append(fix)
+
+    result = {}
+    for md in ["Matchday 1", "Matchday 2", "Matchday 3"]:
+        if md in md_buckets:
+            result[md] = sorted(md_buckets[md], key=lambda f: f.get("kick_off") or "")
+
+    for stage in _KO_STAGES:
+        if stage in ko_buckets:
+            result[stage] = sorted(ko_buckets[stage], key=lambda f: f.get("kick_off") or "")
+
+    for stage, fixes in other.items():
+        result[stage] = fixes
+
+    return result

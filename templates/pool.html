@@ -212,9 +212,10 @@
 
 <!-- ── Stage navigation ───────────────────────────────────────────── -->
 {% set SHORT = {
+  'Matchday 1': 'MD1', 'Matchday 2': 'MD2', 'Matchday 3': 'MD3',
   'Round of 32': 'R32', 'Round of 16': 'R16',
   'Quarter-Finals': 'QF', 'Semi-Finals': 'SF',
-  'Third Place': '3P', 'Final': 'Final'
+  'Third Place': '3P', 'Final': 'F'
 } %}
 <nav class="stage-nav" id="stage-nav">
   {% for stage in grouped_fixtures %}
@@ -280,7 +281,13 @@
                   {% else %}
                     <div class="meta-date" style="color:var(--text-dim)">TBC</div>
                   {% endif %}
-                  <div class="meta-group">{{ f.stage.replace('Group ','') if f.stage else '—' }}</div>
+                  <div class="meta-group">
+                    {%- if f.stage and f.stage.startswith('Group ') -%}
+                      Grp {{ f.stage[-1] }}
+                    {%- elif f.stage -%}
+                      {{ f.stage[:4] }}
+                    {%- else -%}—{%- endif -%}
+                  </div>
                 </div>
 
                 <!-- Pill column: pick row + score line -->
