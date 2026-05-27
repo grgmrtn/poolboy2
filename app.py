@@ -185,11 +185,6 @@ def home():
 @app.route("/pool/<pool_id>/join", methods=["POST"])
 @login_required
 def join_pool(pool_id):
-    """
-    Join a pool by its ID.
-    
-    Only works for public pools. After joining, redirect to the pool page.
-    """
     user = current_user()
     pool = db.get_pool_by_id(pool_id)
     if not pool:
@@ -199,8 +194,14 @@ def join_pool(pool_id):
         flash("That pool is not open to the public.", "error")
         return redirect(url_for("home"))
 
-    db.join_pool(str(uuid.uuid4()), user["id"], pool_id)
-    flash(f"You joined {pool['name']}!", "success")
+    # Free pools: auto-confirm. Paid pools: join as unpaid pending admin confirmation.
+    has_paid = 0 if pool["entry_fee"] else 1
+    db.join_pool(str(uuid.uuid4()), user["id"], pool_id, has_paid=has_paid)
+
+    if pool["entry_fee"]:
+        flash(f"You're registered for {pool['name']}. Complete your payment to unlock picks.", "success")
+    else:
+        flash(f"You joined {pool['name']}!", "success")
     return redirect(url_for("pool_page", pool_id=pool_id))
 
 
@@ -256,6 +257,9 @@ def pool_page(pool_id):
     leaderboard = db.get_pool_leaderboard(pool_id)
     now_iso = datetime.utcnow().isoformat()
 
+    membership = db.get_pool_membership(user["id"], pool_id)
+    has_paid = bool(membership and membership["has_paid"])
+
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
@@ -264,6 +268,7 @@ def pool_page(pool_id):
         all_picks_by_fixture=all_picks_by_fixture,
         leaderboard=leaderboard,
         now_iso=now_iso,
+        has_paid=has_paid,
     )
 
 
@@ -290,6 +295,11 @@ def submit_pick(pool_id):
     if not db.is_pool_member(user["id"], pool_id):
         return jsonify({"ok": False, "error": "Not a pool member."}), 403
 
+    membership = db.get_pool_membership(user["id"], pool_id)
+    pool = db.get_pool_by_id(pool_id)
+    if pool and pool["entry_fee"] and membership and not membership["has_paid"]:
+        return jsonify({"ok": False, "error": "Payment required to make picks."}), 403
+
     # Check the fixture hasn't kicked off yet
     conn = db.get_db()
     fixture = conn.execute("SELECT kick_off FROM fixtures WHERE id=?", (fixture_id,)).fetchone()
@@ -312,11 +322,14 @@ def admin_page():
 
     # Per-pool scoring: {pool_id: {"group_stage": cfg, "knockout": cfg}}
     pool_scoring = {}
+    pool_members = {}
     for pool in all_pools:
-        pool_scoring[pool["id"]] = {
-            "group_stage": db.get_scoring_config(pool["id"], "Group A"),
-            "knockout":    db.get_scoring_config(pool["id"], "Round of 16"),
+        pid = pool["id"]
+        pool_scoring[pid] = {
+            "group_stage": db.get_scoring_config(pid, "Group A"),
+            "knockout":    db.get_scoring_config(pid, "Round of 16"),
         }
+        pool_members[pid] = db.get_pool_members(pid)
 
     return render_template("admin.html",
         config=config,
@@ -324,6 +337,7 @@ def admin_page():
         all_pools=all_pools,
         users=users,
         pool_scoring=pool_scoring,
+        pool_members=pool_members,
     )
 
 
@@ -402,16 +416,36 @@ def set_fixture_result(fixture_id):
 @admin_required
 def create_pool():
     """Create a new pool from the admin page."""
-    name        = request.form.get("name", "").strip()
-    description = request.form.get("description", "").strip()
-    is_public   = 1 if request.form.get("is_public") else 0
+    name                 = request.form.get("name", "").strip()
+    description          = request.form.get("description", "").strip()
+    is_public            = 1 if request.form.get("is_public") else 0
+    entry_fee            = request.form.get("entry_fee", "").strip() or None
+    payment_instructions = request.form.get("payment_instructions", "").strip() or None
 
     if not name:
         flash("Pool name is required.", "error")
         return redirect(url_for("admin_page"))
 
-    db.create_pool(str(uuid.uuid4()), name, description, is_public)
+    db.create_pool(str(uuid.uuid4()), name, description, is_public,
+                   entry_fee=entry_fee, payment_instructions=payment_instructions)
     flash(f"Pool '{name}' created.", "success")
+    return redirect(url_for("admin_page"))
+
+
+@app.route("/admin/pool/<pool_id>/member/<user_id>/paid", methods=["POST"])
+@admin_required
+def mark_member_paid(pool_id, user_id):
+    """Toggle a pool member's payment status."""
+    membership = db.get_pool_membership(user_id, pool_id)
+    if not membership:
+        flash("Member not found.", "error")
+        return redirect(url_for("admin_page"))
+    new_paid = 0 if membership["has_paid"] else 1
+    db.set_member_paid(user_id, pool_id, new_paid)
+    pool = db.get_pool_by_id(pool_id)
+    user = db.get_user_by_id(user_id)
+    verb = "marked as paid" if new_paid else "marked as unpaid"
+    flash(f"{user['display_name']} {verb} for {pool['name']}.", "success")
     return redirect(url_for("admin_page"))
 
 

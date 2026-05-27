@@ -78,7 +78,18 @@
       {% for pool in my_pools %}
         <a class="pool-card mine" href="{{ url_for('pool_page', pool_id=pool.id) }}">
           <div>
-            <div class="pool-card-name">{{ pool.name }}</div>
+            <div class="pool-card-name">
+              {{ pool.name }}
+              {% if pool.entry_fee and not pool.has_paid %}
+                <span style="
+                  display:inline-block;margin-left:0.5rem;
+                  font-size:0.62rem;font-weight:700;letter-spacing:0.07em;
+                  padding:0.1rem 0.4rem;border-radius:4px;
+                  background:rgba(255,193,7,0.15);color:#ffc107;
+                  border:1px solid rgba(255,193,7,0.3);vertical-align:middle
+                ">PAYMENT PENDING</span>
+              {% endif %}
+            </div>
             {% if pool.description %}
               <div class="pool-card-desc">{{ pool.description }}</div>
             {% endif %}
@@ -109,8 +120,12 @@
             {% if pool.description %}
               <div class="pool-card-desc">{{ pool.description }}</div>
             {% endif %}
+            {% if pool.entry_fee %}
+              <div style="font-size:0.72rem;color:var(--accent);margin-top:0.25rem;font-weight:600">
+                Entry: {{ pool.entry_fee }}
+              </div>
+            {% endif %}
           </div>
-          <!-- POST form for joining — no JavaScript needed -->
           <form class="join-form" method="POST" action="{{ url_for('join_pool', pool_id=pool.id) }}">
             <button type="submit" class="btn btn-ghost btn-sm join-btn">Join →</button>
           </form>

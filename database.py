@@ -84,11 +84,13 @@ def init_db():
     # A pool is a competition group. is_public=1 makes it visible to everyone.
     c.execute("""
         CREATE TABLE IF NOT EXISTS pools (
-            id          TEXT PRIMARY KEY,
-            name        TEXT NOT NULL,
-            description TEXT,
-            is_public   INTEGER DEFAULT 1,
-            created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+            id                   TEXT PRIMARY KEY,
+            name                 TEXT NOT NULL,
+            description          TEXT,
+            is_public            INTEGER DEFAULT 1,
+            entry_fee            TEXT,
+            payment_instructions TEXT,
+            created_at           TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -98,6 +100,7 @@ def init_db():
             id         TEXT PRIMARY KEY,
             user_id    TEXT NOT NULL REFERENCES users(id),
             pool_id    TEXT NOT NULL REFERENCES pools(id),
+            has_paid   INTEGER DEFAULT 0,
             joined_at  TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, pool_id)
         )
@@ -172,12 +175,22 @@ def init_db():
         for sql in [
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS pool_id TEXT",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS round_type TEXT",
+            "ALTER TABLE pools ADD COLUMN IF NOT EXISTS entry_fee TEXT",
+            "ALTER TABLE pools ADD COLUMN IF NOT EXISTS payment_instructions TEXT",
+            "ALTER TABLE pool_members ADD COLUMN IF NOT EXISTS has_paid INTEGER DEFAULT 0",
         ]:
             c.execute(sql)
     else:
-        for col_def in ["pool_id TEXT", "round_type TEXT"]:
+        migrations = [
+            ("scoring_config", "pool_id TEXT"),
+            ("scoring_config", "round_type TEXT"),
+            ("pools",          "entry_fee TEXT"),
+            ("pools",          "payment_instructions TEXT"),
+            ("pool_members",   "has_paid INTEGER DEFAULT 0"),
+        ]
+        for table, col_def in migrations:
             try:
-                c.execute(f"ALTER TABLE scoring_config ADD COLUMN {col_def}")
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
             except Exception:
                 pass
 
@@ -265,10 +278,10 @@ def get_all_public_pools():
 
 
 def get_pools_for_user(user_id):
-    """Return all pools that a user is currently a member of."""
+    """Return all pools the user belongs to, including their has_paid status."""
     conn = get_db()
     pools = conn.execute("""
-        SELECT p.* FROM pools p
+        SELECT p.*, pm.has_paid FROM pools p
         JOIN pool_members pm ON pm.pool_id = p.id
         WHERE pm.user_id = ? AND p.id IS NOT NULL
         ORDER BY p.name
@@ -288,19 +301,53 @@ def is_pool_member(user_id, pool_id):
     return row is not None
 
 
-def join_pool(member_id, user_id, pool_id):
+def join_pool(member_id, user_id, pool_id, has_paid=0):
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO pool_members (id, user_id, pool_id) VALUES (?,?,?)",
-            (member_id, user_id, pool_id)
+            "INSERT INTO pool_members (id, user_id, pool_id, has_paid) VALUES (?,?,?,?)",
+            (member_id, user_id, pool_id, has_paid)
         )
         conn.commit()
-        print("JOIN SUCCESS:", member_id, user_id, pool_id)
-    except _IntegrityError as e:
-        print("JOIN FAILED:", e, member_id, user_id, pool_id)
+    except _IntegrityError:
+        pass
     finally:
         conn.close()
+
+
+def get_pool_membership(user_id, pool_id):
+    """Return the pool_members row for this user+pool as a dict, or None."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM pool_members WHERE user_id=? AND pool_id=?",
+        (user_id, pool_id)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_member_paid(user_id, pool_id, paid):
+    conn = get_db()
+    conn.execute(
+        "UPDATE pool_members SET has_paid=? WHERE user_id=? AND pool_id=?",
+        (paid, user_id, pool_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_pool_members(pool_id):
+    """Return all members of a pool with their payment status, ordered by name."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT u.id, u.display_name, u.email, pm.has_paid, pm.joined_at
+        FROM pool_members pm
+        JOIN users u ON u.id = pm.user_id
+        WHERE pm.pool_id = ?
+        ORDER BY u.display_name
+    """, (pool_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_pool_by_id(pool_id):
@@ -311,12 +358,14 @@ def get_pool_by_id(pool_id):
     return pool
 
 
-def create_pool(pool_id, name, description, is_public=1):
+def create_pool(pool_id, name, description, is_public=1,
+                entry_fee=None, payment_instructions=None):
     """Insert a new pool."""
     conn = get_db()
     conn.execute(
-        "INSERT INTO pools (id, name, description, is_public) VALUES (?,?,?,?)",
-        (pool_id, name, description, is_public)
+        "INSERT INTO pools (id, name, description, is_public, entry_fee, payment_instructions)"
+        " VALUES (?,?,?,?,?,?)",
+        (pool_id, name, description, is_public, entry_fee or None, payment_instructions or None)
     )
     conn.commit()
     conn.close()

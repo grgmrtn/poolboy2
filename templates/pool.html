@@ -236,6 +236,27 @@
     {% endif %}
   </div>
 
+  {% if pool.entry_fee and not has_paid %}
+  <div style="
+    background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.3);
+    border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+    display: flex; align-items: flex-start; gap: 0.75rem;
+  ">
+    <span style="font-size:1.1rem;flex-shrink:0">⚠</span>
+    <div>
+      <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.3rem">
+        Payment required — {{ pool.entry_fee }} entry fee
+      </div>
+      {% if pool.payment_instructions %}
+        <div style="font-size:0.8rem;color:var(--text-muted)">{{ pool.payment_instructions }}</div>
+      {% endif %}
+      <div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem">
+        Picks are locked until an admin confirms your payment.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="pool-layout">
 
     <!-- ── Fixtures ──────────────────────────────────────────────── -->
@@ -321,17 +342,18 @@
                         </div>
 
                       {% else %}
-                        <!-- Pickable: team-name buttons with 3-letter abbr -->
+                        <!-- Pickable (or locked if unpaid) -->
+                        {% set picks_locked = pool.entry_fee and not has_paid %}
                         <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
+                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)"{% endif %}>
                           <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
                                alt="" onerror="this.style.display='none'" loading="lazy">
                           <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
                         </button>
                         <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
+                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)"{% endif %}>Draw</button>
                         <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
-                                onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
+                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)"{% endif %}>
                           <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
                           <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
                                alt="" onerror="this.style.display='none'" loading="lazy">

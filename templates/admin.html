@@ -37,6 +37,21 @@
   .create-pool-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
   @media (max-width:700px) { .create-pool-form { grid-template-columns: 1fr; } }
 
+  .members-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.75rem; }
+  .members-table th {
+    text-align: left; font-size: 0.6rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-dim);
+    padding: 0 0.6rem 0.4rem; border-bottom: 1px solid var(--border);
+  }
+  .members-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .members-table tr:last-child td { border-bottom: none; }
+  .paid-badge {
+    display:inline-block; padding:0.1rem 0.4rem; border-radius:4px;
+    font-size:0.62rem; font-weight:700; letter-spacing:0.06em;
+  }
+  .paid-yes { background:rgba(200,255,87,0.12); color:var(--accent); border:1px solid rgba(200,255,87,0.25); }
+  .paid-no  { background:rgba(255,193,7,0.1);   color:#ffc107;       border:1px solid rgba(255,193,7,0.25); }
+
   .pool-scoring-card { margin-bottom: 1rem; }
   .round-label {
     font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
@@ -254,10 +269,10 @@
     </div>
     {% endif %}
 
-    <div class="card" style="max-width:600px">
+    <div class="card" style="max-width:700px">
       <div class="section-label" style="margin-bottom:1rem">Create new pool</div>
       <form method="POST" action="{{ url_for('create_pool') }}">
-        <div class="create-pool-form">
+        <div class="create-pool-form" style="grid-template-columns:1fr 1fr auto">
           <div class="form-group" style="margin:0">
             <label class="form-label" for="pname">Pool name</label>
             <input class="form-input" type="text" id="pname" name="name" placeholder="e.g. Office Pool 2026" required>
@@ -275,9 +290,72 @@
             </div>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.5rem">Create pool</button>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:0.75rem;margin-top:0.75rem">
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="pfee">Entry fee (optional)</label>
+            <input class="form-input" type="text" id="pfee" name="entry_fee"
+              placeholder="e.g. $5 CAD">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" for="ppay">Payment instructions</label>
+            <input class="form-input" type="text" id="ppay" name="payment_instructions"
+              placeholder="e.g. e-transfer $5 to greg@example.com — include your name">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.75rem">Create pool</button>
       </form>
     </div>
+
+    <!-- ── Member payments per paid pool ─────────────────────────────── -->
+    {% for pool in all_pools %}
+      {% if pool.entry_fee %}
+      <div class="card" style="margin-top:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+          <div>
+            <span style="font-weight:700;font-size:0.88rem">{{ pool.name }}</span>
+            <span style="font-size:0.75rem;color:var(--accent);margin-left:0.5rem">{{ pool.entry_fee }}</span>
+          </div>
+          {% set members = pool_members[pool.id] %}
+          {% set paid_count = members | selectattr('has_paid') | list | length %}
+          <span style="font-size:0.72rem;color:var(--text-muted)">{{ paid_count }}/{{ members|length }} paid</span>
+        </div>
+        {% if pool.payment_instructions %}
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.75rem">{{ pool.payment_instructions }}</div>
+        {% endif %}
+        {% if members %}
+        <table class="members-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td>{{ m.display_name }}</td>
+              <td style="color:var(--text-muted)">{{ m.email }}</td>
+              <td>
+                {% if m.has_paid %}
+                  <span class="paid-badge paid-yes">paid</span>
+                {% else %}
+                  <span class="paid-badge paid-no">pending</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST"
+                      action="{{ url_for('mark_member_paid', pool_id=pool.id, user_id=m.id) }}"
+                      style="display:inline">
+                  <button type="submit" class="btn btn-ghost btn-sm">
+                    {% if m.has_paid %}Mark unpaid{% else %}Mark paid{% endif %}
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p style="font-size:0.78rem;color:var(--text-dim)">No members yet.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
   </div>
 
   <!-- ── Users ──────────────────────────────────────────────────────── -->
