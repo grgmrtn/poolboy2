@@ -229,7 +229,11 @@
 <div class="page">
 
   <div style="margin-bottom:1.5rem">
-    <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
+    <div style="display:flex;align-items:baseline;gap:1rem">
+      <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
+      <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
+         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">stats →</a>
+    </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     {% if pool.description %}
       <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem">{{ pool.description }}</p>

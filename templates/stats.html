@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }} — Stats{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  .stats-header { margin-bottom: 1.5rem; }
+  .stats-header h1 { font-size: 1.3rem; font-weight: 700; margin-top: 0.4rem; }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.25rem 1rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+  .chart-title {
+    font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 1rem;
+  }
+  .chart-wrap { position: relative; height: 420px; }
+  @media (max-width: 600px) { .chart-wrap { height: 260px; } }
+
+  /* Legend table */
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.3rem 1rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.75rem; cursor: pointer;
+    color: var(--text-muted);
+    padding: 0.15rem 0;
+    transition: color 0.12s;
+  }
+  .legend-item:hover { color: var(--text); }
+  .legend-item.is-me { color: var(--text); font-weight: 700; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-swatch {
+    width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0;
+  }
+  .legend-score {
+    margin-left: auto; font-weight: 700; font-size: 0.7rem;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .empty-state {
+    padding: 3rem 1.5rem; text-align: center;
+    color: var(--text-dim); font-size: 0.82rem;
+    border: 1px dashed var(--border); border-radius: var(--radius-lg);
+  }
+
+  .meta-row {
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+  .meta-chip {
+    font-size: 0.72rem; color: var(--text-muted);
+  }
+  .meta-chip strong { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div class="stats-header">
+    <a href="{{ url_for('pool_page', pool_id=pool.id) }}"
+       style="color:var(--text-dim);font-size:0.78rem">← {{ pool.name }}</a>
+    <h1>Points over time</h1>
+  </div>
+
+  {% if not timeline.fixtures or timeline.fixtures|length <= 1 %}
+    <div class="empty-state">
+      No scored fixtures yet — check back once matches have been played.
+    </div>
+  {% else %}
+
+    {% set n_fixtures = timeline.fixtures|length - 1 %}
+    {% set n_players  = timeline.players|length %}
+
+    <div class="meta-row">
+      <div class="meta-chip"><strong>{{ n_fixtures }}</strong> scored matches</div>
+      <div class="meta-chip">
+        <strong>{{ n_players }}</strong>
+        {% if timeline.total_players > n_players %}
+          of {{ timeline.total_players }}
+        {% endif %}
+        players shown
+      </div>
+      {% if timeline.players %}
+        <div class="meta-chip">
+          Leader: <strong>{{ timeline.players[0].display_name }}</strong>
+          — {{ timeline.players[0].final_score }} pts
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Cumulative points — each player</div>
+      <div class="chart-wrap">
+        <canvas id="statsChart"></canvas>
+      </div>
+      <div class="legend-grid" id="legend"></div>
+    </div>
+
+  {% endif %}
+
+</div>
+
+<script>
+(function () {
+  const MY_UID  = {{ my_user_id | tojson }};
+  const fixtures = {{ timeline.fixtures | tojson }};
+  const players  = {{ timeline.players  | tojson }};
+
+  if (!fixtures.length || fixtures.length <= 1) return;
+
+  // ── Colour palette ─────────────────────────────────────────────────────
+  const PALETTE = [
+    "#57b3ff","#c8ff57","#ff7c57","#c557ff","#57ffd8",
+    "#ffdd57","#ff5792","#57d8ff","#a0ff57","#ff9657",
+    "#9b57ff","#57ffae","#ff5757","#57c8ff","#f0ff57",
+    "#ff57c8","#57ffff","#ff8c57","#7c57ff","#57ff7c",
+  ];
+
+  // x-axis labels: "Start", then "14 Jun\nGER v SCO" etc.
+  const labels = fixtures.map((f, i) => {
+    if (i === 0) return "Start";
+    return `${f.date_label}\n${f.label}`;
+  });
+
+  // Build datasets
+  const datasets = players.map((p, i) => {
+    const isMe = p.user_id === MY_UID;
+    const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
+    return {
+      label:       p.display_name,
+      data:        p.cumulative,
+      borderColor: color,
+      backgroundColor: color + "18",
+      borderWidth: isMe ? 2.5 : 1.5,
+      pointRadius: isMe ? 3 : 1.5,
+      pointHoverRadius: isMe ? 6 : 4,
+      tension: 0.25,
+      fill: false,
+      _uid: p.user_id,
+      _final: p.final_score,
+    };
+  });
+
+  // ── Chart ──────────────────────────────────────────────────────────────
+  const ctx = document.getElementById("statsChart").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(10,10,15,0.92)",
+          borderColor: "#2a2a35",
+          borderWidth: 1,
+          titleColor: "#e0e0e8",
+          bodyColor: "#9090a0",
+          padding: 10,
+          callbacks: {
+            title(items) {
+              const i = items[0].dataIndex;
+              if (i === 0) return "Start";
+              const f = fixtures[i];
+              return `${f.date_label} — ${f.label}${f.stage ? "  (" + f.stage + ")" : ""}`;
+            },
+            label(item) {
+              const prev = item.dataIndex > 0 ? item.dataset.data[item.dataIndex - 1] : 0;
+              const gained = item.parsed.y - prev;
+              const gainStr = gained > 0 ? ` (+${gained})` : (gained === 0 ? " (—)" : "");
+              return ` ${item.dataset.label}: ${item.parsed.y} pts${gainStr}`;
+            },
+          },
+          itemSort(a, b) { return b.parsed.y - a.parsed.y; },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#606070",
+            font: { size: 10 },
+            maxRotation: 45,
+            minRotation: 0,
+            maxTicksLimit: 18,
+            callback(val, i) {
+              if (i === 0) return "Start";
+              return fixtures[i]?.date_label ?? "";
+            },
+          },
+          grid: { color: "#1e1e28" },
+        },
+        y: {
+          ticks: { color: "#606070", font: { size: 11 } },
+          grid:  { color: "#1e1e28" },
+          title: {
+            display: true,
+            text: "Cumulative points",
+            color: "#505060",
+            font: { size: 10 },
+          },
+        },
+      },
+    },
+  });
+
+  // ── Custom legend with toggle ──────────────────────────────────────────
+  const legendEl = document.getElementById("legend");
+  const hidden = new Set();
+
+  function rebuildLegend() {
+    legendEl.innerHTML = "";
+    datasets.forEach((ds, i) => {
+      const isMe = ds._uid === MY_UID;
+      const isDimmed = hidden.has(i);
+      const item = document.createElement("div");
+      item.className = `legend-item${isMe ? " is-me" : ""}${isDimmed ? " dimmed" : ""}`;
+      item.innerHTML = `
+        <span class="legend-swatch" style="background:${ds.borderColor}"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${ds.label}</span>
+        <span class="legend-score">${ds._final} pts</span>
+      `;
+      item.addEventListener("click", () => {
+        if (hidden.has(i)) {
+          hidden.delete(i);
+          chart.show(i);
+        } else {
+          hidden.add(i);
+          chart.hide(i);
+        }
+        rebuildLegend();
+      });
+      legendEl.appendChild(item);
+    });
+  }
+
+  rebuildLegend();
+})();
+</script>
+{% endblock %}

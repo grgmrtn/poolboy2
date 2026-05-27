@@ -565,6 +565,96 @@ def set_user_admin(user_id, is_admin):
     conn.close()
 
 
+# ── Stats ─────────────────────────────────────────────────────────────────
+
+def get_pool_score_timeline(pool_id, max_players=20):
+    """
+    Return data for the pool stats chart.
+
+    Result dict:
+      fixtures  — list of {id, label, date_label} in kick_off order
+      players   — top max_players by final score, each with a `cumulative`
+                  list (one value per fixture, starting with 0)
+    Only scored fixtures are included.
+    """
+    from datetime import datetime as _dt
+    conn = get_db()
+
+    # Distinct scored fixtures in this pool, ordered chronologically
+    fix_rows = conn.execute("""
+        SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team, f.stage
+        FROM score_log sl
+        JOIN picks p ON p.id = sl.pick_id
+        JOIN fixtures f ON f.id = p.fixture_id
+        WHERE sl.pool_id = ?
+        ORDER BY f.kick_off, f.id
+    """, (pool_id,)).fetchall()
+
+    # All score_log rows for this pool
+    score_rows = conn.execute("""
+        SELECT sl.user_id, p.fixture_id, sl.points_awarded, u.display_name
+        FROM score_log sl
+        JOIN picks p ON p.id = sl.pick_id
+        JOIN users u ON u.id = sl.user_id
+        WHERE sl.pool_id = ?
+    """, (pool_id,)).fetchall()
+
+    conn.close()
+
+    if not fix_rows:
+        return {"fixtures": [], "players": []}
+
+    fixture_ids = [r["id"] for r in fix_rows]
+
+    # Build fixture label list (prepend a "Start" sentinel at index 0)
+    fixtures_out = [{"id": None, "label": "Start", "date_label": ""}]
+    for r in fix_rows:
+        ko = r["kick_off"] or ""
+        try:
+            dt = _dt.fromisoformat(ko[:10])
+            date_label = f"{dt.day} {dt.strftime('%b')}"
+        except Exception:
+            date_label = ko[:10]
+        ha = (r["home_team"] or "")[:3].upper()
+        aa = (r["away_team"] or "")[:3].upper()
+        fixtures_out.append({
+            "id": r["id"],
+            "label": f"{ha} v {aa}",
+            "date_label": date_label,
+            "stage": r["stage"] or "",
+        })
+
+    # Aggregate points: {user_id: {fixture_id: points}}
+    user_pts = {}
+    user_names = {}
+    for row in score_rows:
+        uid = row["user_id"]
+        user_names[uid] = row["display_name"]
+        user_pts.setdefault(uid, {})[row["fixture_id"]] = row["points_awarded"]
+
+    # Build cumulative series per player (index 0 = 0, then +points per fixture)
+    players_out = []
+    for uid, pts_map in user_pts.items():
+        cumulative = [0]
+        running = 0
+        for fid in fixture_ids:
+            running += pts_map.get(fid, 0)
+            cumulative.append(running)
+        players_out.append({
+            "user_id": uid,
+            "display_name": user_names[uid],
+            "cumulative": cumulative,
+            "final_score": running,
+        })
+
+    players_out.sort(key=lambda p: p["final_score"], reverse=True)
+    return {
+        "fixtures": fixtures_out,
+        "players": players_out[:max_players],
+        "total_players": len(players_out),
+    }
+
+
 # ── Scoring job ────────────────────────────────────────────────────────────
 
 def calculate_scores_for_fixture(fixture_id):

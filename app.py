@@ -451,6 +451,37 @@ def mark_member_paid(pool_id, user_id):
 
 # ── Startup ────────────────────────────────────────────────────────────────
 
+@app.route("/pool/<pool_id>/stats")
+@login_required
+def pool_stats(pool_id):
+    user = current_user()
+    pool = db.get_pool_by_id(pool_id)
+    if not pool:
+        flash("Pool not found.", "error")
+        return redirect(url_for("home"))
+    if not db.is_pool_member(user["id"], pool_id):
+        flash("You're not a member of that pool.", "error")
+        return redirect(url_for("home"))
+
+    timeline = db.get_pool_score_timeline(pool_id)
+
+    # Always include the current user even if outside top-20
+    my_uid = user["id"]
+    in_top = any(p["user_id"] == my_uid for p in timeline["players"])
+    if not in_top:
+        full = db.get_pool_score_timeline(pool_id, max_players=10_000)
+        for p in full["players"]:
+            if p["user_id"] == my_uid:
+                timeline["players"].append(p)
+                break
+
+    return render_template("stats.html",
+        pool=pool,
+        timeline=timeline,
+        my_user_id=my_uid,
+    )
+
+
 import os
 
 def seed_defaults():
