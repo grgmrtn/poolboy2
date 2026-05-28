@@ -237,7 +237,6 @@
       WC<span>26</span> Pool
     </a>
     <div class="navbar-right">
-      <span class="navbar-score">score: <strong>{{ current_user.total_score }} pts</strong></span>
       <span class="navbar-user">{{ current_user.display_name }}</span>
       {% if current_user.is_admin %}
         <a href="{{ url_for('admin_page') }}" class="nav-link">admin</a>

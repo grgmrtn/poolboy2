@@ -285,14 +285,21 @@ def get_all_fixtures():
     other         = {}
 
     for row in rows:
-        stage = _normalize_stage(row["stage"] or "Other")
+        stage   = _normalize_stage(row["stage"] or "Other")
+        home    = row["home_team"] or ""
+        away    = row["away_team"] or ""
+        kick_off = row["kick_off"] or ""
+        if home == "TBD" and away == "TBD":
+            continue
+        if kick_off and not kick_off.startswith("202"):
+            continue
+        if kick_off and kick_off[:4] not in ("2025", "2026", "2027"):
+            continue
         d = dict(row)
         if stage.startswith("Group "):
             group_buckets.setdefault(stage, []).append(d)
         elif stage in _KO_STAGES:
             ko_buckets.setdefault(stage, []).append(d)
-        else:
-            other.setdefault(stage, []).append(d)
 
     # Assign matchday within each group (sorted by kick_off, 2 games per matchday)
     md_buckets = {}
@@ -310,8 +317,5 @@ def get_all_fixtures():
     for stage in _KO_STAGES:
         if stage in ko_buckets:
             result[stage] = sorted(ko_buckets[stage], key=lambda f: f.get("kick_off") or "")
-
-    for stage, fixes in other.items():
-        result[stage] = fixes
 
     return result

@@ -33,7 +33,7 @@
     gap: 2rem; align-items: start;
   }
   @media (max-width: 820px) { .pool-layout { grid-template-columns: 1fr; } }
-  .sticky-sidebar { position: sticky; top: 106px; } /* 56px nav + 50px stage-nav */
+  .sticky-sidebar { position: sticky; top: 106px; }
 
   .stage-heading {
     font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
@@ -53,17 +53,21 @@
   .meta-time  { font-size: 0.6rem;  color: var(--text-muted); }
   .meta-group { font-size: 0.55rem; color: var(--accent); letter-spacing: 0.06em;
                 margin-top: 0.15rem; text-transform: uppercase; }
+  .meta-countdown {
+    font-size: 0.48rem; color: var(--amber); margin-top: 0.2rem;
+    letter-spacing: 0.03em; line-height: 1.3;
+  }
 
-  /* ── Fixture content col (pill row + optional score below) ───────── */
+  /* ── Fixture content col ─────────────────────────────────────────── */
   .fixture-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
 
   .fixture-pills {
     display: flex; align-items: center;
     gap: 0.3rem; overflow-x: auto; scrollbar-width: none;
+    flex-wrap: nowrap;
   }
   .fixture-pills::-webkit-scrollbar { display: none; }
 
-  /* Score line below completed pills */
   .fixture-score {
     font-size: 0.62rem; color: var(--text-muted);
     letter-spacing: 0.04em; padding-left: 2px;
@@ -72,8 +76,9 @@
   .score-result { font-weight: 600; }
   .score-pts    { color: var(--accent); font-weight: 700; }
   .score-pts-zero { color: var(--text-dim); }
+  .score-pts-neg  { color: var(--red); font-weight: 700; }
 
-  /* ── Match pill — FIXED width so all rows align ──────────────────── */
+  /* ── Match pill ──────────────────────────────────────────────────── */
   .match-pill {
     display: flex; align-items: stretch;
     background: var(--surface); border: 1px solid var(--border);
@@ -85,8 +90,8 @@
   .match-pill.completed   { border-color: rgba(255,190,87,0.18); }
   .match-pill.scored-win  { border-color: rgba(200,255,87,0.32); }
   .match-pill.scored-loss { border-color: rgba(255,87,87,0.18); }
+  .match-pill.locked      { border-color: rgba(255,190,87,0.12); }
 
-  /* Shared: team side fixed width */
   .pill-side {
     width: 80px; flex-shrink: 0;
     display: flex; align-items: center; gap: 0.3rem;
@@ -95,7 +100,6 @@
   .pill-side.home { border-right: 1px solid var(--border); }
   .pill-side.away { border-left: 1px solid var(--border); flex-direction: row-reverse; }
 
-  /* Fixed-width center */
   .pill-centre {
     flex: 1;
     display: flex; align-items: center; justify-content: center;
@@ -104,13 +108,12 @@
   .team-abbr { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
   .flag { width: 18px; height: 13px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
 
-  /* ── Pick buttons (inside pill, pickable state) ───────────────────── */
+  /* ── Pick buttons (group stage) ──────────────────────────────────── */
   .pick-btn {
     background: transparent; border: none; cursor: pointer;
     font-family: var(--mono); transition: all 0.12s;
     display: flex; align-items: center;
   }
-  /* Home / Away buttons reuse pill-side sizing */
   .pick-home {
     width: 80px; flex-shrink: 0; gap: 0.3rem; padding: 0 0.6rem;
     border-right: 1px solid var(--border);
@@ -122,8 +125,7 @@
     flex-direction: row-reverse; height: 100%;
     justify-content: flex-start;
   }
-  .pick-home .team-abbr,
-  .pick-away .team-abbr { color: var(--text-muted); }
+  .pick-home .team-abbr, .pick-away .team-abbr { color: var(--text-muted); }
 
   .pick-draw {
     flex: 1; height: 100%; justify-content: center;
@@ -140,7 +142,6 @@
   .pick-away.active { background: var(--away-bg); }
   .pick-away.active .team-abbr { color: var(--away-color, var(--red)); }
 
-  /* Result indicator shown in pill centre when completed */
   .pill-result {
     font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
     width: 24px; height: 24px; border-radius: 4px;
@@ -154,6 +155,74 @@
     color: var(--amber); background: rgba(255,190,87,0.10);
     width: auto; padding: 0 0.3rem;
   }
+  .pill-score {
+    font-size: 0.82rem; font-weight: 700; color: var(--text);
+    line-height: 1; white-space: nowrap; letter-spacing: -0.01em;
+  }
+  .score-sep { color: var(--text-dim); margin: 0 1px; font-weight: 400; }
+
+  /* ── Spy modal ───────────────────────────────────────────────────── */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.6); display: flex;
+    align-items: center; justify-content: center;
+  }
+  .modal-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 1.5rem 1.75rem;
+    max-width: 340px; width: 92%; box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  }
+  .modal-title {
+    font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+  .modal-body { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5; }
+  .modal-body strong { color: var(--accent); }
+  .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
+
+  /* ── Knockout betting form ───────────────────────────────────────── */
+  .ko-bet-row {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0.35rem 0; flex-wrap: wrap;
+  }
+  .ko-opt {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.55rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer;
+    font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted);
+    transition: all 0.12s; white-space: nowrap;
+  }
+  .ko-opt:hover { border-color: var(--border-hi); color: var(--text); }
+  .ko-opt.selected-H { border-color: var(--home-color, var(--blue));
+                        color: var(--home-color, var(--blue));
+                        background: var(--home-bg); }
+  .ko-opt.selected-A { border-color: var(--away-color, var(--red));
+                        color: var(--away-color, var(--red));
+                        background: var(--away-bg); }
+  .ko-opt.selected-D { border-color: var(--accent); color: var(--accent);
+                        background: rgba(200,255,87,0.08); }
+  .ko-bet-amt {
+    width: 72px; padding: 0.25rem 0.45rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: var(--mono); font-size: 0.78rem;
+    outline: none; transition: border-color 0.12s;
+  }
+  .ko-bet-amt:focus { border-color: var(--accent); }
+  .ko-potential { font-size: 0.65rem; color: var(--accent); white-space: nowrap; }
+  .ko-note { font-size: 0.6rem; color: var(--text-dim); font-style: italic; }
+  .ko-locked-label {
+    font-size: 0.65rem; color: var(--text-muted); padding: 0.2rem 0;
+    display: flex; gap: 0.5rem; align-items: center;
+  }
+  .ko-badge {
+    font-size: 0.58rem; font-weight: 700; padding: 0.1rem 0.35rem;
+    border-radius: 4px; letter-spacing: 0.06em;
+  }
+  .ko-badge-H { background: rgba(87,179,255,0.15); color: var(--blue); }
+  .ko-badge-A { background: rgba(255,87,87,0.15);  color: var(--red); }
+  .ko-badge-D { background: rgba(200,255,87,0.12); color: var(--accent); }
 
   /* ── Player pill ─────────────────────────────────────────────────── */
   .player-pill {
@@ -170,18 +239,34 @@
   .player-pill.is-me.pick-D { border-color: var(--accent); color: var(--accent); }
   .player-pill.is-me.pick-A { border-color: var(--away-color, var(--red));    color: var(--away-color, var(--red)); }
   .player-pill.scored-pos   { border-color: rgba(200,255,87,0.35); color: var(--accent); }
+  .player-pill.scored-neg   { border-color: rgba(255,87,87,0.25); color: var(--red); }
   .player-pill.scored-zero  { color: var(--text-dim); }
 
   .pill-name   { font-weight: 500; }
   .pill-choice { font-size: 0.6rem; opacity: 0.75; }
   .pill-pts    { font-weight: 700; font-size: 0.7rem; }
   .pill-no-pick{ font-style: italic; opacity: 0.4; font-size: 0.6rem; }
+  .pill-bet    { font-size: 0.58rem; color: var(--text-dim); }
 
   .saved-flash {
     font-size: 0.58rem; color: var(--accent); letter-spacing: 0.08em;
     opacity: 0; transition: opacity 0.3s; flex-shrink: 0;
   }
   .saved-flash.show { opacity: 1; }
+
+  /* ── Spy button ──────────────────────────────────────────────────── */
+  .spy-pill {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0 0.55rem; height: 44px;
+    border-radius: 8px; border: 1px dashed var(--border);
+    background: transparent; flex-shrink: 0;
+    font-size: 0.65rem; color: var(--text-dim);
+    white-space: nowrap; cursor: pointer;
+    transition: all 0.15s; font-family: var(--mono);
+  }
+  .spy-pill:hover { border-color: var(--amber); color: var(--amber); }
+  .spy-pill:disabled { opacity: 0.4; cursor: default; }
+  .spy-cost { font-size: 0.6rem; opacity: 0.7; }
 
   /* ── Leaderboard ─────────────────────────────────────────────────── */
   .lb-row {
@@ -191,12 +276,64 @@
   .lb-row:last-child { border-bottom: none; }
   .lb-rank { color: var(--text-dim); width: 1.1rem; font-size: 0.72rem; }
   .lb-me   { color: var(--accent); }
-  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 26px; text-align: right; }
+  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 46px; text-align: right; font-size: 0.72rem; }
   .lb-check {
     width: 14px; height: 14px; accent-color: var(--accent);
     cursor: pointer; flex-shrink: 0; margin-left: 0.35rem;
   }
   .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.35rem; }
+  .lb-balance-label {
+    font-size: 0.6rem; color: var(--text-dim); margin-bottom: 0.3rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .my-balance-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.65rem; border-radius: 20px;
+    background: rgba(200,255,87,0.08); border: 1px solid rgba(200,255,87,0.2);
+    font-size: 0.72rem; font-weight: 700; color: var(--accent);
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Group standings ─────────────────────────────────────────────── */
+  .standings-wrap { margin-top: 2.5rem; }
+  .standings-toggle {
+    display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+    font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-dim); padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border); margin-bottom: 1rem;
+    user-select: none;
+  }
+  .standings-toggle:hover { color: var(--text); }
+  .standings-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+  .standings-toggle.open .arrow { transform: rotate(90deg); }
+
+  .standings-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+  .standings-group { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; }
+  .standings-group-header {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-dim); border-bottom: 1px solid var(--border);
+    font-weight: 700;
+  }
+  .standings-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .standings-table th {
+    padding: 0.25rem 0.5rem; text-align: center;
+    font-size: 0.55rem; letter-spacing: 0.08em; color: var(--text-dim);
+    font-weight: 500;
+  }
+  .standings-table th:first-child { text-align: left; width: 24px; }
+  .standings-table th.team-col { text-align: left; }
+  .standings-table td { padding: 0.3rem 0.5rem; border-top: 1px solid rgba(255,255,255,0.04); text-align: center; }
+  .standings-table td:first-child { text-align: center; color: var(--text-dim); font-size: 0.62rem; }
+  .standings-table td.team-name { text-align: left; display: flex; align-items: center; gap: 0.3rem; }
+  .standings-table tr.qual-auto td { background: rgba(80,200,100,0.07); }
+  .standings-table tr.qual-pot  td { background: rgba(255,190,87,0.06); }
+  .standings-table tr.qual-none td { opacity: 0.55; }
+  .standings-pts { font-weight: 700; color: var(--accent); }
 
   /* ── Mobile tweaks ───────────────────────────────────────────────── */
   @media (max-width: 500px) {
@@ -209,6 +346,9 @@
 {% endblock %}
 
 {% block content %}
+
+{% set LOCK_MIN = lock_minutes %}
+{% set now_dt = now_iso %}
 
 <!-- ── Stage navigation ───────────────────────────────────────────── -->
 {% set SHORT = {
@@ -267,38 +407,53 @@
     <div>
       {% if grouped_fixtures %}
         {% for stage, fixtures in grouped_fixtures.items() %}
+          {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
           <div class="stage-section" id="stage-{{ loop.index0 }}" data-idx="{{ loop.index0 }}">
             <div class="stage-heading">{{ stage }}</div>
 
             {% for f in fixtures %}
-              {% set is_started   = f.kick_off and f.kick_off < now_iso %}
+              {# Lock time = kick_off - LOCK_MIN minutes #}
+              {% if f.kick_off %}
+                {% set ko_str = f.kick_off[:19] %}
+                {# Compute lock_iso in template: we just pass it as JS data-attr and check in Python #}
+                {% set is_started   = f.kick_off and f.kick_off[:19] < now_iso[:19] %}
+                {% set mo  = f.kick_off[5:7]|int %}
+                {% set dy  = f.kick_off[8:10]|int %}
+                {% set ko_time = f.kick_off[11:16] %}
+              {% else %}
+                {% set is_started = false %}
+              {% endif %}
               {% set is_completed = f.result is not none and f.result != '' %}
-              {% set my_pick      = existing_picks.get(f.id) %}
-              {% set my_pts       = pick_scores.get(f.id) %}
+              {% set my_pick_data = existing_picks.get(f.id) %}
+              {% set my_pick      = my_pick_data.predicted_result if my_pick_data else none %}
+              {% set my_bet       = my_pick_data.bet_amount if my_pick_data else none %}
+              {% set my_payout    = payout_by_fixture.get(f.id) %}
               {% set others       = all_picks_by_fixture.get(f.id, []) %}
 
+              {# Pill class #}
               {% if is_completed %}
-                {% if my_pts is not none %}
+                {% if my_payout is not none %}
                   {% set pill_cls = 'match-pill completed ' + ('scored-win' if my_pick == f.result else 'scored-loss') %}
                 {% else %}
                   {% set pill_cls = 'match-pill completed' %}
                 {% endif %}
               {% elif my_pick %}
                 {% set pill_cls = 'match-pill has-pick' %}
+              {% elif is_started %}
+                {% set pill_cls = 'match-pill locked' %}
               {% else %}
                 {% set pill_cls = 'match-pill' %}
               {% endif %}
 
-              {% if f.kick_off %}
-                {% set mo     = f.kick_off[5:7]|int %}
-                {% set dy     = f.kick_off[8:10]|int %}
-                {% set ko_time = f.kick_off[11:16] %}
-              {% endif %}
+              <div class="fixture-row" id="fixture-{{ f.id }}"
+                   data-fixture-id="{{ f.id }}"
+                   data-kick-off="{{ f.kick_off or '' }}"
+                   data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
+                   data-home-team="{{ f.home_team or '' }}"
+                   data-away-team="{{ f.away_team or '' }}">
 
-              <div class="fixture-row" id="fixture-{{ f.id }}">
-
-                <!-- Date/time meta -->
+                <!-- Date/time + countdown -->
                 <div class="fixture-meta-col">
                   {% if f.kick_off %}
                     <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
@@ -313,11 +468,14 @@
                       {{ f.stage[:4] }}
                     {%- else -%}—{%- endif -%}
                   </div>
+                  {# Countdown shown only for upcoming unlocked fixtures #}
+                  {% if f.kick_off and not is_completed and not is_started %}
+                    <div class="meta-countdown" id="countdown-{{ f.id }}"></div>
+                  {% endif %}
                 </div>
 
-                <!-- Pill column: pick row + score line -->
+                <!-- Pill column -->
                 <div class="fixture-col">
-
                   <div class="fixture-pills">
 
                     <!-- Match pill -->
@@ -326,32 +484,43 @@
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
 
                       {% if is_completed or is_started %}
-                        <!-- Display-only: flag + ABR | result/live | ABR + flag -->
+                        <!-- Display-only -->
                         <div class="pill-side home">
-                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
-                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                           <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
                         </div>
                         <div class="pill-centre">
                           {% if is_completed %}
-                            <div class="pill-result {{ f.result }}">{{ f.result }}</div>
+                            <div class="pill-score">{{ f.home_score }}<span class="score-sep">–</span>{{ f.away_score }}</div>
                           {% else %}
                             <div class="pill-result pending">Live</div>
                           {% endif %}
                         </div>
                         <div class="pill-side away">
                           <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
-                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
-                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+                        </div>
+
+                      {% elif is_ko_stage %}
+                        <!-- Knockout: display-only pill (bet form is below) -->
+                        <div class="pill-side home">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                        </div>
+                        <div class="pill-centre">
+                          <span style="font-size:0.55rem;color:var(--text-dim);letter-spacing:0.08em">KO</span>
+                        </div>
+                        <div class="pill-side away">
+                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                         </div>
 
                       {% else %}
-                        <!-- Pickable (or locked if unpaid) -->
+                        <!-- Group stage: H/D/A pick buttons -->
                         {% set picks_locked = pool.entry_fee and not has_paid %}
                         <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
                                 {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)"{% endif %}>
-                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg"
-                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                           <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
                         </button>
                         <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
@@ -359,28 +528,48 @@
                         <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
                                 {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)"{% endif %}>
                           <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
-                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg"
-                               alt="" onerror="this.style.display='none'" loading="lazy">
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                         </button>
                       {% endif %}
-
                     </div><!-- /.match-pill -->
 
                     <!-- My pick pill -->
                     {% if is_completed %}
-                      {% set pts_cls = 'scored-pos' if (my_pts is not none and my_pts > 0) else 'scored-zero' %}
+                      {% if my_payout is not none %}
+                        {% if my_payout > 0 %}
+                          {% set pts_cls = 'scored-pos' %}
+                        {% elif my_payout < 0 %}
+                          {% set pts_cls = 'scored-neg' %}
+                        {% else %}
+                          {% set pts_cls = 'scored-zero' %}
+                        {% endif %}
+                      {% else %}
+                        {% set pts_cls = 'scored-zero' %}
+                      {% endif %}
                       <div class="player-pill is-me {{ pts_cls }}" data-player="{{ current_user.email }}">
-                        <span class="pill-name">{{ current_user.display_name }}</span>
-                        {% if my_pick %}<span class="pill-choice">{{ my_pick }}</span>{% endif %}
-                        {% if my_pts is not none %}<span class="pill-pts">+{{ my_pts }}</span>{% endif %}
+                        <span class="pill-name">You</span>
+                        {% if my_pick %}
+                          <span class="pill-choice">
+                            {%- if my_pick == 'H' -%}{{ f.home_team }}{%- elif my_pick == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                          </span>
+                        {% endif %}
+                        {% if my_bet %}<span class="pill-bet">${{ "%.0f"|format(my_bet) }}</span>{% endif %}
+                        {% if my_payout is not none %}
+                          <span class="pill-pts">{% if my_payout >= 0 %}+{% endif %}${{ "%.2f"|format(my_payout) }}</span>
+                        {% endif %}
                         {% if not my_pick %}<span class="pill-no-pick">–</span>{% endif %}
                       </div>
                     {% else %}
                       <div class="player-pill is-me{% if my_pick %} pick-{{ my_pick }}{% endif %}"
                            id="mypill-{{ f.id }}" data-player="{{ current_user.email }}">
-                        <span class="pill-name">{{ current_user.display_name }}</span>
+                        <span class="pill-name">You</span>
                         <span id="mypill-choice-{{ f.id }}" class="pill-choice">
-                          {%- if my_pick %}<span>{{ my_pick }}</span>{% else %}<span class="pill-no-pick">–</span>{% endif -%}
+                          {%- if my_pick %}
+                            <span>
+                              {%- if my_pick == 'H' -%}{{ f.home_team }}{%- elif my_pick == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                            </span>
+                            {%- if my_bet %}<span class="pill-bet">${{ "%.0f"|format(my_bet) }}</span>{% endif %}
+                          {%- else %}<span class="pill-no-pick">–</span>{% endif -%}
                         </span>
                       </div>
                       <span class="saved-flash" id="status-{{ f.id }}">✓</span>
@@ -390,84 +579,216 @@
                     {% for o in others %}
                       {% if o.email != current_user.email %}
                         {% if is_completed %}
-                          {% set opt_cls = 'scored-pos' if (o.points_awarded and o.points_awarded > 0) else 'scored-zero' %}
+                          {% set opt_cls = 'scored-pos' if (o.get('points_awarded') and o.get('points_awarded', 0) > 0) else 'scored-zero' %}
                           <div class="player-pill {{ opt_cls }}" data-player="{{ o.email }}">
-                            <span class="pill-name">{{ o.display_name }}</span>
-                            {% if o.predicted_result %}<span class="pill-choice">{{ o.predicted_result }}</span>{% endif %}
-                            {% if o.points_awarded is not none %}<span class="pill-pts">+{{ o.points_awarded }}</span>{% endif %}
+                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
+                            {% if o.predicted_result %}
+                              <span class="pill-choice">
+                                {%- if o.predicted_result == 'H' -%}{{ f.home_team }}{%- elif o.predicted_result == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                              </span>
+                            {% endif %}
+                            {% if o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
+                          </div>
+                        {% elif o.visible %}
+                          <div class="player-pill pick-{{ o.predicted_result or '' }}"
+                               id="ppill-{{ f.id }}-{{ o.user_id }}"
+                               data-player="{{ o.email }}">
+                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
+                            {% if o.predicted_result %}
+                              <span class="pill-choice">
+                                {%- if o.predicted_result == 'H' -%}{{ f.home_team }}{%- elif o.predicted_result == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                              </span>
+                            {% endif %}
+                            {% if is_ko_stage and o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
                           </div>
                         {% else %}
-                          <div class="player-pill" data-player="{{ o.email }}">
-                            <span class="pill-name">{{ o.display_name }}</span>
-                            <span class="pill-choice">{% if o.predicted_result %}·{% else %}<span class="pill-no-pick">–</span>{% endif %}</span>
-                          </div>
+                          <button class="spy-pill"
+                                  id="spy-{{ f.id }}-{{ o.user_id }}"
+                                  data-fixture="{{ f.id }}"
+                                  data-target-email="{{ o.email }}"
+                                  data-target-id="{{ o.user_id }}"
+                                  onclick="buySpy('{{ pool.id }}','{{ f.id }}','{{ o.email }}','{{ o.user_id }}',this)">
+                            <span>👁</span>
+                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
+                            <span class="spy-cost" id="spy-cost-{{ f.id }}-{{ o.user_id }}"></span>
+                          </button>
                         {% endif %}
                       {% endif %}
                     {% endfor %}
 
                   </div><!-- /.fixture-pills -->
 
-                  <!-- Score line beneath the pill row -->
-                  {% if is_completed %}
-                    <div class="fixture-score">
-                      <span class="score-result">
-                        {{ f.home_score }}–{{ f.away_score }}
-                        &nbsp;·&nbsp;
-                        {% if f.result == 'H' %}{{ (f.home_team or 'Home')[:10] }} win
-                        {% elif f.result == 'A' %}{{ (f.away_team or 'Away')[:10] }} win
+                  <!-- Knockout bet form (below pills, before lock, not completed) -->
+                  {% if is_ko_stage and not is_completed and not is_started %}
+                    {% set picks_locked = pool.entry_fee and not has_paid %}
+                    {% if not my_pick %}
+                    <div class="ko-bet-row" id="ko-form-{{ f.id }}">
+                      <button class="ko-opt" id="ko-H-{{ f.id }}"
+                              data-choice="H"
+                              onclick="selectKoOpt('{{ f.id }}','H',this)">
+                        <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" loading="lazy">
+                        {{ (f.home_team or 'Home')[:10] }} wins
+                      </button>
+                      <button class="ko-opt" id="ko-A-{{ f.id }}"
+                              data-choice="A"
+                              onclick="selectKoOpt('{{ f.id }}','A',this)">
+                        {{ (f.away_team or 'Away')[:10] }} wins
+                        <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" loading="lazy">
+                      </button>
+                      <div class="ko-note">includes ET &amp; pens if necessary</div>
+                      <input type="number" class="ko-bet-amt" id="ko-amt-{{ f.id }}"
+                             placeholder="$" min="0.01" step="1" max="{{ my_balance }}"
+                             {% if picks_locked %}disabled{% endif %}
+                             oninput="updateKoPotential('{{ f.id }}')">
+                      <span class="ko-potential" id="ko-pot-{{ f.id }}"></span>
+                      <button class="btn btn-primary btn-sm"
+                              id="ko-submit-{{ f.id }}"
+                              {% if picks_locked %}disabled title="Payment required"{% endif %}
+                              onclick="saveKoPick('{{ pool.id }}','{{ f.id }}',this)">Bet</button>
+                    </div>
+                    {% else %}
+                    <div class="ko-locked-label">
+                      <span class="ko-badge ko-badge-{{ my_pick }}">
+                        {% if my_pick == 'H' %}{{ (f.home_team or 'Home')[:12] }} wins
+                        {% elif my_pick == 'A' %}{{ (f.away_team or 'Away')[:12] }} wins
                         {% else %}Draw{% endif %}
                       </span>
-                      {% if my_pts is not none %}
-                        <span class="{% if my_pts > 0 %}score-pts{% else %}score-pts-zero{% endif %}">
-                          +{{ my_pts }} pt{{ 's' if my_pts != 1 else '' }}
-                        </span>
+                      {% if my_bet %}<span>${{ "%.2f"|format(my_bet) }} bet</span>
+                        <span style="color:var(--accent)">→ potential ${{ "%.2f"|format(my_bet * scoring_config.knockout_flat_payout_multiplier) }}</span>
                       {% endif %}
                     </div>
+                    {% endif %}
                   {% endif %}
 
                 </div><!-- /.fixture-col -->
-
               </div><!-- /.fixture-row -->
             {% endfor %}
           </div><!-- /.stage-section -->
-
         {% endfor %}
       {% else %}
         <div style="color:var(--text-dim);font-size:0.82rem">No fixtures loaded yet.</div>
       {% endif %}
-    </div>
+
+      <!-- ── Group standings ─────────────────────────────────────── -->
+      {% if group_standings %}
+      <div class="standings-wrap">
+        <div class="standings-toggle" id="standings-toggle" onclick="toggleStandings()">
+          <span class="arrow" id="standings-arrow">▶</span>
+          Group Standings
+          <span style="color:var(--text-dim);font-weight:400">({{ group_standings|length }} group{{ 's' if group_standings|length != 1 }})</span>
+        </div>
+        <div id="standings-body" style="display:none">
+          <div class="standings-grid">
+            {% for group_name, teams in group_standings.items() %}
+            <div class="standings-group">
+              <div class="standings-group-header">{{ group_name }}</div>
+              <table class="standings-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th class="team-col" colspan="2">Team</th>
+                    <th>P</th><th>W</th><th>D</th><th>L</th>
+                    <th>GF</th><th>GA</th><th>GD</th>
+                    <th>Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in teams %}
+                  {# Top 2 automatically qualify; 3rd may qualify (best 8 third-place); 4th eliminated #}
+                  {% set pos_cls = 'qual-auto' if loop.index <= 2 else ('qual-pot' if loop.index == 3 else 'qual-none') %}
+                  <tr class="{{ pos_cls }}">
+                    <td>{{ loop.index }}</td>
+                    <td>
+                      <img class="flag" src="https://flagcdn.com/{{ t.flag_code }}.svg" alt="" loading="lazy" onerror="this.style.display='none'">
+                    </td>
+                    <td style="text-align:left;white-space:nowrap">{{ t.team }}</td>
+                    <td>{{ t.played }}</td>
+                    <td>{{ t.won }}</td>
+                    <td>{{ t.drawn }}</td>
+                    <td>{{ t.lost }}</td>
+                    <td>{{ t.goals_for }}</td>
+                    <td>{{ t.goals_against }}</td>
+                    <td>{% if t.goal_diff > 0 %}+{% endif %}{{ t.goal_diff }}</td>
+                    <td class="standings-pts">{{ t.points }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endfor %}
+          </div>
+          <p style="font-size:0.6rem;color:var(--text-dim);margin-top:0.75rem">
+            Green = automatic qualifiers (top 2). Amber = potential third-place qualifier (best 8 of 12).
+            Tiebreakers: Pts → GD → GF → H2H. Fair play (step 7) and FIFA ranking (step 8) not available from free API tier.
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
+    </div><!-- /.fixtures column -->
 
     <!-- ── Leaderboard sidebar ──────────────────────────────────── -->
     <div class="sticky-sidebar">
       <div class="card">
-        <div class="section-label" style="margin-bottom:0.75rem">Leaderboard</div>
-        {% for row in leaderboard %}
-          <div class="lb-row{% if row.email == current_user.email %} lb-me{% endif %}">
-            <span class="lb-rank">{{ loop.index }}</span>
-            <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
-            <span class="lb-pts">{{ row.total_points }}</span>
-            {% if row.email != current_user.email %}
-              {% set default_checked = loop.index <= 3 %}
-              <input type="checkbox" class="lb-check" data-player="{{ row.email }}"
-                     {% if default_checked %}checked{% endif %}
-                     onchange="togglePlayer('{{ row.email }}', this.checked)"
-                     title="Show {{ row.display_name }}'s picks">
-            {% else %}
-              <span style="width:14px;margin-left:0.35rem"></span>
-            {% endif %}
-          </div>
-        {% endfor %}
-        {% if not leaderboard %}
-          <div style="color:var(--text-dim);font-size:0.78rem">No scores yet.</div>
-        {% endif %}
+        <div class="standings-toggle open" id="lb-toggle" onclick="toggleLeaderboard()" style="margin-bottom:0">
+          <span class="arrow">▶</span>
+          <span>Leaderboard</span>
+          <span style="margin-left:auto;color:var(--accent);font-weight:700;font-size:0.8rem" id="my-balance-display">
+            ${{ "%.2f"|format(my_balance) }}
+          </span>
+        </div>
+        <div id="lb-body">
+          {% for row in leaderboard %}
+            <div class="lb-row{% if row.email == current_user.email %} lb-me{% endif %}">
+              <span class="lb-rank">{{ loop.index }}</span>
+              <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
+              <span class="lb-pts">${{ "%.2f"|format(row.balance) }}</span>
+              {% if row.email != current_user.email %}
+                {% set default_checked = loop.index <= 3 %}
+                <input type="checkbox" class="lb-check" data-player="{{ row.email }}"
+                       {% if default_checked %}checked{% endif %}
+                       onchange="togglePlayer('{{ row.email }}', this.checked)"
+                       title="Show {{ row.display_name }}'s picks">
+              {% else %}
+                <span style="width:14px;margin-left:0.35rem"></span>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% if not leaderboard %}
+            <div style="color:var(--text-dim);font-size:0.78rem">No members yet.</div>
+          {% endif %}
+        </div>
       </div>
     </div>
 
   </div><!-- /.pool-layout -->
 </div><!-- /.page -->
 
+<div id="spy-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)spyModalCancel()">
+  <div class="modal-box">
+    <div class="modal-title">👁 Reveal pick</div>
+    <div class="modal-body">
+      This will cost <strong id="spy-modal-cost">$0.00</strong> to reveal one player's pick.
+      Each spy costs a little more than the last.
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="spyModalCancel()">Cancel</button>
+      <button class="btn btn-primary" id="spy-modal-confirm" onclick="spyModalConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  // ── Country colours (flag code → hex) ──────────────────────────────
+  // ── Constants injected from server ────────────────────────────────────
+  const POOL_ID      = {{ pool.id | tojson }};
+  const LOCK_MINUTES = {{ lock_minutes }};
+  const KO_MULT      = {{ scoring_config.knockout_flat_payout_multiplier }};
+  let spyCount       = {{ spy_count }};
+  let spyCostBase    = {{ scoring_config.spy_base_cost }};
+  let spyCostInc     = {{ scoring_config.spy_increment }};
+  let myBalance      = {{ my_balance }};
+
+  // ── Country colours (flag code → hex) ─────────────────────────────────
   const COUNTRY_COLORS = {
     'ar':'#74ACDF','au':'#00008B','at':'#ED2939','al':'#E41E20','dz':'#006233',
     'be':'#EF3340','bo':'#D52B1E','ba':'#002395','br':'#009C3B',
@@ -499,8 +820,9 @@
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
-  // ── Initialise country colours + player pill visibility ─────────────
+  // ── Init on load ───────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
+    // Apply country colours
     document.querySelectorAll('.fixture-row').forEach(row => {
       const pill = row.querySelector('.match-pill');
       if (!pill) return;
@@ -512,10 +834,10 @@
       row.style.setProperty('--away-bg',    hexToRgba(ac, 0.13));
     });
 
+    // Apply checkbox visibility state
     document.querySelectorAll('.lb-check').forEach(cb => {
       if (!cb.checked) hidePills(cb.dataset.player);
     });
-
     const visibleEmails = new Set(
       [...document.querySelectorAll('.lb-check')].map(c => c.dataset.player)
     );
@@ -525,9 +847,25 @@
         pill.classList.add('player-hidden');
       }
     });
+
+    // Initialise countdown timers and spy cost labels
+    document.querySelectorAll('.fixture-row').forEach(row => {
+      const fixtureId = row.dataset.fixtureId;
+      const kickOff   = row.dataset.kickOff;
+      if (kickOff) setupCountdown(fixtureId, kickOff, POOL_ID);
+      const activeBtn = row.querySelector('.pick-btn.active');
+      if (activeBtn) {
+        let pred = 'D';
+        if (activeBtn.classList.contains('pick-home')) pred = 'H';
+        else if (activeBtn.classList.contains('pick-away')) pred = 'A';
+        applyPickHighlight(fixtureId, pred);
+      }
+    });
+
+    updateAllSpyCosts();
   });
 
-  // ── Stage nav: highlight active section on scroll ───────────────────
+  // ── Stage nav: highlight active section on scroll ──────────────────────
   const stageSections = document.querySelectorAll('.stage-section');
   const stageTabs     = document.querySelectorAll('.stage-tab');
 
@@ -540,31 +878,27 @@
           const tab = document.querySelector(`.stage-tab[data-stage="${idx}"]`);
           if (tab) {
             tab.classList.add('active');
-            // Keep active tab visible in the nav bar
             tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           }
         }
       });
     }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
-
     stageSections.forEach(s => io.observe(s));
-    // Activate first tab immediately
     if (stageTabs.length) stageTabs[0].classList.add('active');
   }
 
-  // Smooth-scroll on tab click (account for sticky nav heights)
   stageTabs.forEach(tab => {
     tab.addEventListener('click', e => {
       e.preventDefault();
       const target = document.getElementById('stage-' + tab.dataset.stage);
       if (!target) return;
-      const offset = 56 + 42; // navbar + stage-nav heights
+      const offset = 56 + 42;
       const top = target.getBoundingClientRect().top + window.scrollY - offset - 8;
       window.scrollTo({ top, behavior: 'smooth' });
     });
   });
 
-  // ── Player pill toggle ───────────────────────────────────────────────
+  // ── Player pill toggle ─────────────────────────────────────────────────
   function togglePlayer(email, visible) { visible ? showPills(email) : hidePills(email); }
   function showPills(email) {
     document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
@@ -575,7 +909,199 @@
       .forEach(p => p.classList.add('player-hidden'));
   }
 
-  // ── Save pick via AJAX ───────────────────────────────────────────────
+  // ── Countdown timers ───────────────────────────────────────────────────
+  const activeTimers = {};
+
+  function setupCountdown(fixtureId, kickOffIso, poolId) {
+    const el = document.getElementById('countdown-' + fixtureId);
+    if (!el) return;
+
+    // Parse kick-off (treat as UTC)
+    const ko = new Date(kickOffIso.includes('T') ? kickOffIso.replace(' ','T') + 'Z' : kickOffIso);
+    const lockTime = new Date(ko.getTime() - LOCK_MINUTES * 60 * 1000);
+
+    function tick() {
+      const remaining = lockTime - Date.now();
+      if (remaining <= 0) {
+        el.textContent = 'Locked';
+        el.style.color = 'var(--text-dim)';
+        // Reveal all picks for this fixture
+        revealFixturePicks(fixtureId, poolId);
+        return;
+      }
+      const h = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      if (h > 0) {
+        el.textContent = `${h}h ${m}m lock`;
+      } else if (m > 0) {
+        el.textContent = `${m}m ${s}s lock`;
+      } else {
+        el.textContent = `${s}s lock`;
+        el.style.color = 'var(--red)';
+      }
+      activeTimers[fixtureId] = setTimeout(tick, 1000);
+    }
+    tick();
+  }
+
+  // ── Reveal all picks for a fixture after lock (AJAX) ──────────────────
+  async function revealFixturePicks(fixtureId, poolId) {
+    try {
+      const res  = await fetch(`/pool/${poolId}/fixture/${fixtureId}/picks`);
+      const data = await res.json();
+      if (!data.ok) return;
+
+      const row = document.getElementById('fixture-' + fixtureId);
+      if (!row) return;
+      const isKo = data.is_knockout;
+
+      data.picks.forEach(pick => {
+        const spyBtn = document.getElementById(`spy-${fixtureId}-${pick.user_id}`);
+        if (spyBtn) {
+          const pill = document.createElement('div');
+          pill.className = 'player-pill pick-' + (pick.predicted_result || '');
+          pill.dataset.player = pick.email;
+          pill.innerHTML = `<span class="pill-name">${escHtml(firstName(pick.display_name))}</span>` +
+            (pick.predicted_result ? `<span class="pill-choice">${escHtml(pickLabel(pick.predicted_result, fixtureId))}</span>` : '') +
+            (isKo && pick.bet_amount ? `<span class="pill-bet">$${Math.round(pick.bet_amount)}</span>` : '');
+          spyBtn.replaceWith(pill);
+        }
+      });
+    } catch(e) {
+      console.warn('revealFixturePicks failed', e);
+    }
+  }
+
+  // ── Utility helpers ────────────────────────────────────────────────────
+  function firstName(name) { return (name || '').split(' ')[0] || name; }
+
+  function pickLabel(prediction, fixtureId) {
+    const row = document.getElementById('fixture-' + fixtureId);
+    if (!row) return prediction;
+    if (prediction === 'H') return row.dataset.homeTeam || prediction;
+    if (prediction === 'A') return row.dataset.awayTeam || prediction;
+    return 'Draw';
+  }
+
+  function applyPickHighlight(fixtureId, prediction) {
+    const row = document.getElementById('fixture-' + fixtureId);
+    if (!row) return;
+    const pill    = row.querySelector('.match-pill');
+    const homeBtn = row.querySelector('.pick-home');
+    const awayBtn = row.querySelector('.pick-away');
+    const drawBtn = row.querySelector('.pick-draw');
+    [homeBtn, awayBtn, drawBtn].forEach(b => {
+      if (b) { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; }
+    });
+    if (!pill) return;
+    if (prediction === 'H' && homeBtn) {
+      const c = COUNTRY_COLORS[pill.dataset.homeFlag] || '#4a9eff';
+      homeBtn.style.background   = c + '28';
+      homeBtn.style.borderColor  = c + '77';
+      homeBtn.style.color        = c;
+    } else if (prediction === 'A' && awayBtn) {
+      const c = COUNTRY_COLORS[pill.dataset.awayFlag] || '#ff5757';
+      awayBtn.style.background   = c + '28';
+      awayBtn.style.borderColor  = c + '77';
+      awayBtn.style.color        = c;
+    } else if (prediction === 'D' && drawBtn) {
+      drawBtn.style.background   = 'rgba(200,255,87,0.12)';
+      drawBtn.style.borderColor  = 'rgba(200,255,87,0.4)';
+      drawBtn.style.color        = 'var(--accent)';
+    }
+  }
+
+  // ── Spy modal ──────────────────────────────────────────────────────────
+  let spyModalSeen = !!sessionStorage.getItem('spyConfirmed');
+  let _pendingSpy  = null;
+
+  function buySpy(poolId, fixtureId, targetEmail, targetId, btn) {
+    const cost = (spyCostBase + spyCostInc * spyCount).toFixed(2);
+    if (!spyModalSeen) {
+      _pendingSpy = { poolId, fixtureId, targetEmail, targetId, btn };
+      document.getElementById('spy-modal-cost').textContent = `$${cost}`;
+      document.getElementById('spy-modal').style.display = 'flex';
+      return;
+    }
+    doSpy(poolId, fixtureId, targetEmail, targetId, btn);
+  }
+
+  function spyModalConfirm() {
+    document.getElementById('spy-modal').style.display = 'none';
+    spyModalSeen = true;
+    sessionStorage.setItem('spyConfirmed', '1');
+    if (_pendingSpy) {
+      const { poolId, fixtureId, targetEmail, targetId, btn } = _pendingSpy;
+      _pendingSpy = null;
+      doSpy(poolId, fixtureId, targetEmail, targetId, btn);
+    }
+  }
+
+  function spyModalCancel() {
+    document.getElementById('spy-modal').style.display = 'none';
+    _pendingSpy = null;
+  }
+
+  // ── Spy purchase ───────────────────────────────────────────────────────
+  function updateAllSpyCosts() {
+    const nextCost = (spyCostBase + spyCostInc * spyCount).toFixed(2);
+    document.querySelectorAll('.spy-cost').forEach(el => {
+      el.textContent = `$${nextCost}`;
+    });
+  }
+
+  async function doSpy(poolId, fixtureId, targetEmail, targetId, btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+
+    try {
+      const res  = await fetch(`/pool/${poolId}/spy`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fixture_id: fixtureId, target_email: targetEmail}),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        const row = document.getElementById('fixture-' + fixtureId);
+        const isKo = row && row.dataset.isKo === 'true';
+        const pick = data.pick;
+        const pill = document.createElement('div');
+        pill.className = 'player-pill' + (pick && pick.predicted_result ? ' pick-' + pick.predicted_result : '');
+        pill.dataset.player = targetEmail;
+        const name = firstName(btn.querySelector('.pill-name').textContent.trim());
+        let inner = `<span class="pill-name">${escHtml(name)}</span>`;
+        if (pick && pick.predicted_result) {
+          inner += `<span class="pill-choice">${escHtml(pickLabel(pick.predicted_result, fixtureId))}</span>`;
+          if (isKo && pick.bet_amount) {
+            inner += `<span class="pill-bet">$${Math.round(pick.bet_amount)}</span>`;
+          }
+        } else {
+          inner += `<span class="pill-no-pick">–</span>`;
+        }
+        pill.innerHTML = inner;
+        btn.replaceWith(pill);
+
+        if (!data.free) {
+          myBalance = data.new_balance;
+          spyCount++;
+          updateAllSpyCosts();
+          updateBalanceDisplay(myBalance);
+        }
+      } else {
+        alert(data.error || 'Could not purchase spy access.');
+        btn.disabled = false;
+        btn.style.opacity = '';
+      }
+    } catch(e) {
+      alert('Network error — please try again.');
+      btn.disabled = false;
+      btn.style.opacity = '';
+    }
+  }
+
+  // ── Group stage pick via AJAX ──────────────────────────────────────────
   async function savePick(poolId, fixtureId, prediction, btn) {
     const row     = document.getElementById('fixture-' + fixtureId);
     const buttons = row.querySelectorAll('.pick-home, .pick-draw, .pick-away');
@@ -584,14 +1110,15 @@
     try {
       const res  = await fetch(`/pool/${poolId}/pick`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixture_id: fixtureId, prediction })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fixture_id: fixtureId, prediction}),
       });
       const data = await res.json();
 
       if (data.ok) {
         buttons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        applyPickHighlight(fixtureId, prediction);
 
         const pill   = document.getElementById('mypill-' + fixtureId);
         const choice = document.getElementById('mypill-choice-' + fixtureId);
@@ -599,9 +1126,7 @@
           pill.classList.remove('pick-H','pick-A','pick-D');
           pill.classList.add('pick-' + prediction);
         }
-        if (choice) {
-          choice.innerHTML = `<span>${prediction}</span>`;
-        }
+        if (choice) choice.innerHTML = `<span>${escHtml(pickLabel(prediction, fixtureId))}</span>`;
 
         const flash = document.getElementById('status-' + fixtureId);
         if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
@@ -613,6 +1138,123 @@
     } finally {
       buttons.forEach(b => { b.style.opacity = ''; b.style.pointerEvents = ''; });
     }
+  }
+
+  // ── Knockout bet UI ────────────────────────────────────────────────────
+  const koSelections = {};  // fixtureId → 'H' | 'A' | 'D'
+
+  function selectKoOpt(fixtureId, choice, btn) {
+    koSelections[fixtureId] = choice;
+    const row = document.getElementById('fixture-' + fixtureId);
+    row.querySelectorAll('.ko-opt').forEach(b => {
+      b.classList.remove('selected-H','selected-A','selected-D');
+    });
+    btn.classList.add('selected-' + choice);
+    updateKoPotential(fixtureId);
+  }
+
+  function updateKoPotential(fixtureId) {
+    const amtEl = document.getElementById('ko-amt-' + fixtureId);
+    const potEl = document.getElementById('ko-pot-' + fixtureId);
+    if (!amtEl || !potEl) return;
+    const amt = parseFloat(amtEl.value);
+    if (isNaN(amt) || amt <= 0) {
+      potEl.textContent = '';
+      return;
+    }
+    potEl.textContent = `→ $${(amt * KO_MULT).toFixed(2)} if correct`;
+  }
+
+  async function saveKoPick(poolId, fixtureId, submitBtn) {
+    const prediction = koSelections[fixtureId];
+    if (!prediction) { alert('Select Home or Away first.'); return; }
+
+    const amtEl = document.getElementById('ko-amt-' + fixtureId);
+    const bet_amount = parseFloat(amtEl ? amtEl.value : 0);
+    if (!bet_amount || bet_amount <= 0) { alert('Enter a bet amount.'); return; }
+    if (bet_amount > myBalance) {
+      alert(`Insufficient balance. You have $${myBalance.toFixed(2)}.`); return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '...';
+
+    try {
+      const res  = await fetch(`/pool/${poolId}/pick`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fixture_id: fixtureId, prediction, bet_amount}),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        myBalance = data.new_balance;
+        updateBalanceDisplay(myBalance);
+
+        const form = document.getElementById('ko-form-' + fixtureId);
+        if (form) {
+          const label = document.createElement('div');
+          label.className = 'ko-locked-label';
+          const teamLabel = escHtml(pickLabel(prediction, fixtureId));
+          label.innerHTML = `<span class="ko-badge ko-badge-${prediction}">${teamLabel} wins</span>` +
+            `<span>$${bet_amount.toFixed(2)} bet</span>` +
+            `<span style="color:var(--accent)">→ $${(bet_amount * KO_MULT).toFixed(2)} if correct</span>`;
+          form.replaceWith(label);
+        }
+
+        const pill   = document.getElementById('mypill-' + fixtureId);
+        const choice = document.getElementById('mypill-choice-' + fixtureId);
+        if (pill) {
+          pill.classList.remove('pick-H','pick-A','pick-D');
+          pill.classList.add('pick-' + prediction);
+        }
+        if (choice) {
+          choice.innerHTML = `<span>${escHtml(pickLabel(prediction, fixtureId))}</span><span class="pill-bet">$${Math.round(bet_amount)}</span>`;
+        }
+
+        const flash = document.getElementById('status-' + fixtureId);
+        if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+      } else {
+        alert('Could not save: ' + (data.error || 'unknown error'));
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Bet';
+      }
+    } catch {
+      alert('Network error — please try again.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Bet';
+    }
+  }
+
+  // ── Balance display update ─────────────────────────────────────────────
+  function updateBalanceDisplay(balance) {
+    const el = document.getElementById('my-balance-display');
+    if (el) el.textContent = `$${balance.toFixed(2)}`;
+  }
+
+  // ── Leaderboard toggle ────────────────────────────────────────────────
+  function toggleLeaderboard() {
+    const body   = document.getElementById('lb-body');
+    const toggle = document.getElementById('lb-toggle');
+    const visible = body.style.display !== 'none';
+    body.style.display = visible ? 'none' : 'block';
+    toggle.classList.toggle('open', !visible);
+  }
+
+  // ── Group standings toggle ─────────────────────────────────────────────
+  function toggleStandings() {
+    const body    = document.getElementById('standings-body');
+    const toggle  = document.getElementById('standings-toggle');
+    const arrow   = document.getElementById('standings-arrow');
+    const visible = body.style.display !== 'none';
+    body.style.display  = visible ? 'none' : 'block';
+    toggle.classList.toggle('open', !visible);
+  }
+
+  // ── Utility ────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 </script>
 {% endblock content %}

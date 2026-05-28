@@ -7,7 +7,7 @@ and ties together the database and fixture modules.
 To run:
     python3 app.py
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5001 in your browser.
 A default admin account is created automatically on first run:
     Email:    admin@pool.local
     Password: changeme
@@ -16,7 +16,7 @@ A default admin account is created automatically on first run:
 import os
 import uuid
 import functools
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import (
     Flask, render_template, request, redirect,
     url_for, session, flash, jsonify
@@ -29,10 +29,10 @@ import fixtures as fx
 # ── App setup ──────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
-
-# Secret key signs the session cookie. Change this to something random
-# and private before deploying publicly.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-in-production")
+
+# Minutes before kick-off when picks lock
+LOCK_MINUTES = 15
 
 
 # ── Auth helpers ───────────────────────────────────────────────────────────
@@ -40,8 +40,6 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-in-productio
 def login_required(f):
     """
     Decorator: redirects to /login if the user isn't logged in.
-    
-    Usage: put @login_required above any route that needs authentication.
     The original destination is saved so we can redirect back after login.
     """
     @functools.wraps(f)
@@ -53,9 +51,7 @@ def login_required(f):
 
 
 def admin_required(f):
-    """
-    Decorator: redirects to /home if the logged-in user isn't an admin.
-    """
+    """Decorator: redirects to /home if the logged-in user isn't an admin."""
     @functools.wraps(f)
     @login_required
     def decorated(*args, **kwargs):
@@ -68,11 +64,7 @@ def admin_required(f):
 
 
 def current_user():
-    """
-    Return the currently logged-in user row, or None.
-    
-    Also attaches a 'total_score' key for the navbar.
-    """
+    """Return the currently logged-in user row (with total_score attached), or None."""
     if "user_id" not in session:
         return None
     user = db.get_user_by_id(session["user_id"])
@@ -82,21 +74,40 @@ def current_user():
     return user
 
 
-# Inject current_user into every template automatically —
-# no need to pass it manually to every render_template() call.
 @app.context_processor
 def inject_user():
     return {"current_user": current_user()}
 
-# Add Python's built-in enumerate to Jinja2 templates
+
 app.jinja_env.globals['enumerate'] = enumerate
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+def _lock_time_for_fixture(kick_off_iso):
+    """
+    Return the lock datetime (kick_off - LOCK_MINUTES) for a fixture, or None.
+    Picks are rejected server-side once now >= lock_time.
+    """
+    if not kick_off_iso:
+        return None
+    try:
+        ko = datetime.fromisoformat(kick_off_iso[:19])
+        return ko - timedelta(minutes=LOCK_MINUTES)
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_locked(kick_off_iso):
+    """Return True if the pick window for this fixture has closed."""
+    lt = _lock_time_for_fixture(kick_off_iso)
+    return lt is not None and datetime.utcnow() >= lt
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
-    """Root URL: redirect to home if logged in, otherwise to login."""
     if "user_id" in session:
         return redirect(url_for("home"))
     return redirect(url_for("login"))
@@ -104,37 +115,24 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """
-    GET  → show the login form.
-    POST → validate credentials and start a session.
-    
-    On success, redirects to the page the user was trying to reach
-    (stored in ?next=), or to /home by default.
-    """
-    # If already logged in, no need to show login again
+    """GET → show login form. POST → validate credentials and start session."""
     if "user_id" in session:
         return redirect(url_for("home"))
-
     if request.method == "POST":
         email    = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
-
         user = db.get_user_by_email(email)
-
-        # check_password_hash compares securely (timing-safe)
         if user and check_password_hash(user["password_hash"], password):
             session["user_id"] = user["id"]
             next_page = request.args.get("next", url_for("home"))
             return redirect(next_page)
         else:
             flash("Invalid email or password.", "error")
-
     return render_template("login.html")
 
 
 @app.route("/logout")
 def logout():
-    """Clear the session and redirect to login."""
     session.clear()
     return redirect(url_for("login"))
 
@@ -164,22 +162,11 @@ def register():
 @app.route("/home")
 @login_required
 def home():
-    """
-    Main dashboard page.
-    
-    Shows:
-    - Pools the current user is enrolled in
-    - All public pools (with a Join button for ones they haven't joined)
-    """
     user = current_user()
-    my_pool_ids   = {p["id"] for p in db.get_pools_for_user(user["id"])}
-    my_pools      = db.get_pools_for_user(user["id"])
-    public_pools  = [p for p in db.get_all_public_pools() if p["id"] not in my_pool_ids]
-
-    return render_template("home.html",
-        my_pools=my_pools,
-        public_pools=public_pools,
-    )
+    my_pool_ids  = {p["id"] for p in db.get_pools_for_user(user["id"])}
+    my_pools     = db.get_pools_for_user(user["id"])
+    public_pools = [p for p in db.get_all_public_pools() if p["id"] not in my_pool_ids]
+    return render_template("home.html", my_pools=my_pools, public_pools=public_pools)
 
 
 @app.route("/pool/<pool_id>/join", methods=["POST"])
@@ -194,9 +181,12 @@ def join_pool(pool_id):
         flash("That pool is not open to the public.", "error")
         return redirect(url_for("home"))
 
-    # Free pools: auto-confirm. Paid pools: join as unpaid pending admin confirmation.
     has_paid = 0 if pool["entry_fee"] else 1
-    db.join_pool(str(uuid.uuid4()), user["id"], pool_id, has_paid=has_paid)
+    # Use the pool's starting_balance from scoring config
+    config = db.get_active_scoring_config()
+    starting_balance = config.get("starting_balance", 100.0)
+    db.join_pool(str(uuid.uuid4()), user["id"], pool_id,
+                 has_paid=has_paid, balance=starting_balance)
 
     if pool["entry_fee"]:
         flash(f"You're registered for {pool['name']}. Complete your payment to unlock picks.", "success")
@@ -210,65 +200,96 @@ def join_pool(pool_id):
 def pool_page(pool_id):
     """
     The fixture picker page for a pool.
-    
-    Shows all fixtures grouped by stage. For each fixture, the user
-    can pick Home win (H), Draw (D), or Away win (A).
-    Fixtures that have already kicked off are locked (no editing).
+    Shows all fixtures grouped by stage with economy-based pick/bet/spy UI.
     """
     user = current_user()
     pool = db.get_pool_by_id(pool_id)
     if not pool:
         flash("Pool not found.", "error")
         return redirect(url_for("home"))
-
-    # Ensure the user is a member (they could navigate directly to the URL)
     if not db.is_pool_member(user["id"], pool_id):
         flash("You're not a member of that pool.", "error")
         return redirect(url_for("home"))
 
-    # Get all fixtures grouped by stage, refreshing cache if needed
     grouped_fixtures = fx.get_all_fixtures()
+    existing_picks   = db.get_picks_full_for_user_in_pool(user["id"], pool_id)
+    membership       = db.get_pool_membership(user["id"], pool_id)
+    has_paid         = bool(membership and membership["has_paid"])
+    my_balance       = db.get_member_balance(user["id"], pool_id)
+    scoring_config   = db.get_active_scoring_config()
+    spy_set          = db.get_spy_set_for_user_in_pool(user["id"], pool_id)
+    spy_count        = db.get_spy_count_for_user_in_pool(user["id"], pool_id)
 
-    existing_picks = db.get_picks_for_user_in_pool(user["id"], pool_id)
+    conn = db.get_db()
 
-    sc = db.get_db()
-    score_rows = sc.execute("""
-        SELECT p.fixture_id, sl.points_awarded
-        FROM score_log sl JOIN picks p ON p.id = sl.pick_id
-        WHERE sl.user_id=? AND sl.pool_id=?
+    # Payouts from transactions table (economy source of truth)
+    payout_rows = conn.execute("""
+        SELECT fixture_id, amount FROM transactions
+        WHERE user_id=? AND pool_id=? AND type='payout'
     """, (user["id"], pool_id)).fetchall()
+    payout_by_fixture = {r["fixture_id"]: r["amount"] for r in payout_rows}
 
-    all_pick_rows = sc.execute("""
-        SELECT p.fixture_id, u.display_name, u.email,
-               p.predicted_result, sl.points_awarded
+    # All picks in this pool — enriched with user_id and bet_amount
+    all_pick_rows = conn.execute("""
+        SELECT p.fixture_id, u.id AS user_id, u.display_name, u.email,
+               p.predicted_result, p.bet_amount
         FROM picks p
         JOIN users u ON u.id = p.user_id
-        LEFT JOIN score_log sl ON sl.pick_id = p.id
         WHERE p.pool_id=?
         ORDER BY u.display_name
     """, (pool_id,)).fetchall()
-    sc.close()
+    conn.close()
 
-    pick_scores = {r["fixture_id"]: r["points_awarded"] for r in score_rows}
-    all_picks_by_fixture = {}
+    # Build {fixture_id: [pick_rows]} and attach visibility flag
+    now = datetime.utcnow()
+
+    # Build a flat fixture lookup for lock-time checks
+    fixture_lookup = {}
+    for stage_fixes in grouped_fixtures.values():
+        for f in stage_fixes:
+            fixture_lookup[f["id"]] = f
+
+    raw_by_fixture = {}
     for r in all_pick_rows:
-        all_picks_by_fixture.setdefault(r["fixture_id"], []).append(dict(r))
+        raw_by_fixture.setdefault(r["fixture_id"], []).append(dict(r))
 
-    leaderboard = db.get_pool_leaderboard(pool_id)
-    now_iso = datetime.utcnow().isoformat()
+    all_picks_by_fixture = {}
+    for fid, picks in raw_by_fixture.items():
+        f_data = fixture_lookup.get(fid, {})
+        completed = bool(f_data.get("result"))
+        locked    = _is_locked(f_data.get("kick_off"))
 
-    membership = db.get_pool_membership(user["id"], pool_id)
-    has_paid = bool(membership and membership["has_paid"])
+        enriched = []
+        for p in picks:
+            if p["email"] == user["email"]:
+                visible = True
+            elif completed or locked:
+                visible = True
+            elif (fid, p["user_id"]) in spy_set:
+                visible = True
+            else:
+                visible = False
+            enriched.append({**p, "visible": visible})
+        all_picks_by_fixture[fid] = enriched
+
+    group_standings = db.get_group_standings()
+    leaderboard     = db.get_pool_leaderboard(pool_id)
+    now_iso         = now.isoformat()
 
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
         existing_picks=existing_picks,
-        pick_scores=pick_scores,
+        payout_by_fixture=payout_by_fixture,
         all_picks_by_fixture=all_picks_by_fixture,
         leaderboard=leaderboard,
         now_iso=now_iso,
         has_paid=has_paid,
+        my_balance=my_balance,
+        scoring_config=scoring_config,
+        spy_count=spy_count,
+        group_standings=group_standings,
+        lock_minutes=LOCK_MINUTES,
     )
 
 
@@ -276,10 +297,16 @@ def pool_page(pool_id):
 @login_required
 def submit_pick(pool_id):
     """
-    Save a pick via AJAX (called by JavaScript on the pool page).
-    
-    Expects JSON body: { "fixture_id": "...", "prediction": "H"|"A"|"D" }
-    Returns JSON: { "ok": true } or { "ok": false, "error": "..." }
+    Save a pick via AJAX.
+
+    For group fixtures: JSON {fixture_id, prediction}
+    For knockout fixtures: JSON {fixture_id, prediction, bet_amount}
+
+    Picks lock LOCK_MINUTES before kick-off. Knockout bets are deducted
+    immediately from the member's balance; changing a KO pick before lock
+    refunds the old bet and deducts the new one.
+
+    Returns JSON {ok, error?, new_balance?}
     """
     user = current_user()
     data = request.get_json()
@@ -300,17 +327,208 @@ def submit_pick(pool_id):
     if pool and pool["entry_fee"] and membership and not membership["has_paid"]:
         return jsonify({"ok": False, "error": "Payment required to make picks."}), 403
 
-    # Check the fixture hasn't kicked off yet
+    # Fetch fixture for lock-time and stage checks
     conn = db.get_db()
-    fixture = conn.execute("SELECT kick_off FROM fixtures WHERE id=?", (fixture_id,)).fetchone()
+    fixture = conn.execute(
+        "SELECT kick_off, stage FROM fixtures WHERE id=?", (fixture_id,)
+    ).fetchone()
+
+    # Get existing pick for KO refund calculation
+    existing_pick = conn.execute(
+        "SELECT predicted_result, bet_amount FROM picks WHERE user_id=? AND pool_id=? AND fixture_id=?",
+        (user["id"], pool_id, fixture_id)
+    ).fetchone()
     conn.close()
+
+    # Enforce lock time (15 min before kick-off)
     if fixture and fixture["kick_off"]:
-        if fixture["kick_off"] < datetime.utcnow().isoformat():
-            return jsonify({"ok": False, "error": "Fixture has already started."}), 400
+        if _is_locked(fixture["kick_off"]):
+            return jsonify({"ok": False, "error": "Pick window has closed (15 min before kick-off)."}), 400
 
-    db.upsert_pick(str(uuid.uuid4()), user["id"], pool_id, fixture_id, prediction)
-    return jsonify({"ok": True})
+    knockout = db.is_knockout_stage(fixture["stage"] if fixture else "")
 
+    if knockout:
+        bet_raw = data.get("bet_amount")
+        try:
+            bet_amount = float(bet_raw) if bet_raw is not None else None
+        except (TypeError, ValueError):
+            bet_amount = None
+
+        if bet_amount is None or bet_amount <= 0:
+            return jsonify({"ok": False, "error": "A positive bet amount is required for knockout picks."}), 400
+
+        balance = db.get_member_balance(user["id"], pool_id)
+        old_bet = (existing_pick["bet_amount"] or 0.0) if existing_pick else 0.0
+        # Effective cost = new bet minus refund of existing bet
+        net_cost = bet_amount - old_bet
+        if net_cost > balance:
+            return jsonify({"ok": False,
+                            "error": f"Insufficient balance. You have ${balance:.2f} available."}), 400
+
+        # Atomically: refund old bet (if any), deduct new bet, update pick
+        _apply_ko_bet(user["id"], pool_id, fixture_id, old_bet, bet_amount)
+    else:
+        bet_amount = None
+
+    db.upsert_pick(str(uuid.uuid4()), user["id"], pool_id, fixture_id, prediction, bet_amount)
+    new_balance = db.get_member_balance(user["id"], pool_id)
+    return jsonify({"ok": True, "new_balance": new_balance})
+
+
+def _apply_ko_bet(user_id, pool_id, fixture_id, old_bet, new_bet):
+    """
+    Refund old_bet (if > 0) and deduct new_bet for a knockout pick change.
+    Writes bet transactions and updates pool_members.balance.
+    All in one DB round-trip for consistency.
+    """
+    conn = db.get_db()
+    if old_bet > 0:
+        db._write_transaction(conn, str(uuid.uuid4()), user_id, pool_id, fixture_id,
+                              "adjustment", old_bet, f"KO bet refund (pick changed)")
+        db._update_balance(conn, user_id, pool_id, old_bet)
+    db._write_transaction(conn, str(uuid.uuid4()), user_id, pool_id, fixture_id,
+                          "bet", -new_bet, f"KO bet placed · ${new_bet:.2f}")
+    db._update_balance(conn, user_id, pool_id, -new_bet)
+    conn.commit()
+    conn.close()
+
+
+@app.route("/pool/<pool_id>/fixture/<fixture_id>/picks")
+@login_required
+def fixture_picks(pool_id, fixture_id):
+    """
+    Return all picks for a fixture in a pool — only accessible after the lock time.
+
+    Called by the countdown timer when it reaches zero to reveal all picks in-place
+    without a page reload. Returns 403 if the lock time hasn't passed yet.
+
+    Response JSON:
+      {ok, is_knockout, picks: [{email, display_name, user_id, predicted_result, bet_amount}]}
+    """
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"ok": False, "error": "Not a pool member."}), 403
+
+    conn = db.get_db()
+    fixture = conn.execute(
+        "SELECT kick_off, stage FROM fixtures WHERE id=?", (fixture_id,)
+    ).fetchone()
+
+    if not fixture:
+        conn.close()
+        return jsonify({"ok": False, "error": "Fixture not found."}), 404
+
+    if not _is_locked(fixture["kick_off"]):
+        conn.close()
+        return jsonify({"ok": False, "error": "Picks not yet visible."}), 403
+
+    pick_rows = conn.execute("""
+        SELECT u.id AS user_id, u.email, u.display_name,
+               p.predicted_result, p.bet_amount
+        FROM picks p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.pool_id=? AND p.fixture_id=?
+        ORDER BY u.display_name
+    """, (pool_id, fixture_id)).fetchall()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "is_knockout": db.is_knockout_stage(fixture["stage"]),
+        "picks": [dict(r) for r in pick_rows],
+    })
+
+
+@app.route("/pool/<pool_id>/spy", methods=["POST"])
+@login_required
+def spy_pick(pool_id):
+    """
+    Purchase spy access to reveal one competitor's pick for one fixture.
+
+    Request JSON: {fixture_id, target_email}
+    Response JSON: {ok, pick: {predicted_result, bet_amount}, new_balance, next_spy_cost, error?}
+
+    Cost = spy_base_cost + spy_increment × total_spies_purchased_so_far.
+    If the fixture is already past lock time, picks are free (returns pick with no charge).
+    If the user has already paid to spy on this target+fixture, returns pick for free.
+    """
+    user = current_user()
+    data = request.get_json()
+    if not data:
+        return jsonify({"ok": False, "error": "No data."}), 400
+
+    fixture_id   = data.get("fixture_id", "")
+    target_email = data.get("target_email", "")
+
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"ok": False, "error": "Not a pool member."}), 403
+
+    target = db.get_user_by_email(target_email)
+    if not target:
+        return jsonify({"ok": False, "error": "Target user not found."}), 404
+
+    if target["id"] == user["id"]:
+        return jsonify({"ok": False, "error": "Cannot spy on yourself."}), 400
+
+    conn = db.get_db()
+    fixture = conn.execute("SELECT kick_off, stage FROM fixtures WHERE id=?", (fixture_id,)).fetchone()
+    if not fixture:
+        conn.close()
+        return jsonify({"ok": False, "error": "Fixture not found."}), 404
+
+    # After lock time: picks are free — return without charging
+    if _is_locked(fixture["kick_off"]):
+        pick = conn.execute(
+            "SELECT predicted_result, bet_amount FROM picks WHERE user_id=? AND pool_id=? AND fixture_id=?",
+            (target["id"], pool_id, fixture_id)
+        ).fetchone()
+        conn.close()
+        config = db.get_active_scoring_config()
+        spy_count = db.get_spy_count_for_user_in_pool(user["id"], pool_id)
+        return jsonify({
+            "ok": True,
+            "pick": dict(pick) if pick else None,
+            "free": True,
+            "new_balance": db.get_member_balance(user["id"], pool_id),
+            "next_spy_cost": round(config["spy_base_cost"] + config["spy_increment"] * spy_count, 2),
+            "is_knockout": db.is_knockout_stage(fixture["stage"]),
+        })
+    conn.close()
+
+    # Compute cost
+    config    = db.get_active_scoring_config()
+    spy_count = db.get_spy_count_for_user_in_pool(user["id"], pool_id)
+    cost      = round(config["spy_base_cost"] + config["spy_increment"] * spy_count, 2)
+    balance   = db.get_member_balance(user["id"], pool_id)
+
+    if balance < cost:
+        return jsonify({"ok": False, "error": f"Insufficient balance. Need ${cost:.2f}."}), 400
+
+    pick = db.record_spy(
+        spy_id     = str(uuid.uuid4()),
+        tx_id      = str(uuid.uuid4()),
+        buyer_id   = user["id"],
+        target_id  = target["id"],
+        pool_id    = pool_id,
+        fixture_id = fixture_id,
+        cost       = cost,
+    )
+
+    new_balance  = db.get_member_balance(user["id"], pool_id)
+    new_spy_count = spy_count + 1
+    next_cost = round(config["spy_base_cost"] + config["spy_increment"] * new_spy_count, 2)
+
+    return jsonify({
+        "ok": True,
+        "pick": pick,
+        "cost": cost,
+        "new_balance": new_balance,
+        "next_spy_cost": next_cost,
+        "is_knockout": db.is_knockout_stage(fixture["stage"] or ""),
+    })
+
+
+# ── Admin routes ────────────────────────────────────────────────────────────
 
 @app.route("/admin")
 @admin_required
@@ -320,16 +538,23 @@ def admin_page():
     all_pools = db.get_all_public_pools()
     users     = db.get_all_users()
 
-    # Per-pool scoring: {pool_id: {"group_stage": cfg, "knockout": cfg}}
     pool_scoring = {}
     pool_members = {}
+    pool_balances = {}
+    pool_transactions = {}
+
     for pool in all_pools:
         pid = pool["id"]
         pool_scoring[pid] = {
             "group_stage": db.get_scoring_config(pid, "Group A"),
             "knockout":    db.get_scoring_config(pid, "Round of 16"),
         }
-        pool_members[pid] = db.get_pool_members(pid)
+        pool_members[pid]      = db.get_pool_members(pid)
+        pool_balances[pid]     = db.get_pool_members_with_balances(pid)
+        pool_transactions[pid] = {
+            m["id"]: db.get_user_transactions(m["id"], pid)
+            for m in pool_balances[pid]
+        }
 
     return render_template("admin.html",
         config=config,
@@ -338,25 +563,53 @@ def admin_page():
         users=users,
         pool_scoring=pool_scoring,
         pool_members=pool_members,
+        pool_balances=pool_balances,
+        pool_transactions=pool_transactions,
     )
 
 
 @app.route("/admin/scoring", methods=["POST"])
 @admin_required
 def save_scoring():
-    user      = current_user()
-    pool_id   = request.form.get("pool_id") or None
+    user       = current_user()
+    pool_id    = request.form.get("pool_id") or None
     round_type = request.form.get("round_type") or None
+
     try:
-        win  = int(request.form["points_win"])
-        draw = int(request.form["points_draw"])
-        loss = int(request.form["points_loss"])
+        win  = int(request.form.get("points_win", 3))
+        draw = int(request.form.get("points_draw", 1))
+        loss = int(request.form.get("points_loss", 0))
     except (KeyError, ValueError):
         flash("Please enter valid integer point values.", "error")
         return redirect(url_for("admin_page"))
 
-    db.save_scoring_config(str(uuid.uuid4()), win, draw, loss, user["id"],
-                           pool_id=pool_id, round_type=round_type)
+    # Economy fields (only present on the global defaults form)
+    def _float(key, default):
+        try:
+            return float(request.form[key])
+        except (KeyError, ValueError, TypeError):
+            return default
+
+    starting_balance   = _float("starting_balance", None)
+    group_win_payout   = _float("group_win_payout", None)
+    group_draw_payout  = _float("group_draw_payout", None)
+    group_loss_payout  = _float("group_loss_payout", None)
+    spy_base_cost      = _float("spy_base_cost", None)
+    spy_increment      = _float("spy_increment", None)
+    ko_flat_mult       = _float("knockout_flat_payout_multiplier", None)
+
+    db.save_scoring_config(
+        str(uuid.uuid4()), win, draw, loss, user["id"],
+        pool_id=pool_id, round_type=round_type,
+        starting_balance=starting_balance,
+        group_win_payout=group_win_payout,
+        group_draw_payout=group_draw_payout,
+        group_loss_payout=group_loss_payout,
+        spy_base_cost=spy_base_cost,
+        spy_increment=spy_increment,
+        knockout_flat_payout_multiplier=ko_flat_mult,
+    )
+
     if pool_id:
         pool  = db.get_pool_by_id(pool_id)
         label = f"{pool['name']} — {'Group Stage' if round_type == 'group_stage' else 'Knockout'}"
@@ -414,9 +667,7 @@ def admin_seed_euro2024():
 @app.route("/admin/fixture/<fixture_id>/result", methods=["POST"])
 @admin_required
 def set_fixture_result(fixture_id):
-    """
-    Record a match result and trigger scoring for all picks on that fixture.
-    """
+    """Record a match result and trigger economy payouts for all picks."""
     try:
         home_score = int(request.form["home_score"])
         away_score = int(request.form["away_score"])
@@ -424,16 +675,15 @@ def set_fixture_result(fixture_id):
         flash("Please enter valid scores.", "error")
         return redirect(url_for("admin_page"))
 
-    result = db.update_fixture_result(fixture_id, home_score, away_score)
-    scored = db.calculate_scores_for_fixture(fixture_id)
-    flash(f"Result saved ({result}). Scored {scored} picks.", "success")
+    result    = db.update_fixture_result(fixture_id, home_score, away_score)
+    processed = db.process_fixture_result(fixture_id)
+    flash(f"Result saved ({result}). Processed {processed} picks.", "success")
     return redirect(url_for("admin_page"))
 
 
 @app.route("/admin/pool/create", methods=["POST"])
 @admin_required
 def create_pool():
-    """Create a new pool from the admin page."""
     name                 = request.form.get("name", "").strip()
     description          = request.form.get("description", "").strip()
     is_public            = 1 if request.form.get("is_public") else 0
@@ -453,7 +703,6 @@ def create_pool():
 @app.route("/admin/pool/<pool_id>/member/<user_id>/paid", methods=["POST"])
 @admin_required
 def mark_member_paid(pool_id, user_id):
-    """Toggle a pool member's payment status."""
     membership = db.get_pool_membership(user_id, pool_id)
     if not membership:
         flash("Member not found.", "error")
@@ -461,13 +710,38 @@ def mark_member_paid(pool_id, user_id):
     new_paid = 0 if membership["has_paid"] else 1
     db.set_member_paid(user_id, pool_id, new_paid)
     pool = db.get_pool_by_id(pool_id)
-    user = db.get_user_by_id(user_id)
+    target = db.get_user_by_id(user_id)
     verb = "marked as paid" if new_paid else "marked as unpaid"
-    flash(f"{user['display_name']} {verb} for {pool['name']}.", "success")
+    flash(f"{target['display_name']} {verb} for {pool['name']}.", "success")
     return redirect(url_for("admin_page"))
 
 
-# ── Startup ────────────────────────────────────────────────────────────────
+@app.route("/admin/pool/<pool_id>/member/<user_id>/adjust-balance", methods=["POST"])
+@admin_required
+def admin_adjust_balance(pool_id, user_id):
+    """Manual balance adjustment for a pool member (admin only)."""
+    try:
+        amount = float(request.form["amount"])
+    except (KeyError, ValueError):
+        flash("Invalid amount.", "error")
+        return redirect(url_for("admin_page"))
+
+    description = request.form.get("description", "Manual adjustment").strip() or "Manual adjustment"
+    if not description:
+        description = "Manual adjustment by admin"
+
+    target = db.get_user_by_id(user_id)
+    if not target or not db.is_pool_member(user_id, pool_id):
+        flash("Member not found.", "error")
+        return redirect(url_for("admin_page"))
+
+    db.apply_balance_adjustment(str(uuid.uuid4()), user_id, pool_id, amount, description)
+    sign = "+" if amount >= 0 else ""
+    flash(f"Balance adjusted for {target['display_name']}: {sign}${amount:.2f}.", "success")
+    return redirect(url_for("admin_page"))
+
+
+# ── Pool stats page ────────────────────────────────────────────────────────
 
 @app.route("/pool/<pool_id>/stats")
 @login_required
@@ -483,7 +757,6 @@ def pool_stats(pool_id):
 
     timeline = db.get_pool_score_timeline(pool_id)
 
-    # Always include the current user even if outside top-20
     my_uid = user["id"]
     in_top = any(p["user_id"] == my_uid for p in timeline["players"])
     if not in_top:
@@ -500,16 +773,13 @@ def pool_stats(pool_id):
     )
 
 
-import os
+# ── Startup ────────────────────────────────────────────────────────────────
 
 def seed_defaults():
     """
     Create a default admin user and a sample pool if the database is empty.
-    
-    This runs once on first startup. The admin password should be changed
-    immediately in a real deployment.
+    Runs once on first startup.
     """
-    # Create admin user if no users exist yet
     conn = db.get_db()
     count = conn.execute("SELECT COUNT(*) as n FROM users").fetchone()["n"]
     conn.close()
@@ -523,7 +793,6 @@ def seed_defaults():
             password_hash= generate_password_hash("changeme"),
             is_admin     = 1,
         )
-        # Create a sample user too
         db.create_user(
             user_id      = str(uuid.uuid4()),
             display_name = "Alice",
@@ -532,7 +801,6 @@ def seed_defaults():
         )
         print("[seed] Created admin (admin@pool.local / changeme) and Alice (alice@example.com / password123)")
 
-        # Create a sample public pool
         pool_id = str(uuid.uuid4())
         db.create_pool(pool_id, "The Main Event", "Open picks pool for the 2026 World Cup", is_public=1)
         print(f"[seed] Created pool 'The Main Event' (id={pool_id})")
