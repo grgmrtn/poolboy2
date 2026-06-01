@@ -5,9 +5,13 @@
 <style>
   /* ── Stage nav ───────────────────────────────────────────────────── */
   .stage-nav {
-    position: sticky; top: 56px; z-index: 90;
+    position: sticky;
+    top: 56px;                                  /* below the main navbar (56px tall) */
+    top: calc(56px + env(safe-area-inset-top, 0));
+    z-index: 90;
     background: rgba(10,10,15,0.96);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
     display: flex; overflow-x: auto; scrollbar-width: none;
     padding: 0 1.5rem; gap: 0;
@@ -15,10 +19,10 @@
   .stage-nav::-webkit-scrollbar { display: none; }
   .stage-tab {
     flex-shrink: 0;
-    padding: 0.5rem 0.7rem;
-    font-size: 0.62rem; font-weight: 600;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.72rem; font-weight: 600;       /* was 0.62rem — boosted for iPhone */
     letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-dim); text-decoration: none;
+    color: var(--text-muted); text-decoration: none;  /* was text-dim — now meets AA */
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
     white-space: nowrap;
@@ -36,8 +40,8 @@
   .sticky-sidebar { position: sticky; top: 106px; }
 
   .stage-heading {
-    font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--text-dim); margin: 2rem 0 0.5rem;
+    font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-muted); margin: 2rem 0 0.5rem;
     padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
   }
 
@@ -47,14 +51,14 @@
     gap: 0.55rem; margin-bottom: 0.45rem;
   }
   .fixture-meta-col {
-    flex-shrink: 0; width: 44px; text-align: center; padding-top: 12px;
+    flex-shrink: 0; width: 50px; text-align: center; padding-top: 12px;
   }
-  .meta-date  { font-size: 0.72rem; color: var(--text); font-weight: 600; line-height: 1.2; }
-  .meta-time  { font-size: 0.6rem;  color: var(--text-muted); }
-  .meta-group { font-size: 0.55rem; color: var(--accent); letter-spacing: 0.06em;
+  .meta-date  { font-size: 0.78rem; color: var(--text); font-weight: 600; line-height: 1.2; }
+  .meta-time  { font-size: 0.68rem; color: var(--text-muted); }
+  .meta-group { font-size: 0.62rem; color: var(--accent); letter-spacing: 0.06em;
                 margin-top: 0.15rem; text-transform: uppercase; }
   .meta-countdown {
-    font-size: 0.48rem; color: var(--amber); margin-top: 0.2rem;
+    font-size: 0.58rem; color: var(--amber); margin-top: 0.2rem;
     letter-spacing: 0.03em; line-height: 1.3;
   }
 
@@ -69,13 +73,13 @@
   .fixture-pills::-webkit-scrollbar { display: none; }
 
   .fixture-score {
-    font-size: 0.62rem; color: var(--text-muted);
+    font-size: 0.72rem; color: var(--text-muted);
     letter-spacing: 0.04em; padding-left: 2px;
     display: flex; align-items: center; gap: 0.5rem;
   }
   .score-result { font-weight: 600; }
   .score-pts    { color: var(--accent); font-weight: 700; }
-  .score-pts-zero { color: var(--text-dim); }
+  .score-pts-zero { color: var(--text-muted); }
   .score-pts-neg  { color: var(--red); font-weight: 700; }
 
   /* ── Match pill ──────────────────────────────────────────────────── */
@@ -129,8 +133,8 @@
 
   .pick-draw {
     flex: 1; height: 100%; justify-content: center;
-    font-size: 0.58rem; font-weight: 500; letter-spacing: 0.07em;
-    text-transform: uppercase; color: var(--text-dim);
+    font-size: 0.7rem; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-muted);
   }
 
   .pick-btn:hover .team-abbr { color: var(--text); }
@@ -143,7 +147,7 @@
   .pick-away.active .team-abbr { color: var(--away-color, var(--red)); }
 
   .pill-result {
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
     width: 24px; height: 24px; border-radius: 4px;
     display: flex; align-items: center; justify-content: center;
   }
@@ -203,21 +207,21 @@
   .ko-opt.selected-D { border-color: var(--accent); color: var(--accent);
                         background: rgba(200,255,87,0.08); }
   .ko-bet-amt {
-    width: 72px; padding: 0.25rem 0.45rem;
+    width: 80px; padding: 0.3rem 0.5rem;
     background: var(--surface2); border: 1px solid var(--border);
     border-radius: 6px; color: var(--text);
-    font-family: var(--mono); font-size: 0.78rem;
+    font-family: var(--mono); font-size: 1rem;   /* 16px avoids iOS zoom on focus */
     outline: none; transition: border-color 0.12s;
   }
   .ko-bet-amt:focus { border-color: var(--accent); }
-  .ko-potential { font-size: 0.65rem; color: var(--accent); white-space: nowrap; }
-  .ko-note { font-size: 0.6rem; color: var(--text-dim); font-style: italic; }
+  .ko-potential { font-size: 0.72rem; color: var(--accent); white-space: nowrap; }
+  .ko-note { font-size: 0.68rem; color: var(--text-muted); font-style: italic; }
   .ko-locked-label {
-    font-size: 0.65rem; color: var(--text-muted); padding: 0.2rem 0;
+    font-size: 0.72rem; color: var(--text-muted); padding: 0.2rem 0;
     display: flex; gap: 0.5rem; align-items: center;
   }
   .ko-badge {
-    font-size: 0.58rem; font-weight: 700; padding: 0.1rem 0.35rem;
+    font-size: 0.66rem; font-weight: 700; padding: 0.15rem 0.4rem;
     border-radius: 4px; letter-spacing: 0.06em;
   }
   .ko-badge-H { background: rgba(87,179,255,0.15); color: var(--blue); }
@@ -230,7 +234,7 @@
     padding: 0 0.55rem; height: 44px;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); flex-shrink: 0;
-    font-size: 0.68rem; color: var(--text-dim);
+    font-size: 0.75rem; color: var(--text-muted);
     white-space: nowrap; transition: border-color 0.15s;
   }
   .player-pill.player-hidden { display: none; }
@@ -240,16 +244,16 @@
   .player-pill.is-me.pick-A { border-color: var(--away-color, var(--red));    color: var(--away-color, var(--red)); }
   .player-pill.scored-pos   { border-color: rgba(200,255,87,0.35); color: var(--accent); }
   .player-pill.scored-neg   { border-color: rgba(255,87,87,0.25); color: var(--red); }
-  .player-pill.scored-zero  { color: var(--text-dim); }
+  .player-pill.scored-zero  { color: var(--text-muted); }
 
   .pill-name   { font-weight: 500; }
-  .pill-choice { font-size: 0.6rem; opacity: 0.75; }
-  .pill-pts    { font-weight: 700; font-size: 0.7rem; }
-  .pill-no-pick{ font-style: italic; opacity: 0.4; font-size: 0.6rem; }
-  .pill-bet    { font-size: 0.58rem; color: var(--text-dim); }
+  .pill-choice { font-size: 0.68rem; opacity: 0.85; }
+  .pill-pts    { font-weight: 700; font-size: 0.78rem; }
+  .pill-no-pick{ font-style: italic; opacity: 0.55; font-size: 0.68rem; }
+  .pill-bet    { font-size: 0.66rem; color: var(--text-muted); }
 
   .saved-flash {
-    font-size: 0.58rem; color: var(--accent); letter-spacing: 0.08em;
+    font-size: 0.7rem; color: var(--accent); letter-spacing: 0.08em;
     opacity: 0; transition: opacity 0.3s; flex-shrink: 0;
   }
   .saved-flash.show { opacity: 1; }
@@ -260,37 +264,37 @@
     padding: 0 0.55rem; height: 44px;
     border-radius: 8px; border: 1px dashed var(--border);
     background: transparent; flex-shrink: 0;
-    font-size: 0.65rem; color: var(--text-dim);
+    font-size: 0.72rem; color: var(--text-muted);
     white-space: nowrap; cursor: pointer;
     transition: all 0.15s; font-family: var(--mono);
   }
   .spy-pill:hover { border-color: var(--amber); color: var(--amber); }
   .spy-pill:disabled { opacity: 0.4; cursor: default; }
-  .spy-cost { font-size: 0.6rem; opacity: 0.7; }
+  .spy-cost { font-size: 0.68rem; opacity: 0.85; }
 
   /* ── Leaderboard ─────────────────────────────────────────────────── */
   .lb-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
   }
   .lb-row:last-child { border-bottom: none; }
-  .lb-rank { color: var(--text-dim); width: 1.1rem; font-size: 0.72rem; }
+  .lb-rank { color: var(--text-muted); width: 1.2rem; font-size: 0.78rem; }
   .lb-me   { color: var(--accent); }
-  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 46px; text-align: right; font-size: 0.72rem; }
+  .lb-pts  { font-weight: 700; color: var(--accent); min-width: 50px; text-align: right; font-size: 0.78rem; }
   .lb-check {
-    width: 14px; height: 14px; accent-color: var(--accent);
-    cursor: pointer; flex-shrink: 0; margin-left: 0.35rem;
+    width: 16px; height: 16px; accent-color: var(--accent);
+    cursor: pointer; flex-shrink: 0; margin-left: 0.4rem;
   }
-  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.35rem; }
+  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.4rem; }
   .lb-balance-label {
-    font-size: 0.6rem; color: var(--text-dim); margin-bottom: 0.3rem;
+    font-size: 0.68rem; color: var(--text-muted); margin-bottom: 0.3rem;
     display: flex; justify-content: space-between; align-items: center;
   }
   .my-balance-chip {
     display: inline-flex; align-items: center; gap: 0.3rem;
-    padding: 0.25rem 0.65rem; border-radius: 20px;
+    padding: 0.3rem 0.75rem; border-radius: 20px;
     background: rgba(200,255,87,0.08); border: 1px solid rgba(200,255,87,0.2);
-    font-size: 0.72rem; font-weight: 700; color: var(--accent);
+    font-size: 0.8rem; font-weight: 700; color: var(--accent);
     margin-bottom: 0.75rem;
   }
 
@@ -298,8 +302,8 @@
   .standings-wrap { margin-top: 2.5rem; }
   .standings-toggle {
     display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
-    font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--text-dim); padding-bottom: 0.4rem;
+    font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-muted); padding-bottom: 0.4rem;
     border-bottom: 1px solid var(--border); margin-bottom: 1rem;
     user-select: none;
   }
@@ -314,33 +318,41 @@
   .standings-group { background: var(--surface); border: 1px solid var(--border);
     border-radius: 10px; overflow: hidden; }
   .standings-group-header {
-    padding: 0.5rem 0.8rem;
-    font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--text-dim); border-bottom: 1px solid var(--border);
+    padding: 0.55rem 0.85rem;
+    font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-muted); border-bottom: 1px solid var(--border);
     font-weight: 700;
   }
-  .standings-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .standings-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .standings-table th {
-    padding: 0.25rem 0.5rem; text-align: center;
-    font-size: 0.55rem; letter-spacing: 0.08em; color: var(--text-dim);
+    padding: 0.3rem 0.55rem; text-align: center;
+    font-size: 0.65rem; letter-spacing: 0.08em; color: var(--text-muted);
     font-weight: 500;
   }
   .standings-table th:first-child { text-align: left; width: 24px; }
   .standings-table th.team-col { text-align: left; }
-  .standings-table td { padding: 0.3rem 0.5rem; border-top: 1px solid rgba(255,255,255,0.04); text-align: center; }
-  .standings-table td:first-child { text-align: center; color: var(--text-dim); font-size: 0.62rem; }
+  .standings-table td { padding: 0.35rem 0.55rem; border-top: 1px solid rgba(255,255,255,0.04); text-align: center; }
+  .standings-table td:first-child { text-align: center; color: var(--text-muted); font-size: 0.7rem; }
   .standings-table td.team-name { text-align: left; display: flex; align-items: center; gap: 0.3rem; }
   .standings-table tr.qual-auto td { background: rgba(80,200,100,0.07); }
   .standings-table tr.qual-pot  td { background: rgba(255,190,87,0.06); }
-  .standings-table tr.qual-none td { opacity: 0.55; }
+  .standings-table tr.qual-none td { opacity: 0.65; }
   .standings-pts { font-weight: 700; color: var(--accent); }
 
   /* ── Mobile tweaks ───────────────────────────────────────────────── */
   @media (max-width: 500px) {
-    .fixture-meta-col { width: 36px; }
+    .fixture-meta-col { width: 42px; }
     .match-pill { width: 200px; }
     .pill-side, .pick-home, .pick-away { width: 70px; padding: 0 0.45rem; }
-    .team-abbr { font-size: 0.75rem; }
+    .team-abbr { font-size: 0.82rem; }
+    .stage-nav { padding: 0 1rem; }
+    .standings-grid { grid-template-columns: 1fr; }
+  }
+  /* Narrowest iPhone (SE/12 mini) */
+  @media (max-width: 380px) {
+    .fixture-meta-col { width: 38px; }
+    .match-pill { width: 185px; }
+    .pill-side, .pick-home, .pick-away { width: 64px; padding: 0 0.35rem; }
   }
 </style>
 {% endblock %}

@@ -752,6 +752,28 @@ def get_spy_set_for_user_in_pool(user_id, pool_id):
     return frozenset((r["fixture_id"], r["target_id"]) for r in rows)
 
 
+def has_spied(buyer_id, target_id, pool_id, fixture_id):
+    """Return True if the buyer has already purchased spy access for this target+fixture."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM spy_log WHERE buyer_id=? AND target_id=? AND pool_id=? AND fixture_id=?",
+        (buyer_id, target_id, pool_id, fixture_id)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def get_pick_for_user_fixture(user_id, pool_id, fixture_id):
+    """Fetch a single pick dict or None — used by the spy endpoint after a free reveal."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT predicted_result, bet_amount FROM picks WHERE user_id=? AND pool_id=? AND fixture_id=?",
+        (user_id, pool_id, fixture_id)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def record_spy(spy_id, tx_id, buyer_id, target_id, pool_id, fixture_id, cost):
     """
     Atomically purchase spy access for one target on one fixture.
@@ -799,7 +821,7 @@ def record_spy(spy_id, tx_id, buyer_id, target_id, pool_id, fixture_id, cost):
 
 def process_fixture_result(fixture_id):
     """
-    Award or deduct economy balances for all picks on a completed fixture.
+    Award or deduct economy balances + score_log points for all picks on a completed fixture.
 
     Group stage: credits group_win_payout / group_draw_payout / group_loss_payout
     (from scoring_config) to each member's balance and writes a 'payout' transaction.
@@ -807,12 +829,12 @@ def process_fixture_result(fixture_id):
     Knockout stage: credits bet_amount × knockout_flat_payout_multiplier for
     correct predictions (bet was already deducted at pick submission time).
 
-    Odds from football-data.org are not available on the free tier (would require
-    a paid subscription to /v4/competitions/{id}/matches with odds=true). When odds
-    become available, replace the flat multiplier with decimal_odds from the API.
+    Also writes a score_log row per pick (points_win / points_draw / points_loss
+    from scoring_config) so the /pool/<id>/stats points-over-time chart renders.
 
-    Idempotent — a pick that already has a payout transaction is skipped.
-    Returns: number of picks newly processed.
+    Result corrections are handled by reversing any existing payout transactions
+    and score_log rows for this fixture before re-deriving from the new result.
+    Returns: number of picks processed.
     """
     import uuid as _uuid
     conn = get_db()
@@ -828,6 +850,21 @@ def process_fixture_result(fixture_id):
     stage  = fixture["stage"] or ""
     knockout = is_knockout_stage(stage)
 
+    # Reverse prior payouts (handles admin result corrections): undo the balance
+    # impact and delete the transactions so re-processing produces correct totals.
+    prior = conn.execute(
+        "SELECT user_id, pool_id, amount FROM transactions WHERE type='payout' AND fixture_id=?",
+        (fixture_id,)
+    ).fetchall()
+    for r in prior:
+        _update_balance(conn, r["user_id"], r["pool_id"], -r["amount"])
+    conn.execute("DELETE FROM transactions WHERE type='payout' AND fixture_id=?", (fixture_id,))
+    # Same for score_log — drop prior rows so re-scoring works after a correction.
+    conn.execute(
+        "DELETE FROM score_log WHERE pick_id IN (SELECT id FROM picks WHERE fixture_id=?)",
+        (fixture_id,)
+    )
+
     picks = conn.execute(
         "SELECT id, user_id, pool_id, predicted_result, bet_amount FROM picks WHERE fixture_id=?",
         (fixture_id,)
@@ -835,17 +872,22 @@ def process_fixture_result(fixture_id):
 
     processed = 0
     for pick in picks:
-        # Idempotency: skip if payout transaction already exists for this pick
-        already = conn.execute("""
-            SELECT id FROM transactions
-            WHERE type='payout' AND fixture_id=? AND user_id=? AND pool_id=?
-        """, (fixture_id, pick["user_id"], pick["pool_id"])).fetchone()
-        if already:
-            continue
-
         config = get_scoring_config(pick["pool_id"], stage)
         correct = pick["predicted_result"] == actual
 
+        # Points (score_log) — used by the stats timeline.
+        if correct and actual == "D":
+            points = config.get("points_draw", config["points_win"])
+        elif correct:
+            points = config["points_win"]
+        else:
+            points = config["points_loss"]
+        conn.execute("""
+            INSERT INTO score_log (id, user_id, pool_id, pick_id, points_awarded)
+            VALUES (?,?,?,?,?)
+        """, (str(_uuid.uuid4()), pick["user_id"], pick["pool_id"], pick["id"], points))
+
+        # Economy (transactions / balances).
         if knockout:
             if not correct:
                 processed += 1  # Bet already deducted at submission — no further action

@@ -232,10 +232,18 @@ def sync_fixtures():
             _cache["last_fetched"] = now
             set_meta("fixtures_last_fetched", str(now))
     else:
-        _load_mock_fixtures()
+        # Only seed mock fixtures if the DB has none — avoids clobbering real
+        # fixture data (e.g. on production cold starts after the API key briefly
+        # went missing, or in test environments seeded by a custom script).
+        from database import get_fixtures
+        existing = get_fixtures()
+        if not existing:
+            _load_mock_fixtures()
+            print("[fixtures] No API key found and DB empty; loaded mock fixture data.")
+        else:
+            print(f"[fixtures] No API key; {len(existing)} fixtures already in DB, skipping mock load.")
         _cache["last_fetched"] = now
         set_meta("fixtures_last_fetched", str(now))
-        print("[fixtures] No API key found; using mock fixture data.")
 
 
 _STAGE_ORDER = [

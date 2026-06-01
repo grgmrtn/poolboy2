@@ -347,6 +347,9 @@ def submit_pick(pool_id):
 
     knockout = db.is_knockout_stage(fixture["stage"] if fixture else "")
 
+    if knockout and prediction == "D":
+        return jsonify({"ok": False, "error": "Draws are not allowed in knockout rounds."}), 400
+
     if knockout:
         bet_raw = data.get("bet_amount")
         try:
@@ -501,6 +504,20 @@ def spy_pick(pool_id):
     cost      = round(config["spy_base_cost"] + config["spy_increment"] * spy_count, 2)
     balance   = db.get_member_balance(user["id"], pool_id)
 
+    # Idempotency: if this buyer already spied on this target+fixture, return the
+    # pick for free without re-charging. Distinct from a true new purchase below.
+    already_spied = db.has_spied(user["id"], target["id"], pool_id, fixture_id)
+    if already_spied:
+        pick = db.get_pick_for_user_fixture(target["id"], pool_id, fixture_id)
+        return jsonify({
+            "ok": True,
+            "pick": pick,
+            "free": True,
+            "new_balance": balance,
+            "next_spy_cost": cost,
+            "is_knockout": db.is_knockout_stage(fixture["stage"] or ""),
+        })
+
     if balance < cost:
         return jsonify({"ok": False, "error": f"Insufficient balance. Need ${cost:.2f}."}), 400
 
@@ -583,20 +600,26 @@ def save_scoring():
         flash("Please enter valid integer point values.", "error")
         return redirect(url_for("admin_page"))
 
-    # Economy fields (only present on the global defaults form)
+    # Inherit economy values from the current effective config when fields
+    # aren't present in the submitted form (e.g. per-pool forms only render
+    # the points fields). Falling back to None would null out the column
+    # on a per-pool override and silently revert the user's economy settings.
+    stage_for_lookup = "Round of 16" if round_type == "knockout" else "Group A"
+    current = db.get_scoring_config(pool_id, stage_for_lookup)
+
     def _float(key, default):
         try:
             return float(request.form[key])
         except (KeyError, ValueError, TypeError):
             return default
 
-    starting_balance   = _float("starting_balance", None)
-    group_win_payout   = _float("group_win_payout", None)
-    group_draw_payout  = _float("group_draw_payout", None)
-    group_loss_payout  = _float("group_loss_payout", None)
-    spy_base_cost      = _float("spy_base_cost", None)
-    spy_increment      = _float("spy_increment", None)
-    ko_flat_mult       = _float("knockout_flat_payout_multiplier", None)
+    starting_balance   = _float("starting_balance",                current["starting_balance"])
+    group_win_payout   = _float("group_win_payout",                current["group_win_payout"])
+    group_draw_payout  = _float("group_draw_payout",               current["group_draw_payout"])
+    group_loss_payout  = _float("group_loss_payout",               current["group_loss_payout"])
+    spy_base_cost      = _float("spy_base_cost",                   current["spy_base_cost"])
+    spy_increment      = _float("spy_increment",                   current["spy_increment"])
+    ko_flat_mult       = _float("knockout_flat_payout_multiplier", current["knockout_flat_payout_multiplier"])
 
     db.save_scoring_config(
         str(uuid.uuid4()), win, draw, loss, user["id"],

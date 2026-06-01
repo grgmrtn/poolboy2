@@ -13,18 +13,18 @@
     /* ── Design tokens ───────────────────────────────────────────────── */
     :root {
       --bg:          #0a0a0f;
-      --surface:     #111118;
-      --surface2:    #1a1a25;
-      --border:      #2a2a3a;
-      --border-hi:   #3d3d55;
-      --text:        #e8e8f0;
-      --text-muted:  #7a7a9a;
-      --text-dim:    #4a4a66;
-      --accent:      #c8ff57;       /* sharp lime-green — the one vivid colour */
-      --accent-dim:  #8ab53d;
-      --red:         #ff5757;
-      --amber:       #ffbe57;
-      --blue:        #57b3ff;
+      --surface:     #15151e;       /* slightly lifted for better visual hierarchy */
+      --surface2:    #1f1f2c;
+      --border:      #34344a;       /* brighter for clearer separation in dark mode */
+      --border-hi:   #4e4e6e;
+      --text:        #f3f3f7;       /* near-white for highest contrast against bg */
+      --text-muted:  #a0a0c0;       /* lifted for WCAG AA on body text */
+      --text-dim:    #7070a0;       /* lifted from #4a4a66 — was below AA contrast */
+      --accent:      #d3ff67;       /* slightly brighter lime for better visibility */
+      --accent-dim:  #95c548;
+      --red:         #ff6b6b;
+      --amber:       #ffc870;
+      --blue:        #6abfff;
       --mono:        'JetBrains Mono', monospace;
       --sans:        'DM Sans', sans-serif;
       --radius:      8px;
@@ -33,13 +33,16 @@
 
     /* ── Reset ────────────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 16px; }
+    html { font-size: 17px; }                /* +1px base — propagates to every rem */
     body {
       background: var(--bg);
       color: var(--text);
       font-family: var(--mono);
       line-height: 1.6;
       min-height: 100vh;
+      -webkit-text-size-adjust: 100%;        /* iOS Safari: prevent auto-zoom on orientation change */
+      -webkit-font-smoothing: antialiased;   /* crisper text on retina iPhones */
+      -moz-osx-font-smoothing: grayscale;
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -58,20 +61,26 @@
 
     /* ── Navbar ───────────────────────────────────────────────────────── */
     .navbar {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(10, 10, 15, 0.92);
+      position: sticky;
+      top: 0;
+      top: env(safe-area-inset-top, 0);    /* respect iPhone notch/dynamic island */
+      z-index: 100;
+      background: rgba(10, 10, 15, 0.94);
       backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px); /* iOS Safari support */
       border-bottom: 1px solid var(--border);
       padding: 0 2rem;
+      padding-left:  max(2rem, env(safe-area-inset-left));
+      padding-right: max(2rem, env(safe-area-inset-right));
       display: flex; align-items: center; justify-content: space-between;
       height: 56px;
-      font-size: 0.78rem;
+      font-size: 0.85rem;                  /* +0.07rem for better legibility */
       letter-spacing: 0.03em;
     }
     .navbar-brand {
       color: var(--text);
       font-weight: 700;
-      font-size: 0.85rem;
+      font-size: 0.95rem;                  /* +0.10rem */
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
@@ -91,27 +100,36 @@
     }
     .nav-link:hover { color: var(--text); text-decoration: none; }
     .nav-logout {
-      color: var(--text-dim);
-      font-size: 0.72rem;
+      color: var(--text-muted);            /* was text-dim — now meets AA contrast */
+      font-size: 0.78rem;                  /* +0.06rem */
       letter-spacing: 0.05em;
       text-transform: uppercase;
       border: 1px solid var(--border);
-      padding: 0.25rem 0.6rem;
+      padding: 0.3rem 0.7rem;
       border-radius: var(--radius);
       transition: all 0.15s;
     }
-    .nav-logout:hover { color: var(--text-muted); border-color: var(--border-hi); text-decoration: none; }
+    .nav-logout:hover { color: var(--text); border-color: var(--border-hi); text-decoration: none; }
 
     /* ── Page wrapper ─────────────────────────────────────────────────── */
-    .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 3rem 2rem; }
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+      padding-left:   max(2rem, env(safe-area-inset-left));
+      padding-right:  max(2rem, env(safe-area-inset-right));
+      padding-bottom: max(3rem, env(safe-area-inset-bottom));
+    }
     .page-sm { max-width: 480px; }
 
     /* ── Flash messages ───────────────────────────────────────────────── */
     .flashes { list-style: none; margin-bottom: 1.5rem; }
     .flash {
-      padding: 0.7rem 1rem;
+      padding: 0.75rem 1rem;
       border-radius: var(--radius);
-      font-size: 0.82rem;
+      font-size: 0.9rem;                   /* +0.08rem for clearer reading */
       margin-bottom: 0.5rem;
       border-left: 3px solid;
     }
@@ -130,21 +148,22 @@
 
     /* ── Section labels ───────────────────────────────────────────────── */
     .section-label {
-      font-size: 0.65rem;
+      font-size: 0.72rem;                  /* +0.07rem */
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      color: var(--text-dim);
+      color: var(--text-muted);            /* was text-dim — meets AA contrast */
       margin-bottom: 1rem;
     }
 
     /* ── Buttons ──────────────────────────────────────────────────────── */
     .btn {
       display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.55rem 1.1rem;
+      padding: 0.6rem 1.15rem;             /* slightly larger touch target for iPhone */
+      min-height: 40px;                    /* hits iOS HIG 44pt-ish (with line-height) */
       border-radius: var(--radius);
       border: none; cursor: pointer;
       font-family: var(--mono);
-      font-size: 0.78rem;
+      font-size: 0.85rem;                  /* +0.07rem */
       font-weight: 500;
       letter-spacing: 0.04em;
       transition: all 0.15s;
@@ -167,13 +186,13 @@
       border: 1px solid rgba(255,87,87,0.3);
     }
     .btn-danger:hover { background: rgba(255,87,87,0.08); text-decoration: none; }
-    .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.72rem; }
+    .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.78rem; min-height: 32px; }
 
     /* ── Form controls ────────────────────────────────────────────────── */
     .form-group { margin-bottom: 1.2rem; }
     .form-label {
       display: block;
-      font-size: 0.72rem;
+      font-size: 0.78rem;                  /* +0.06rem */
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text-muted);
@@ -185,14 +204,14 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       color: var(--text);
-      padding: 0.65rem 0.9rem;
+      padding: 0.7rem 0.95rem;
       font-family: var(--mono);
-      font-size: 0.88rem;
+      font-size: 1rem;                     /* 16px+ avoids iOS zoom-on-focus on input fields */
       transition: border-color 0.15s;
       outline: none;
     }
     .form-input:focus { border-color: var(--accent); }
-    .form-input::placeholder { color: var(--text-dim); }
+    .form-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 
     /* ── Flag images ──────────────────────────────────────────────────── */
     .flag {
@@ -215,10 +234,35 @@
     /* ── Grid helpers ─────────────────────────────────────────────────── */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+    /* Tablet & smaller-laptop breakpoint */
+    @media (max-width: 820px) {
+      .grid-3 { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Mobile breakpoint — covers iPhone 14/15/Pro/Max (375–430 CSS px) */
     @media (max-width: 700px) {
       .grid-2, .grid-3 { grid-template-columns: 1fr; }
-      .navbar { padding: 0 1rem; }
-      .page { padding: 2rem 1rem; }
+      .navbar {
+        padding: 0 1rem;
+        padding-left:  max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+      }
+      .page {
+        padding: 2rem 1rem;
+        padding-left:   max(1rem, env(safe-area-inset-left));
+        padding-right:  max(1rem, env(safe-area-inset-right));
+        padding-bottom: max(2rem, env(safe-area-inset-bottom));
+      }
+      .navbar-right { gap: 1rem; }
+      .navbar-user { display: none; }      /* drop name on narrow iPhones — save space */
+    }
+
+    /* Narrow iPhone (SE, 12 mini, 13 mini): 375 px or less */
+    @media (max-width: 380px) {
+      html { font-size: 16px; }            /* shave the +1px boost when space is tight */
+      .navbar { padding: 0 0.75rem; }
+      .page { padding: 1.5rem 0.75rem; }
     }
 
     /* ── Page fade-in ─────────────────────────────────────────────────── */
