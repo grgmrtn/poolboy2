@@ -29,7 +29,12 @@ class _PGConn:
         self._cur = raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     def execute(self, sql, params=()):
-        self._cur.execute(sql.replace("?", "%s"), params or ())
+        # Postgres uses %s for parameters and treats %% as a literal %.
+        # Escape any literal % in the SQL first so LIKE patterns like 'Group %'
+        # survive psycopg2's parameter substitution, then convert sqlite-style
+        # ? to %s. Order matters: escape % before introducing our own %s.
+        sql = sql.replace("%", "%%").replace("?", "%s")
+        self._cur.execute(sql, params or ())
         return self._cur
 
     def cursor(self):
