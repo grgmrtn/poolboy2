@@ -114,6 +114,8 @@ def init_db():
     """)
 
     # One row per match. home_score/away_score/result are NULL until played.
+    # home_odds/away_odds are NULL until an admin sets them (KO only); when NULL,
+    # process_fixture_result falls back to scoring_config.knockout_flat_payout_multiplier.
     c.execute("""
         CREATE TABLE IF NOT EXISTS fixtures (
             id             TEXT PRIMARY KEY,
@@ -125,7 +127,9 @@ def init_db():
             stage          TEXT,
             home_score     INTEGER,
             away_score     INTEGER,
-            result         TEXT
+            result         TEXT,
+            home_odds      REAL,
+            away_odds      REAL
         )
     """)
 
@@ -231,6 +235,8 @@ def init_db():
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS spy_base_cost REAL DEFAULT 1",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS spy_increment REAL DEFAULT 1",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS knockout_flat_payout_multiplier REAL DEFAULT 2",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_odds REAL",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_odds REAL",
         ]:
             c.execute(sql)
     else:
@@ -249,6 +255,8 @@ def init_db():
             ("scoring_config", "spy_base_cost REAL DEFAULT 1"),
             ("scoring_config", "spy_increment REAL DEFAULT 1"),
             ("scoring_config", "knockout_flat_payout_multiplier REAL DEFAULT 2"),
+            ("fixtures",       "home_odds REAL"),
+            ("fixtures",       "away_odds REAL"),
         ]
         for table, col_def in migrations:
             try:
@@ -514,6 +522,21 @@ def get_fixtures():
     fixtures = conn.execute("SELECT * FROM fixtures ORDER BY kick_off").fetchall()
     conn.close()
     return fixtures
+
+
+def set_fixture_odds(fixture_id, home_odds, away_odds):
+    """
+    Update the per-fixture H/A odds. Used by /admin to override the
+    flat knockout multiplier for individual KO matches. Either side can
+    be NULL to leave it unset and inherit the global multiplier.
+    """
+    conn = get_db()
+    conn.execute(
+        "UPDATE fixtures SET home_odds=?, away_odds=? WHERE id=?",
+        (home_odds, away_odds, fixture_id)
+    )
+    conn.commit()
+    conn.close()
 
 
 def update_fixture_result(fixture_id, home_score, away_score):
@@ -845,7 +868,7 @@ def process_fixture_result(fixture_id):
     conn = get_db()
 
     fixture = conn.execute(
-        "SELECT result, stage FROM fixtures WHERE id=?", (fixture_id,)
+        "SELECT result, stage, home_odds, away_odds FROM fixtures WHERE id=?", (fixture_id,)
     ).fetchone()
     if not fixture or not fixture["result"]:
         conn.close()
@@ -854,6 +877,8 @@ def process_fixture_result(fixture_id):
     actual = fixture["result"]
     stage  = fixture["stage"] or ""
     knockout = is_knockout_stage(stage)
+    home_odds = fixture["home_odds"]
+    away_odds = fixture["away_odds"]
 
     # Reverse prior payouts (handles admin result corrections): undo the balance
     # impact and delete the transactions so re-processing produces correct totals.
@@ -898,7 +923,15 @@ def process_fixture_result(fixture_id):
                 processed += 1  # Bet already deducted at submission — no further action
                 continue
             bet = pick["bet_amount"] or 0.0
-            mult = config["knockout_flat_payout_multiplier"]
+            # Per-fixture odds take precedence over the global flat multiplier.
+            # A NULL on the winning side falls back to the config default so
+            # admins can leave odds unset and still get sensible payouts.
+            if actual == "H" and home_odds is not None:
+                mult = home_odds
+            elif actual == "A" and away_odds is not None:
+                mult = away_odds
+            else:
+                mult = config["knockout_flat_payout_multiplier"]
             payout = round(bet * mult, 2)
             desc = (f"KO win — {pick['predicted_result']} correct"
                     f" · ${bet:.2f} × {mult} = ${payout:.2f}")

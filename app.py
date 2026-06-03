@@ -704,6 +704,39 @@ def set_fixture_result(fixture_id):
     return redirect(url_for("admin_page"))
 
 
+@app.route("/admin/fixture/<fixture_id>/odds", methods=["POST"])
+@admin_required
+def set_fixture_odds(fixture_id):
+    """
+    Set per-fixture H/A odds for a knockout match. Empty inputs clear the
+    odds (revert to the global flat multiplier on payout).
+    """
+    def _odds(key):
+        raw = (request.form.get(key) or "").strip()
+        if not raw:
+            return None
+        try:
+            v = float(raw)
+        except ValueError:
+            return False  # sentinel for invalid input
+        if v <= 0:
+            return False
+        return v
+
+    home = _odds("home_odds")
+    away = _odds("away_odds")
+    if home is False or away is False:
+        flash("Odds must be positive numbers (or blank to clear).", "error")
+        return redirect(url_for("admin_page"))
+
+    db.set_fixture_odds(fixture_id, home, away)
+    if home is None and away is None:
+        flash("Odds cleared — fixture will use the global multiplier.", "success")
+    else:
+        flash(f"Odds saved — H: {home or 'flat'} · A: {away or 'flat'}.", "success")
+    return redirect(url_for("admin_page"))
+
+
 @app.route("/admin/pool/create", methods=["POST"])
 @admin_required
 def create_pool():

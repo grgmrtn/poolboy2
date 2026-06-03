@@ -243,17 +243,19 @@
         <button type="submit" class="btn btn-ghost btn-sm">⚽ Seed Euro 2024 sim</button>
       </form>
     </div>
+    {% set KO_STAGES = ['Round of 32','Round of 16','Quarter-Finals','Semi-Finals','Third Place','Final'] %}
     <div class="card" style="padding:0;overflow:hidden">
       <table class="fixture-table">
         <thead>
           <tr>
-            <th>Stage</th><th>Match</th><th>Kick-off</th><th>Result</th><th>Enter score</th>
+            <th>Stage</th><th>Match</th><th>Kick-off</th><th>Result</th><th>Enter score</th><th>KO odds (H · A)</th>
           </tr>
         </thead>
         <tbody>
           {% for f in fixtures %}
+          {% set is_ko = f.stage in KO_STAGES %}
           <tr>
-            <td style="color:var(--text-dim)">{{ f.stage }}</td>
+            <td style="color:var(--text-muted)">{{ f.stage }}</td>
             <td>
               <div style="display:flex;align-items:center;gap:0.5rem">
                 <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="{{ f.home_team }}" loading="lazy">
@@ -288,10 +290,28 @@
                 </div>
               </form>
             </td>
+            <td>
+              {% if is_ko %}
+              <form method="POST" action="{{ url_for('set_fixture_odds', fixture_id=f.id) }}">
+                <div class="score-inputs">
+                  <input class="form-input" type="number" name="home_odds" min="1" max="99" step="0.01"
+                    placeholder="H ×" value="{{ '%g'|format(f.home_odds) if f.home_odds is not none else '' }}"
+                    style="width:64px">
+                  <span style="color:var(--text-dim)">·</span>
+                  <input class="form-input" type="number" name="away_odds" min="1" max="99" step="0.01"
+                    placeholder="A ×" value="{{ '%g'|format(f.away_odds) if f.away_odds is not none else '' }}"
+                    style="width:64px">
+                  <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+                </div>
+              </form>
+              {% else %}
+                <span style="color:var(--text-dim);font-size:0.72rem">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
           {% if not fixtures %}
-          <tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:2rem">
+          <tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:2rem">
             No fixtures loaded yet.
           </td></tr>
           {% endif %}

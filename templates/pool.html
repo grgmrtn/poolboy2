@@ -198,6 +198,11 @@
     transition: all 0.12s; white-space: nowrap;
   }
   .ko-opt:hover { border-color: var(--border-hi); color: var(--text); }
+  .ko-odds {
+    font-size: 0.62rem; font-weight: 700;
+    color: var(--accent); margin-left: 0.15rem;
+    letter-spacing: 0.02em;
+  }
   .ko-opt.selected-H { border-color: var(--home-color, var(--blue));
                         color: var(--home-color, var(--blue));
                         background: var(--home-bg); }
@@ -463,7 +468,9 @@
                    data-kick-off="{{ f.kick_off or '' }}"
                    data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
                    data-home-team="{{ f.home_team or '' }}"
-                   data-away-team="{{ f.away_team or '' }}">
+                   data-away-team="{{ f.away_team or '' }}"
+                   data-home-odds="{{ f.home_odds if f.home_odds is not none else '' }}"
+                   data-away-odds="{{ f.away_odds if f.away_odds is not none else '' }}">
 
                 <!-- Date/time + countdown -->
                 <div class="fixture-meta-col">
@@ -634,17 +641,21 @@
                   {% if is_ko_stage and not is_completed and not is_started %}
                     {% set picks_locked = pool.entry_fee and not has_paid %}
                     {% if not my_pick %}
+                    {% set home_odds_display = f.home_odds if f.home_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
+                    {% set away_odds_display = f.away_odds if f.away_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
                     <div class="ko-bet-row" id="ko-form-{{ f.id }}">
                       <button class="ko-opt" id="ko-H-{{ f.id }}"
                               data-choice="H"
                               onclick="selectKoOpt('{{ f.id }}','H',this)">
                         <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" loading="lazy">
                         {{ (f.home_team or 'Home')[:10] }} wins
+                        <span class="ko-odds">{{ "%g"|format(home_odds_display) }}×</span>
                       </button>
                       <button class="ko-opt" id="ko-A-{{ f.id }}"
                               data-choice="A"
                               onclick="selectKoOpt('{{ f.id }}','A',this)">
                         {{ (f.away_team or 'Away')[:10] }} wins
+                        <span class="ko-odds">{{ "%g"|format(away_odds_display) }}×</span>
                         <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" loading="lazy">
                       </button>
                       <div class="ko-note">includes ET &amp; pens if necessary</div>
@@ -659,14 +670,21 @@
                               onclick="saveKoPick('{{ pool.id }}','{{ f.id }}',this)">Bet</button>
                     </div>
                     {% else %}
+                    {% if my_pick == 'H' %}
+                      {% set my_mult = f.home_odds if f.home_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
+                    {% elif my_pick == 'A' %}
+                      {% set my_mult = f.away_odds if f.away_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
+                    {% else %}
+                      {% set my_mult = scoring_config.knockout_flat_payout_multiplier %}
+                    {% endif %}
                     <div class="ko-locked-label">
                       <span class="ko-badge ko-badge-{{ my_pick }}">
                         {% if my_pick == 'H' %}{{ (f.home_team or 'Home')[:12] }} wins
                         {% elif my_pick == 'A' %}{{ (f.away_team or 'Away')[:12] }} wins
                         {% else %}Draw{% endif %}
                       </span>
-                      {% if my_bet %}<span>${{ "%.2f"|format(my_bet) }} bet</span>
-                        <span style="color:var(--accent)">→ potential ${{ "%.2f"|format(my_bet * scoring_config.knockout_flat_payout_multiplier) }}</span>
+                      {% if my_bet %}<span>${{ "%.2f"|format(my_bet) }} bet @ {{ "%g"|format(my_mult) }}×</span>
+                        <span style="color:var(--accent)">→ potential ${{ "%.2f"|format(my_bet * my_mult) }}</span>
                       {% endif %}
                     </div>
                     {% endif %}
@@ -1198,6 +1216,19 @@
     updateKoPotential(fixtureId);
   }
 
+  // Return the multiplier to apply to a KO bet for the user's chosen side.
+  // Reads per-fixture odds from data attributes; falls back to the global flat
+  // multiplier when an odds value isn't set.
+  function koMultFor(fixtureId, choice) {
+    const row = document.getElementById('fixture-' + fixtureId);
+    if (!row) return KO_MULT;
+    const raw = choice === 'H' ? row.dataset.homeOdds
+              : choice === 'A' ? row.dataset.awayOdds
+              : '';
+    const v = parseFloat(raw);
+    return (isFinite(v) && v > 0) ? v : KO_MULT;
+  }
+
   function updateKoPotential(fixtureId) {
     const amtEl = document.getElementById('ko-amt-' + fixtureId);
     const potEl = document.getElementById('ko-pot-' + fixtureId);
@@ -1207,7 +1238,10 @@
       potEl.textContent = '';
       return;
     }
-    potEl.textContent = `→ $${(amt * KO_MULT).toFixed(2)} if correct`;
+    const choice = koSelections[fixtureId];
+    const mult   = choice ? koMultFor(fixtureId, choice) : KO_MULT;
+    const suffix = choice ? '' : ' (pick a side)';
+    potEl.textContent = `→ $${(amt * mult).toFixed(2)} if correct${suffix}`;
   }
 
   async function saveKoPick(poolId, fixtureId, submitBtn) {
@@ -1241,9 +1275,10 @@
           const label = document.createElement('div');
           label.className = 'ko-locked-label';
           const teamLabel = escHtml(pickLabel(prediction, fixtureId));
+          const lockedMult = koMultFor(fixtureId, prediction);
           label.innerHTML = `<span class="ko-badge ko-badge-${prediction}">${teamLabel} wins</span>` +
-            `<span>$${bet_amount.toFixed(2)} bet</span>` +
-            `<span style="color:var(--accent)">→ $${(bet_amount * KO_MULT).toFixed(2)} if correct</span>`;
+            `<span>$${bet_amount.toFixed(2)} bet @ ${(+lockedMult).toString()}×</span>` +
+            `<span style="color:var(--accent)">→ $${(bet_amount * lockedMult).toFixed(2)} if correct</span>`;
           form.replaceWith(label);
         }
 
