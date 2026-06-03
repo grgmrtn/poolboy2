@@ -943,6 +943,8 @@ def get_pool_members_with_balances(pool_id):
     Each row: {id, display_name, email, balance, tx_count}.
     """
     conn = get_db()
+    # Postgres requires every non-aggregate selected column to appear in GROUP BY.
+    # SQLite is loose about this; keep the explicit list so both backends agree.
     rows = conn.execute("""
         SELECT u.id, u.display_name, u.email,
                COALESCE(pm.balance, 100.0) AS balance,
@@ -951,7 +953,7 @@ def get_pool_members_with_balances(pool_id):
         JOIN users u ON u.id = pm.user_id
         LEFT JOIN transactions t ON t.user_id = pm.user_id AND t.pool_id = pm.pool_id
         WHERE pm.pool_id = ?
-        GROUP BY u.id
+        GROUP BY u.id, u.display_name, u.email, pm.balance
         ORDER BY balance DESC
     """, (pool_id,)).fetchall()
     conn.close()
