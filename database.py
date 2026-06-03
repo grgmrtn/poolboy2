@@ -365,10 +365,12 @@ def get_all_public_pools():
 
 
 def get_pools_for_user(user_id):
-    """Return all pools the user belongs to, including their has_paid status."""
+    """Return all pools the user belongs to, plus their has_paid and balance."""
     conn = get_db()
     pools = conn.execute("""
-        SELECT p.*, pm.has_paid FROM pools p
+        SELECT p.*, pm.has_paid,
+               COALESCE(pm.balance, 100.0) AS balance
+        FROM pools p
         JOIN pool_members pm ON pm.pool_id = p.id
         WHERE pm.user_id = ? AND p.id IS NOT NULL
         ORDER BY p.name

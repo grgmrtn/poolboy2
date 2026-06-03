@@ -96,9 +96,9 @@
           </div>
           <div style="text-align:right">
             <div class="pool-score">
-              {{ current_user.total_score }} <span style="font-size:0.7rem;font-weight:400;color:var(--text-dim)">pts</span>
+              <span style="font-size:0.78rem;font-weight:400;color:var(--text-muted);margin-right:0.1rem">$</span>{{ "%.2f"|format(pool.balance) }}
             </div>
-            <div class="pool-score-label">YOUR SCORE</div>
+            <div class="pool-score-label">YOUR BALANCE</div>
           </div>
         </a>
       {% endfor %}
