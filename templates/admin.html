@@ -266,7 +266,8 @@
               </div>
             </td>
             <td style="color:var(--text-muted);white-space:nowrap">
-              {{ (f.kick_off or 'TBC')[:16].replace('T',' ') }}
+              {{ (f.kick_off_display or f.kick_off or 'TBC')[:16].replace('T',' ') }}
+              {% if f.kick_off_display %}<span style="color:var(--text-dim);font-size:0.66rem">ET</span>{% endif %}
             </td>
             <td>
               {% if f.result %}

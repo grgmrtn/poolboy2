@@ -395,6 +395,9 @@
     {% if pool.description %}
       <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem">{{ pool.description }}</p>
     {% endif %}
+    <p style="color:var(--text-dim);font-size:0.7rem;margin-top:0.4rem;letter-spacing:0.04em">
+      All kickoff times shown in New York time (ET).
+    </p>
   </div>
 
   {% if pool.entry_fee and not has_paid %}
@@ -432,12 +435,16 @@
             {% for f in fixtures %}
               {# Lock time = kick_off - LOCK_MIN minutes #}
               {% if f.kick_off %}
+                {# kick_off_display is the same instant rendered in the configured
+                   display timezone (default America/New_York); kick_off itself stays
+                   in UTC so the lock check and JS countdown keep working. #}
+                {% set ko_display = f.kick_off_display or f.kick_off %}
                 {% set ko_str = f.kick_off[:19] %}
                 {# Compute lock_iso in template: we just pass it as JS data-attr and check in Python #}
                 {% set is_started   = f.kick_off and f.kick_off[:19] < now_iso[:19] %}
-                {% set mo  = f.kick_off[5:7]|int %}
-                {% set dy  = f.kick_off[8:10]|int %}
-                {% set ko_time = f.kick_off[11:16] %}
+                {% set mo  = ko_display[5:7]|int %}
+                {% set dy  = ko_display[8:10]|int %}
+                {% set ko_time = ko_display[11:16] %}
               {% else %}
                 {% set is_started = false %}
               {% endif %}

@@ -16,7 +16,8 @@ A default admin account is created automatically on first run:
 import os
 import uuid
 import functools
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from flask import (
     Flask, render_template, request, redirect,
     url_for, session, flash, jsonify
@@ -33,6 +34,37 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-in-productio
 
 # Minutes before kick-off when picks lock
 LOCK_MINUTES = 15
+
+# Display kick-off times in this IANA zone. Logic everywhere else stays UTC —
+# this only changes what the user sees on the pool/admin pages. zoneinfo
+# handles EDT/EST and DST transitions automatically.
+DISPLAY_TZ = ZoneInfo(os.environ.get("DISPLAY_TZ", "America/New_York"))
+
+
+def _to_display_iso(utc_iso_str):
+    """
+    Convert a UTC ISO timestamp ('2026-06-11T18:00:00' or '...Z') to the same
+    ISO format in DISPLAY_TZ. Returns the input unchanged if it can't be parsed.
+    Used only for what users see — JS countdowns + lock checks keep using
+    the raw UTC kick_off so they work consistently across browsers.
+    """
+    if not utc_iso_str:
+        return utc_iso_str
+    try:
+        s = utc_iso_str.rstrip("Z").rstrip()
+        dt = datetime.fromisoformat(s[:19])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(DISPLAY_TZ).strftime("%Y-%m-%dT%H:%M:%S")
+    except (ValueError, TypeError):
+        return utc_iso_str
+
+
+def _attach_display_times(fixtures):
+    """Add f['kick_off_display'] to each fixture dict in-place."""
+    for f in fixtures:
+        f["kick_off_display"] = _to_display_iso(f.get("kick_off"))
+    return fixtures
 
 
 # ── Auth helpers ───────────────────────────────────────────────────────────
@@ -212,6 +244,8 @@ def pool_page(pool_id):
         return redirect(url_for("home"))
 
     grouped_fixtures = fx.get_all_fixtures()
+    for stage_fixtures in grouped_fixtures.values():
+        _attach_display_times(stage_fixtures)
     existing_picks   = db.get_picks_full_for_user_in_pool(user["id"], pool_id)
     membership       = db.get_pool_membership(user["id"], pool_id)
     has_paid         = bool(membership and membership["has_paid"])
@@ -551,7 +585,9 @@ def spy_pick(pool_id):
 @admin_required
 def admin_page():
     config    = db.get_active_scoring_config()
-    fixtures  = db.get_fixtures()
+    # db.get_fixtures returns Row objects; convert to dicts so we can mutate
+    fixtures  = [dict(f) for f in db.get_fixtures()]
+    _attach_display_times(fixtures)
     all_pools = db.get_all_public_pools()
     users     = db.get_all_users()
 
