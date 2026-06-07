@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Flask, render_template, request, redirect,
-    url_for, session, flash, jsonify
+    url_for, session, flash, jsonify, g
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -97,35 +97,53 @@ def admin_required(f):
 
 def current_user():
     """
-    Return the currently logged-in user row (with total_score and a
-    nav_balance / nav_rank pair attached for the sticky header), or None.
+    Return the currently logged-in user row, with nav_balance / nav_rank /
+    nav_pool_size attached for the sticky header.
 
-    nav_balance + nav_rank are derived from the FIRST pool the user joined
-    by display name (alphabetical). For most players that's their only pool
-    and matches what they expect to see; multi-pool users see the same
-    label everywhere but can still drill in from /home.
+    Pool selection priority:
+      1. g.nav_pool_id  — set by pool_page so the navbar matches what the
+         user is currently looking at
+      2. First pool the user has joined (alphabetical) — used for /home,
+         /admin, /stats and any other non-pool page
     """
     if "user_id" not in session:
         return None
     user = db.get_user_by_id(session["user_id"])
-    if user:
-        user = dict(user)
-        user["total_score"] = db.get_user_total_score(user["id"])
-        pools = db.get_pools_for_user(user["id"])
-        if pools:
-            first = pools[0]
-            user["nav_balance"] = float(first["balance"] or 0)
-            rank, size = db.get_member_rank(user["id"], first["id"])
+    if not user:
+        return None
+    user = dict(user)
+    user["total_score"] = db.get_user_total_score(user["id"])
+
+    preferred_id = getattr(g, "nav_pool_id", None)
+    pool_for_nav = None
+    if preferred_id:
+        # User is on a pool page — use that pool for the nav
+        pool_for_nav = db.get_pool_by_id(preferred_id)
+        if pool_for_nav and db.is_pool_member(user["id"], preferred_id):
+            mem = db.get_pool_membership(user["id"], preferred_id)
+            user["nav_balance"] = float(mem["balance"] or 0)
+            rank, size = db.get_member_rank(user["id"], preferred_id)
             user["nav_rank"] = rank
             user["nav_pool_size"] = size
-            user["nav_pool_id"] = first["id"]
-            user["nav_pool_name"] = first["name"]
-        else:
-            user["nav_balance"] = None
-            user["nav_rank"] = None
-            user["nav_pool_size"] = None
-            user["nav_pool_id"] = None
-            user["nav_pool_name"] = None
+            user["nav_pool_id"] = preferred_id
+            user["nav_pool_name"] = pool_for_nav["name"]
+            return user
+
+    pools = db.get_pools_for_user(user["id"])
+    if pools:
+        first = pools[0]
+        user["nav_balance"] = float(first["balance"] or 0)
+        rank, size = db.get_member_rank(user["id"], first["id"])
+        user["nav_rank"] = rank
+        user["nav_pool_size"] = size
+        user["nav_pool_id"] = first["id"]
+        user["nav_pool_name"] = first["name"]
+    else:
+        user["nav_balance"] = None
+        user["nav_rank"] = None
+        user["nav_pool_size"] = None
+        user["nav_pool_id"] = None
+        user["nav_pool_name"] = None
     return user
 
 
@@ -259,6 +277,9 @@ def pool_page(pool_id):
     The fixture picker page for a pool.
     Shows all fixtures grouped by stage with economy-based pick/bet/spy UI.
     """
+    # Mark which pool's balance/rank should appear in the navbar; current_user()
+    # picks this up via Flask's `g` so the chip matches the page the user is on.
+    g.nav_pool_id = pool_id
     user = current_user()
     pool = db.get_pool_by_id(pool_id)
     if not pool:

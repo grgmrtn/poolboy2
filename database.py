@@ -512,15 +512,17 @@ def get_pool_leaderboard(pool_id):
     Return all members of a pool ranked by current balance, highest first.
     Each row includes display_name, email, and balance.
     Falls back to 100.0 if balance column is NULL (pre-migration rows).
+    Tiebreaker is joined_at ASC so the rendered order matches get_member_rank.
     """
     conn = get_db()
     rows = conn.execute("""
         SELECT u.display_name, u.email,
-               COALESCE(pm.balance, 100.0) AS balance
+               COALESCE(pm.balance, 100.0) AS balance,
+               pm.joined_at
         FROM pool_members pm
         JOIN users u ON u.id = pm.user_id
         WHERE pm.pool_id = ?
-        ORDER BY balance DESC
+        ORDER BY balance DESC, pm.joined_at ASC
     """, (pool_id,)).fetchall()
     conn.close()
     return rows

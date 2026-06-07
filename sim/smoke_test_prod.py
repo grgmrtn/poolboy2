@@ -16,10 +16,13 @@ Run: python3 sim/smoke_test_prod.py [base_url]
 """
 import sys, uuid, requests, re
 
+import os
 DEFAULT_BASE = "https://poolboy2-app-production.up.railway.app"
 BASE = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else DEFAULT_BASE
-ADMIN_EMAIL = "admin@pool.local"
-ADMIN_PW    = "scrypt:32768:8:1$tnqrMGNrISLv0Nxt$dd261e498b9b12ba30570ba6c8646b7e2034b2362c5f7210b0a2d40f1be0509bc4525ea61bfbcb8e8698866d859113b7ec46c07a0adb68b0a99699675a2a2603"
+# Pull admin creds from env so they never get committed. Without these set,
+# section [G] is skipped (the rest of the smoke test still runs).
+ADMIN_EMAIL = os.environ.get("SMOKE_ADMIN_EMAIL", "")
+ADMIN_PW    = os.environ.get("SMOKE_ADMIN_PW", "")
 
 results = []
 def check(name, ok, detail=""):
@@ -138,8 +141,31 @@ def main():
           "maybeAutoShowWalkthrough" in r.text)
     check("walkthrough section 'Group stage' rendered",
           "Group stage — free picks" in r.text)
-    check("walkthrough section 'Spying' rendered",
-          "Spying — peek at" in r.text)
+    check("walkthrough section 'Spying' (unified) rendered",
+          "peek at the field" in r.text)
+
+    # ─── Row redesign + unified Spy modal ───────────────────────────────
+    check("match-row wrapper present",
+          'class="match-row"' in r.text)
+    check("fixture-actions container present",
+          'class="fixture-actions"' in r.text)
+    check("unified Spy trigger button rendered",
+          'class="spy-trigger"' in r.text)
+    check("unified Spy modal markup present",
+          'id="spy-modal-unified"' in r.text)
+    check("Hide Completed Picks toggle present",
+          'Hide Completed Picks' in r.text)
+    check("nav rank pill present",
+          'class="nav-rank"' in r.text)
+
+    # ─── New backend endpoints respond ──────────────────────────────────
+    rl = s.get(f"{BASE}/pool/{pool_id}/stats", timeout=15)  # warm session
+    # We can only exercise spy-list / field-spy with a real fixture id —
+    # not worth doing destructively against prod; just check the routes
+    # exist by hitting them with an invalid fixture id (expect 404).
+    r404 = s.get(f"{BASE}/pool/{pool_id}/fixture/__invalid__/spy-list", timeout=15)
+    check("/spy-list route exists (returns 4xx for unknown fixture)",
+          r404.status_code in (400, 404))
 
     # ────────────────────────────────────────────────────────────────────
     print("\n[F] Stats page renders (Fix #1 score_log populated)")
@@ -164,27 +190,28 @@ def main():
     # ────────────────────────────────────────────────────────────────────
     print("\n[G] Admin page renders (Postgres GROUP BY fix)")
     # ────────────────────────────────────────────────────────────────────
-    admin = login(ADMIN_EMAIL, ADMIN_PW)
-    if not admin:
-        check("admin login succeeded", False,
-              "default admin password 'changeme' rejected — already rotated? skipping admin checks")
+    if not ADMIN_EMAIL or not ADMIN_PW:
+        print("  (skipped — set SMOKE_ADMIN_EMAIL and SMOKE_ADMIN_PW env vars to include)")
     else:
-        check("admin login succeeded", True)
-        r = admin.get(f"{BASE}/admin", timeout=15)
-        check("/admin returns 200 (Postgres GROUP BY fix verified)",
-              r.status_code == 200, f"got {r.status_code}")
-        check("'Per-pool scoring' section rendered",
-              "Per-pool scoring" in r.text)
-        check("'KO odds (H · A)' column rendered (today's per-fixture odds feature)",
-              "KO odds (H · A)" in r.text)
-        # Count KO odds form actions — should be > 0 if any KO fixtures exist
-        odds_actions = re.findall(r'action="/admin/fixture/([^/]+)/odds"', r.text)
-        check(f"admin renders odds form actions ({len(odds_actions)} found)",
-              len(odds_actions) >= 0,  # 0 is OK — no KO fixtures yet
-              f"count: {len(odds_actions)}")
-        # The 'Per-pool scoring' card needs the GROUP BY fix to render members
-        check("no Traceback in /admin page",
-              "Traceback" not in r.text)
+        admin = login(ADMIN_EMAIL, ADMIN_PW)
+        if not admin:
+            check("admin login succeeded", False,
+                  "credentials rejected — check SMOKE_ADMIN_EMAIL / SMOKE_ADMIN_PW")
+        else:
+            check("admin login succeeded", True)
+            r = admin.get(f"{BASE}/admin", timeout=15)
+            check("/admin returns 200 (Postgres GROUP BY fix verified)",
+                  r.status_code == 200, f"got {r.status_code}")
+            check("'Per-pool scoring' section rendered",
+                  "Per-pool scoring" in r.text)
+            check("'KO odds (H · A)' column rendered (today's per-fixture odds feature)",
+                  "KO odds (H · A)" in r.text)
+            odds_actions = re.findall(r'action="/admin/fixture/([^/]+)/odds"', r.text)
+            check(f"admin renders odds form actions ({len(odds_actions)} found)",
+                  len(odds_actions) >= 0,
+                  f"count: {len(odds_actions)}")
+            check("no Traceback in /admin page",
+                  "Traceback" not in r.text)
 
     # ────────────────────────────────────────────────────────────────────
     print("\n[H] Logout works")

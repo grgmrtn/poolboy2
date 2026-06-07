@@ -29,11 +29,14 @@
   }
   .stage-tab:hover { color: var(--text); text-decoration: none; }
   .stage-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  /* "Hide completed" filter sits at the end of the stage nav, right-aligned */
+  /* "Hide completed picks" filter sits at the end of the stage nav, right-aligned.
+     Padding is slimmer than the global .btn so it doesn't stick out from the
+     56px-tall navbar element. */
   .stage-toggle {
     flex-shrink: 0; margin-left: auto;
-    padding: 0.3rem 0.7rem;
-    font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+    align-self: center;
+    padding: 0.22rem 0.55rem;
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 600;
     letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-muted);
     background: transparent;
@@ -41,6 +44,7 @@
     border-radius: 999px;
     cursor: pointer; white-space: nowrap;
     transition: all 0.15s;
+    line-height: 1.1; min-height: 0;
   }
   .stage-toggle:hover { color: var(--text); border-color: var(--border-hi); }
   .stage-toggle.active {
@@ -72,6 +76,9 @@
   }
   .stage-heading.collapsed .caret { transform: rotate(-90deg); }
   .stage-heading.collapsed + .stage-section { display: none; }
+  /* Stage heading itself isn't a grid item — it lives outside .stage-section
+     and renders full-width naturally. The wrapper below groups heading and
+     grid so the layout works without span hacks. */
 
   /* ── Fixture row ─────────────────────────────────────────────────── */
   .fixture-row {
@@ -79,8 +86,9 @@
     gap: 0.65rem; margin-bottom: 1rem;
     padding: 0.45rem 0;
   }
-  /* Allow users to filter the page to upcoming/in-progress fixtures only */
-  body.hide-completed .fixture-row.is-completed { display: none; }
+  /* Allow users to filter the page to upcoming/in-progress fixtures only.
+     !important so the rule beats display:flex / grid item rules. */
+  body.hide-completed .fixture-row.is-completed { display: none !important; }
 
   /* On wider screens, render fixtures within a stage in two columns;
      iPhone falls back to single column with more breathing room. */
@@ -161,20 +169,22 @@
   .match-pill.locked      { border-color: rgba(255,190,87,0.12); }
 
   .pill-side {
-    width: 80px; flex-shrink: 0;
-    display: flex; align-items: center; gap: 0.3rem;
-    padding: 0 0.6rem;
+    flex: 1 1 0; min-width: 0;
+    display: flex; align-items: center; gap: 0.45rem;
+    padding: 0 0.85rem;
+    justify-content: center;
   }
   .pill-side.home { border-right: 1px solid var(--border); }
   .pill-side.away { border-left: 1px solid var(--border); flex-direction: row-reverse; }
 
   .pill-centre {
-    flex: 1;
+    flex: 1 1 0; min-width: 0;
     display: flex; align-items: center; justify-content: center;
   }
 
-  .team-abbr { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
-  .flag { width: 18px; height: 13px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+  .team-abbr { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .flag { width: 22px; height: 16px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
 
   /* ── Pick buttons (group stage) ──────────────────────────────────── */
   .pick-btn {
@@ -183,21 +193,21 @@
     display: flex; align-items: center;
   }
   .pick-home {
-    width: 80px; flex-shrink: 0; gap: 0.3rem; padding: 0 0.6rem;
+    flex: 1 1 0; min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
     border-right: 1px solid var(--border);
-    height: 100%; justify-content: flex-start;
+    height: 100%; justify-content: center;
   }
   .pick-away {
-    width: 80px; flex-shrink: 0; gap: 0.3rem; padding: 0 0.6rem;
+    flex: 1 1 0; min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
     border-left: 1px solid var(--border);
     flex-direction: row-reverse; height: 100%;
-    justify-content: flex-start;
+    justify-content: center;
   }
   .pick-home .team-abbr, .pick-away .team-abbr { color: var(--text-muted); }
 
   .pick-draw {
-    flex: 1; height: 100%; justify-content: center;
-    font-size: 0.7rem; font-weight: 500; letter-spacing: 0.07em;
+    flex: 1 1 0; min-width: 0; height: 100%; justify-content: center;
+    font-size: 0.92rem; font-weight: 600; letter-spacing: 0.07em;
     text-transform: uppercase; color: var(--text-muted);
   }
 
@@ -399,19 +409,45 @@
   .field-pill .field-side.dim { color: var(--text-dim); }
   .field-pill .field-side.dim b { color: var(--text-muted); }
 
-  /* ── Spy on Someone button ───────────────────────────────────────── */
-  .spy-someone-pill {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    height: 40px; padding: 0 0.85rem;
-    border-radius: 8px; border: 1px dashed var(--border);
+  /* ── Unified Spy button ──────────────────────────────────────────── */
+  .spy-trigger {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    height: 40px; padding: 0 0.95rem;
+    border-radius: 8px; border: 1px solid var(--border);
     background: transparent; flex-shrink: 0;
-    font-family: var(--mono); font-size: 0.74rem; font-weight: 600;
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700;
     color: var(--text-muted); cursor: pointer;
     transition: all 0.15s; white-space: nowrap; letter-spacing: 0.03em;
   }
-  .spy-someone-pill:hover {
-    border-style: solid; border-color: var(--amber); color: var(--amber);
+  .spy-trigger:hover {
+    border-color: var(--amber); color: var(--amber);
+    background: rgba(255,200,112,0.06);
   }
+  .spy-trigger span:first-child { font-size: 0.95rem; line-height: 1; }
+
+  /* ── Unified Spy modal: field option at top + player list below ── */
+  .spy-modal-section {
+    padding: 0.85rem 0;
+    border-top: 1px solid var(--border);
+  }
+  .spy-modal-section:first-child { border-top: none; padding-top: 0.25rem; }
+  .spy-modal-section h4 {
+    color: var(--text); font-size: 0.95rem; font-weight: 700;
+    margin: 0 0 0.45rem 0;
+  }
+  .spy-field-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .spy-field-row .spy-field-explain {
+    font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;
+  }
+  .spy-field-spread {
+    padding: 0.6rem 0 0.2rem; font-size: 0.95rem;
+    color: var(--text); display: flex; gap: 0.85rem; flex-wrap: wrap;
+  }
+  .spy-field-spread b { color: var(--accent); }
+  .spy-field-spread .dim { color: var(--text-dim); }
   .player-pill.player-hidden { display: none; }
   .player-pill.is-me { border-color: rgba(200,255,87,0.20); color: var(--text); }
   .player-pill.is-me.pick-H { border-color: var(--home-color, var(--blue));   color: var(--home-color, var(--blue)); }
@@ -571,8 +607,8 @@
   {% endfor %}
   <button class="stage-toggle" id="hide-completed-toggle"
           onclick="toggleHideCompleted(this)"
-          title="Hide fixtures already played">
-    Hide completed
+          title="Hide picks for fixtures already played">
+    Hide Completed Picks
   </button>
 </nav>
 
@@ -626,11 +662,11 @@
         {% for stage, fixtures in grouped_fixtures.items() %}
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
+          <div class="stage-heading" onclick="toggleStageHeading(this)">
+            <span class="caret">▼</span>
+            <span>{{ stage }}</span>
+          </div>
           <div class="stage-section" id="stage-{{ loop.index0 }}" data-idx="{{ loop.index0 }}">
-            <div class="stage-heading" onclick="this.classList.toggle('collapsed')">
-              <span class="caret">▼</span>
-              <span>{{ stage }}</span>
-            </div>
 
             {% for f in fixtures %}
               {# Lock time = kick_off - LOCK_MIN minutes #}
@@ -809,7 +845,7 @@
                       </div>
                     {% endif %}
 
-                    {# ── Spy The Field: spread pill or buy button ───────── #}
+                    {# ── Field spread: visible whenever revealed (bought, locked, or completed) ── #}
                     {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
                     {% if field_revealed and field_totals.get(f.id) %}
                       {% set t = field_totals[f.id] %}
@@ -819,16 +855,17 @@
                         <span class="field-side"><b>{{ t.A.count }}</b>A</span>
                         {% if t.no_pick %}<span class="field-side dim">{{ t.no_pick }}—</span>{% endif %}
                       </div>
-                    {% elif not is_completed %}
-                      <button class="field-pill buy" id="field-{{ f.id }}"
-                              onclick="openFieldModal('{{ f.id }}', {{ scoring_config.aggregate_spy_cost }})">
-                        <span class="field-icon">📊</span>
-                        Spy the Field
-                        <span class="field-cost">${{ "%g"|format(scoring_config.aggregate_spy_cost) }}</span>
+                    {% endif %}
+
+                    {# ── Single Spy button: opens modal offering field + per-player options ── #}
+                    {% if not is_completed and not is_started %}
+                      <button class="spy-trigger"
+                              onclick="openSpyModal('{{ pool.id }}','{{ f.id }}', {{ scoring_config.aggregate_spy_cost }}, {{ 'true' if (f.id in aggregate_spy_set) else 'false' }})">
+                        <span>👁</span> Spy
                       </button>
                     {% endif %}
 
-                    {# ── Pills for picks the user has individually spied on (always shown for at-a-glance reading) ── #}
+                    {# ── Pills for picks the user has individually spied on ── #}
                     {% for o in others %}
                       {% if o.email != current_user.email %}
                         {% if is_completed %}
@@ -857,14 +894,6 @@
                         {% endif %}
                       {% endif %}
                     {% endfor %}
-
-                    {# ── Spy on Someone (hidden once everyone is visible: locked/done) ── #}
-                    {% if not is_completed and not is_started %}
-                      <button class="spy-someone-pill"
-                              onclick="openSpySomeoneModal('{{ pool.id }}','{{ f.id }}')">
-                        + Spy on someone
-                      </button>
-                    {% endif %}
 
                   </div><!-- /.fixture-actions -->
 
@@ -1022,37 +1051,38 @@
   </div><!-- /.pool-layout -->
 </div><!-- /.page -->
 
-<!-- ── Spy The Field modal ───────────────────────────────────────────── -->
-<div id="field-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeFieldModal()">
-  <div class="modal-box">
-    <div class="modal-title">📊 Spy the Field</div>
-    <div class="modal-body" id="field-modal-explain">
-      You'll see how many players picked each side for this match — counts only, no names.
-      <br><br>
-      Cost: <strong id="field-modal-cost">$2</strong>. After purchase you can <strong>re-check the
-      live spread any time until kick-off</strong>, no extra charge. Once the match locks, the
-      spread becomes visible to everyone for free.
-    </div>
-    <div id="field-modal-result" style="display:none"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeFieldModal()">Close</button>
-      <button class="btn btn-primary" id="field-modal-confirm" onclick="confirmFieldSpy()">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Spy on Someone modal ─────────────────────────────────────────── -->
-<div id="spy-someone-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeSpySomeoneModal()">
+<!-- ── Unified Spy modal: Field + per-player options together ────────── -->
+<div id="spy-modal-unified" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeSpyModal()">
   <div class="modal-box walk-box">
-    <div class="modal-title">👁 Spy on a Player</div>
-    <div class="modal-body">
-      Pay to reveal one player's pick on this match. Cost goes up with each spy
-      you buy this round (see the price next to each name). Choose carefully — players are
-      sorted by current balance, highest first.
+    <div class="modal-title">👁 Spy on this match</div>
+
+    <!-- Section 1: Spy the Field -->
+    <div class="spy-modal-section">
+      <h4>📊 Spy the Field</h4>
+      <div class="spy-field-row">
+        <div class="spy-field-explain" id="spy-field-explain">
+          See how many players picked each side — counts only, no names.
+          Costs <strong id="spy-field-cost">$2</strong> the first time;
+          after that, re-check the live spread any time until kick-off, free.
+        </div>
+        <button class="btn btn-primary btn-sm" id="spy-field-buy"
+                onclick="confirmFieldSpy()">Reveal Field</button>
+      </div>
+      <div class="spy-field-spread" id="spy-field-spread" style="display:none"></div>
     </div>
-    <div id="spy-someone-list" style="margin-bottom:1rem"></div>
+
+    <!-- Section 2: Spy on a specific player -->
+    <div class="spy-modal-section">
+      <h4>🕵️ Spy on a Player</h4>
+      <div class="modal-body" style="margin-bottom:0.5rem">
+        Reveal one player's pick on this match. The cost rises with each
+        targeted spy you buy this pool — sorted by balance, highest first.
+      </div>
+      <div id="spy-someone-list"></div>
+    </div>
+
     <div class="modal-actions">
-      <button class="btn" onclick="closeSpySomeoneModal()">Close</button>
+      <button class="btn" onclick="closeSpyModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1109,16 +1139,22 @@
       </div>
 
       <div class="walk-section">
-        <div class="walk-head"><span class="walk-num">3</span> Spying — peek at someone's pick</div>
+        <div class="walk-head"><span class="walk-num">3</span> Spying — peek at the field, or one player</div>
         <div class="walk-text">
-          Every other player's pick is hidden until kick-off. If you want to see one early,
-          tap the <strong>👁 player name</strong> button next to a match.
+          Every other player's pick is hidden until kick-off. The <strong>👁 Spy</strong> button
+          next to each match opens a single modal with two options:
           <ul>
-            <li>First spy costs <strong>${{ "%g"|format(scoring_config.spy_base_cost) }}</strong>.
-              Each additional spy costs
-              <strong>${{ "%g"|format(scoring_config.spy_increment) }}</strong> more than the last.</li>
-            <li>Once you've revealed someone's pick on a fixture, you can re-check it for free.</li>
-            <li>After kick-off all picks become visible automatically (no cost).</li>
+            <li><strong>Spy the Field</strong> — see the H/D/A vote distribution for
+              <strong>${{ "%g"|format(scoring_config.aggregate_spy_cost) }}</strong>,
+              counts only (no names). Once paid you can re-check the live spread any time
+              until kick-off, free.</li>
+            <li><strong>Spy on a player</strong> — reveal one specific player's pick. First
+              targeted spy costs <strong>${{ "%g"|format(scoring_config.spy_base_cost) }}</strong>;
+              each subsequent one costs
+              <strong>${{ "%g"|format(scoring_config.spy_increment) }}</strong> more than the last.
+              Sorted by current balance, highest first.</li>
+            <li>Already-revealed picks stay revealed — free to re-check.</li>
+            <li>After kick-off all picks become visible automatically.</li>
           </ul>
         </div>
       </div>
@@ -1467,9 +1503,12 @@
     const on = document.body.classList.toggle('hide-completed');
     if (btn) {
       btn.classList.toggle('active', on);
-      btn.textContent = on ? 'Show completed' : 'Hide completed';
+      btn.textContent = on ? 'Show Completed Picks' : 'Hide Completed Picks';
     }
     try { localStorage.setItem('wc26_hide_completed', on ? '1' : '0'); } catch(e) {}
+  }
+  function toggleStageHeading(el) {
+    el.classList.toggle('collapsed');
   }
   // Restore previous toggle state on page load
   (function restoreHideCompleted() {
@@ -1483,115 +1522,142 @@
     } catch(e) {}
   })();
 
-  // ── Spy The Field modal ────────────────────────────────────────────────
-  let _fieldFixtureId = null;
-  function openFieldModal(fixtureId, cost) {
-    _fieldFixtureId = fixtureId;
-    document.getElementById('field-modal-cost').textContent = '$' + cost;
-    document.getElementById('field-modal-result').style.display = 'none';
-    document.getElementById('field-modal-explain').style.display = '';
-    document.getElementById('field-modal-confirm').style.display = '';
-    document.getElementById('field-modal').style.display = 'flex';
-  }
-  function closeFieldModal() {
-    document.getElementById('field-modal').style.display = 'none';
-    _fieldFixtureId = null;
-  }
-  async function confirmFieldSpy() {
-    if (!_fieldFixtureId) return;
-    const btn = document.getElementById('field-modal-confirm');
-    btn.disabled = true; btn.textContent = '...';
-    try {
-      const r = await fetch(`/pool/${POOL_ID}/fixture/${_fieldFixtureId}/field-spy`, {method:'POST'});
-      const data = await r.json();
-      if (!data.ok) {
-        alert(data.error || 'Could not spy the field.');
-        btn.disabled = false; btn.textContent = 'Confirm';
-        return;
-      }
-      // Update balance + replace the row's buy button with the revealed spread
-      myBalance = data.new_balance;
-      updateBalanceDisplay(myBalance);
-      renderFieldSpread(_fieldFixtureId, data.totals, data.is_knockout);
-      // Show the result in-modal too so users see the immediate payoff
-      const isKo = data.is_knockout;
-      const t = data.totals;
-      const wagered = (side) => (isKo && t[side].wagered) ? ` ($${Math.round(t[side].wagered)})` : '';
-      const parts = [
-        `<strong>${t.H.count}</strong> Home${wagered('H')}`,
-      ];
-      if (!isKo) parts.push(`<strong>${t.D.count}</strong> Draw`);
-      parts.push(`<strong>${t.A.count}</strong> Away${wagered('A')}`);
-      if (t.no_pick) parts.push(`<span style="color:var(--text-dim)">${t.no_pick} not yet picked</span>`);
-      const resultEl = document.getElementById('field-modal-result');
-      resultEl.innerHTML = `<div style="padding:0.75rem 0;font-size:0.95rem;line-height:1.7">${parts.join(' · ')}</div>`;
-      resultEl.style.display = '';
-      document.getElementById('field-modal-explain').style.display = 'none';
-      btn.style.display = 'none';
-    } catch (e) {
-      alert('Network error.');
-      btn.disabled = false; btn.textContent = 'Confirm';
-    }
-  }
-  function renderFieldSpread(fixtureId, totals, isKo) {
-    const el = document.getElementById('field-' + fixtureId);
-    if (!el) return;
-    const wagered = (side) => (isKo && totals[side].wagered)
-      ? ` <span style="color:var(--text-dim);font-size:0.66rem">$${Math.round(totals[side].wagered)}</span>`
-      : '';
-    let html = `<span class="field-side"><b>${totals.H.count}</b>H${wagered('H')}</span>`;
-    if (!isKo) html += `<span class="field-side"><b>${totals.D.count}</b>D</span>`;
-    html += `<span class="field-side"><b>${totals.A.count}</b>A${wagered('A')}</span>`;
-    if (totals.no_pick) html += `<span class="field-side dim">${totals.no_pick}—</span>`;
-    el.outerHTML = `<div class="field-pill revealed" id="field-${fixtureId}">${html}</div>`;
-  }
+  // ── Unified Spy modal (field + player list together) ──────────────────
+  let _spyPool = null, _spyFix = null, _spyFieldBought = false;
 
-  // ── Spy on Someone modal ───────────────────────────────────────────────
-  let _spySomeonePool = null;
-  let _spySomeoneFix  = null;
-  async function openSpySomeoneModal(poolId, fixtureId) {
-    _spySomeonePool = poolId;
-    _spySomeoneFix  = fixtureId;
+  async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
+    _spyPool = poolId; _spyFix = fixtureId;
+    _spyFieldBought = !!alreadyFieldRevealed;
+
+    // Reset field section UI
+    document.getElementById('spy-field-cost').textContent = '$' + fieldCost;
+    const explainEl = document.getElementById('spy-field-explain');
+    const buyBtn    = document.getElementById('spy-field-buy');
+    const spreadEl  = document.getElementById('spy-field-spread');
+    spreadEl.style.display = 'none';
+    spreadEl.innerHTML = '';
+    if (_spyFieldBought) {
+      // Field already bought — pre-fetch + render the spread; hide buy button.
+      explainEl.innerHTML = 'You\'ve already revealed the field for this match — re-check it any time, free.';
+      buyBtn.textContent = 'Refresh';
+      buyBtn.classList.remove('btn-primary');
+      buyBtn.classList.add('btn-ghost');
+    } else {
+      explainEl.innerHTML = 'See how many players picked each side — counts only, no names. ' +
+        'Costs <strong>$' + fieldCost + '</strong> the first time; after that, re-check the live spread any time until kick-off, free.';
+      buyBtn.textContent = 'Reveal Field';
+      buyBtn.classList.remove('btn-ghost');
+      buyBtn.classList.add('btn-primary');
+    }
+    buyBtn.disabled = false;
+
+    // Reset + show the player list
     const list = document.getElementById('spy-someone-list');
     list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
-    document.getElementById('spy-someone-modal').style.display = 'flex';
+
+    document.getElementById('spy-modal-unified').style.display = 'flex';
+
+    // Fire the spy-list fetch (no charge)
     try {
       const r = await fetch(`/pool/${poolId}/fixture/${fixtureId}/spy-list`);
       const data = await r.json();
       if (!data.ok) { list.innerHTML = `<div style="padding:1rem;color:var(--red)">${data.error}</div>`; return; }
       const cost = data.next_spy_cost;
       const html = data.members.map(m => {
-        const disabled = m.already_spied ? 'data-revealed="1"' : '';
         const label = m.already_spied ? 'Revealed' : `$${cost.toFixed(2)}`;
         const cls   = m.already_spied ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm';
-        return `
-          <div class="spy-row">
-            <div class="spy-row-name">
-              <span class="spy-row-display">${escHtml(m.display_name)}</span>
-              <span class="spy-row-balance">$${Math.round(m.balance)}</span>
-            </div>
-            <button class="${cls}" ${m.already_spied ? 'disabled' : ''}
-                    onclick="spyOnPlayerFromModal('${escHtml(m.email)}', this)">
-              ${label}
-            </button>
-          </div>`;
+        return `<div class="spy-row">
+                  <div class="spy-row-name">
+                    <span class="spy-row-display">${escHtml(m.display_name)}</span>
+                    <span class="spy-row-balance">$${Math.round(m.balance)}</span>
+                  </div>
+                  <button class="${cls}" ${m.already_spied ? 'disabled' : ''}
+                          onclick="spyOnPlayerFromModal('${escHtml(m.email)}', this)">${label}</button>
+                </div>`;
       }).join('');
-      list.innerHTML = html || '<div style="padding:1rem;color:var(--text-dim)">No other players in this pool yet.</div>';
+      list.innerHTML = html || '<div style="padding:0.75rem 0;color:var(--text-dim)">No other players in this pool yet.</div>';
     } catch (e) {
       list.innerHTML = '<div style="padding:1rem;color:var(--red)">Network error.</div>';
     }
+
+    // If the user already bought field-spy, also pre-fetch + render the spread
+    if (_spyFieldBought) confirmFieldSpy({silent: true});
   }
-  function closeSpySomeoneModal() {
-    document.getElementById('spy-someone-modal').style.display = 'none';
-    _spySomeonePool = null; _spySomeoneFix = null;
+
+  function closeSpyModal() {
+    document.getElementById('spy-modal-unified').style.display = 'none';
+    _spyPool = null; _spyFix = null;
   }
+
+  async function confirmFieldSpy(opts) {
+    opts = opts || {};
+    if (!_spyFix) return;
+    const buyBtn   = document.getElementById('spy-field-buy');
+    const spreadEl = document.getElementById('spy-field-spread');
+    if (!opts.silent) { buyBtn.disabled = true; buyBtn.textContent = '...'; }
+    try {
+      const r = await fetch(`/pool/${POOL_ID}/fixture/${_spyFix}/field-spy`, {method:'POST'});
+      const data = await r.json();
+      if (!data.ok) {
+        alert(data.error || 'Could not spy the field.');
+        buyBtn.disabled = false; buyBtn.textContent = _spyFieldBought ? 'Refresh' : 'Reveal Field';
+        return;
+      }
+      myBalance = data.new_balance;
+      updateBalanceDisplay(myBalance);
+      renderFieldSpread(_spyFix, data.totals, data.is_knockout);
+
+      // Render the spread inside the modal too
+      const t = data.totals; const isKo = data.is_knockout;
+      const w = (s) => (isKo && t[s].wagered) ? ` <span class="dim">($${Math.round(t[s].wagered)})</span>` : '';
+      let html = `<span><b>${t.H.count}</b> Home${w('H')}</span>`;
+      if (!isKo) html += `<span><b>${t.D.count}</b> Draw</span>`;
+      html += `<span><b>${t.A.count}</b> Away${w('A')}</span>`;
+      if (t.no_pick) html += `<span class="dim">${t.no_pick} not picked yet</span>`;
+      spreadEl.innerHTML = html;
+      spreadEl.style.display = '';
+
+      _spyFieldBought = true;
+      buyBtn.textContent = 'Refresh';
+      buyBtn.classList.remove('btn-primary');
+      buyBtn.classList.add('btn-ghost');
+      buyBtn.disabled = false;
+      document.getElementById('spy-field-explain').innerHTML =
+        'You\'ve revealed the field. Re-check any time until kick-off, free.';
+    } catch (e) {
+      alert('Network error.');
+      buyBtn.disabled = false;
+    }
+  }
+
+  function renderFieldSpread(fixtureId, totals, isKo) {
+    const actions = document.querySelector(`#fixture-${fixtureId} .fixture-actions`);
+    if (!actions) return;
+    let el = document.getElementById('field-' + fixtureId);
+    const w = (s) => (isKo && totals[s].wagered)
+      ? ` <span style="color:var(--text-dim);font-size:0.66rem">$${Math.round(totals[s].wagered)}</span>` : '';
+    let html = `<span class="field-side"><b>${totals.H.count}</b>H${w('H')}</span>`;
+    if (!isKo) html += `<span class="field-side"><b>${totals.D.count}</b>D</span>`;
+    html += `<span class="field-side"><b>${totals.A.count}</b>A${w('A')}</span>`;
+    if (totals.no_pick) html += `<span class="field-side dim">${totals.no_pick}—</span>`;
+    if (el) {
+      el.outerHTML = `<div class="field-pill revealed" id="field-${fixtureId}">${html}</div>`;
+    } else {
+      const div = document.createElement('div');
+      div.className = 'field-pill revealed';
+      div.id = 'field-' + fixtureId;
+      div.innerHTML = html;
+      actions.insertBefore(div, actions.firstChild.nextSibling);
+    }
+  }
+
   async function spyOnPlayerFromModal(email, btn) {
-    if (!_spySomeonePool || !_spySomeoneFix) return;
+    if (!_spyPool || !_spyFix) return;
     btn.disabled = true; btn.textContent = '...';
     try {
-      const r = await fetch(`/pool/${_spySomeonePool}/spy`, {
+      const r = await fetch(`/pool/${_spyPool}/spy`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({fixture_id: _spySomeoneFix, target_email: email})
+        body: JSON.stringify({fixture_id: _spyFix, target_email: email})
       });
       const data = await r.json();
       if (!data.ok) { alert(data.error || 'Failed.'); btn.disabled = false; btn.textContent = 'Try again'; return; }
@@ -1599,12 +1665,11 @@
         myBalance = data.new_balance;
         updateBalanceDisplay(myBalance);
       }
-      // Reflect "revealed" in the modal
       btn.textContent = 'Revealed';
       btn.className = 'btn btn-ghost btn-sm';
       btn.disabled = true;
-      // Reload page after a short delay so the row picks up the revealed pick
-      setTimeout(() => { window.location.reload(); }, 600);
+      // Reload so the row picks up the revealed pick after the user closes the modal
+      setTimeout(() => { window.location.reload(); }, 800);
     } catch (e) {
       alert('Network error.');
       btn.disabled = false; btn.textContent = 'Try again';
