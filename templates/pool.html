@@ -1123,8 +1123,19 @@
     const el = document.getElementById('countdown-' + fixtureId);
     if (!el) return;
 
-    // Parse kick-off (treat as UTC)
-    const ko = new Date(kickOffIso.includes('T') ? kickOffIso.replace(' ','T') + 'Z' : kickOffIso);
+    // Parse kick-off as UTC. football-data.org gives '...Z'; seeded mock
+    // fixtures store no suffix. Normalise by stripping any trailing Z (and
+    // a '+00:00' style offset, just in case) then append a single Z so the
+    // string always represents the same instant in UTC.
+    const koNorm = kickOffIso
+      .replace(' ', 'T')
+      .replace(/Z$/, '')
+      .replace(/[+-]\d{2}:?\d{2}$/, '') + 'Z';
+    const ko = new Date(koNorm);
+    if (isNaN(ko.getTime())) {
+      // Bad data — don't show "NaNs lock" in the UI. Leave the element blank.
+      return;
+    }
     const lockTime = new Date(ko.getTime() - LOCK_MINUTES * 60 * 1000);
 
     function tick() {
