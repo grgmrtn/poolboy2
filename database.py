@@ -228,6 +228,20 @@ def init_db():
         )
     """)
 
+    # Records who has paid to reveal the H/D/A vote distribution for a fixture
+    # (the "Spy the Field" feature). UNIQUE prevents double-charging.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS aggregate_spy_log (
+            id          TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL REFERENCES users(id),
+            pool_id     TEXT NOT NULL REFERENCES pools(id),
+            fixture_id  TEXT NOT NULL REFERENCES fixtures(id),
+            cost        REAL NOT NULL,
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, pool_id, fixture_id)
+        )
+    """)
+
     # Migrations: add columns to existing tables that pre-date this schema version.
     if _USE_POSTGRES:
         for sql in [
@@ -247,6 +261,7 @@ def init_db():
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS knockout_flat_payout_multiplier REAL DEFAULT 2",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_odds REAL",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_odds REAL",
+            "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS aggregate_spy_cost REAL DEFAULT 2",
         ]:
             c.execute(sql)
     else:
@@ -267,6 +282,7 @@ def init_db():
             ("scoring_config", "knockout_flat_payout_multiplier REAL DEFAULT 2"),
             ("fixtures",       "home_odds REAL"),
             ("fixtures",       "away_odds REAL"),
+            ("scoring_config", "aggregate_spy_cost REAL DEFAULT 2"),
         ]
         for table, col_def in migrations:
             try:
@@ -654,6 +670,7 @@ _CONFIG_DEFAULTS = {
     "spy_base_cost":                   1.0,
     "spy_increment":                   1.0,
     "knockout_flat_payout_multiplier": 2.0,
+    "aggregate_spy_cost":              2.0,
 }
 
 
@@ -805,6 +822,141 @@ def get_spy_set_for_user_in_pool(user_id, pool_id):
     ).fetchall()
     conn.close()
     return frozenset((r["fixture_id"], r["target_id"]) for r in rows)
+
+
+def get_aggregate_spy_fixture_set(user_id, pool_id):
+    """Set of fixture_ids the user has bought aggregate spy on for this pool."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT fixture_id FROM aggregate_spy_log WHERE user_id=? AND pool_id=?",
+        (user_id, pool_id)
+    ).fetchall()
+    conn.close()
+    return frozenset(r["fixture_id"] for r in rows)
+
+
+def has_bought_aggregate_spy(user_id, pool_id, fixture_id):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM aggregate_spy_log WHERE user_id=? AND pool_id=? AND fixture_id=?",
+        (user_id, pool_id, fixture_id)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def record_aggregate_spy(spy_id, tx_id, user_id, pool_id, fixture_id, cost):
+    """
+    Idempotently record an aggregate-spy purchase. Returns True if it was a
+    NEW purchase (charged), False if the user had already bought it (no charge).
+    """
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM aggregate_spy_log WHERE user_id=? AND pool_id=? AND fixture_id=?",
+        (user_id, pool_id, fixture_id)
+    ).fetchone()
+    if existing:
+        conn.close()
+        return False
+    conn.execute(
+        "INSERT INTO aggregate_spy_log (id, user_id, pool_id, fixture_id, cost) VALUES (?,?,?,?,?)",
+        (spy_id, user_id, pool_id, fixture_id, cost)
+    )
+    _write_transaction(conn, tx_id, user_id, pool_id, fixture_id, "spy", -cost,
+                       "Field spy purchase")
+    _update_balance(conn, user_id, pool_id, -cost)
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_fixture_pick_totals(pool_id, fixture_id, knockout=False):
+    """
+    Vote distribution for one fixture in one pool. Counts each predicted
+    result and (for KO) sums bet_amount per side.
+
+    Returns:
+      {
+        "H": {"count": int, "wagered": float|None},
+        "D": {"count": int, "wagered": None},
+        "A": {"count": int, "wagered": float|None},
+        "no_pick": int,
+        "total_members": int
+      }
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT predicted_result, "
+        "       COUNT(*) AS n, "
+        "       COALESCE(SUM(bet_amount), 0) AS sum_bet "
+        "FROM picks WHERE pool_id=? AND fixture_id=? "
+        "GROUP BY predicted_result",
+        (pool_id, fixture_id)
+    ).fetchall()
+    members = conn.execute(
+        "SELECT COUNT(*) AS n FROM pool_members WHERE pool_id=?", (pool_id,)
+    ).fetchone()
+    conn.close()
+
+    totals = {"H": {"count": 0, "wagered": (0.0 if knockout else None)},
+              "D": {"count": 0, "wagered": None},
+              "A": {"count": 0, "wagered": (0.0 if knockout else None)}}
+    picked = 0
+    for r in rows:
+        side = r["predicted_result"]
+        if side in totals:
+            totals[side]["count"] = r["n"]
+            if knockout and side in ("H", "A"):
+                totals[side]["wagered"] = float(r["sum_bet"] or 0)
+            picked += r["n"]
+    return {
+        **totals,
+        "no_pick": max(0, (members["n"] or 0) - picked),
+        "total_members": (members["n"] or 0),
+    }
+
+
+def get_member_rank(user_id, pool_id):
+    """
+    Return (rank, total_members) for the user in this pool's leaderboard,
+    sorted by balance DESC. Rank is 1-based. Ties resolve by joined_at.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT user_id, COALESCE(balance, 100.0) AS bal "
+        "FROM pool_members WHERE pool_id=? "
+        "ORDER BY bal DESC, joined_at ASC",
+        (pool_id,)
+    ).fetchall()
+    conn.close()
+    total = len(rows)
+    for i, r in enumerate(rows):
+        if r["user_id"] == user_id:
+            return (i + 1, total)
+    return (None, total)
+
+
+def get_pool_members_for_spy_list(buyer_id, pool_id, fixture_id):
+    """
+    All other members of this pool plus whether the buyer has already spied
+    on them for this fixture. Sorted by balance DESC. Used to populate the
+    'Spy on Someone' modal.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT u.id, u.display_name, u.email, "
+        "       COALESCE(pm.balance, 100.0) AS balance, "
+        "       EXISTS(SELECT 1 FROM spy_log s "
+        "              WHERE s.buyer_id=? AND s.target_id=u.id "
+        "                AND s.pool_id=? AND s.fixture_id=?) AS already_spied "
+        "FROM pool_members pm "
+        "JOIN users u ON u.id = pm.user_id "
+        "WHERE pm.pool_id=? AND pm.user_id != ? "
+        "ORDER BY balance DESC, u.display_name ASC",
+        (buyer_id, pool_id, fixture_id, pool_id, buyer_id)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def has_spied(buyer_id, target_id, pool_id, fixture_id):

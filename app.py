@@ -96,13 +96,36 @@ def admin_required(f):
 
 
 def current_user():
-    """Return the currently logged-in user row (with total_score attached), or None."""
+    """
+    Return the currently logged-in user row (with total_score and a
+    nav_balance / nav_rank pair attached for the sticky header), or None.
+
+    nav_balance + nav_rank are derived from the FIRST pool the user joined
+    by display name (alphabetical). For most players that's their only pool
+    and matches what they expect to see; multi-pool users see the same
+    label everywhere but can still drill in from /home.
+    """
     if "user_id" not in session:
         return None
     user = db.get_user_by_id(session["user_id"])
     if user:
         user = dict(user)
         user["total_score"] = db.get_user_total_score(user["id"])
+        pools = db.get_pools_for_user(user["id"])
+        if pools:
+            first = pools[0]
+            user["nav_balance"] = float(first["balance"] or 0)
+            rank, size = db.get_member_rank(user["id"], first["id"])
+            user["nav_rank"] = rank
+            user["nav_pool_size"] = size
+            user["nav_pool_id"] = first["id"]
+            user["nav_pool_name"] = first["name"]
+        else:
+            user["nav_balance"] = None
+            user["nav_rank"] = None
+            user["nav_pool_size"] = None
+            user["nav_pool_id"] = None
+            user["nav_pool_name"] = None
     return user
 
 
@@ -312,6 +335,28 @@ def pool_page(pool_id):
     leaderboard     = db.get_pool_leaderboard(pool_id)
     now_iso         = now.isoformat()
 
+    # Aggregate-spy fixture set: which fixtures the user has revealed the
+    # field for, so the row can render the spread instead of the buy button.
+    aggregate_spy_set = db.get_aggregate_spy_fixture_set(user["id"], pool_id)
+
+    # For each LOCKED-or-COMPLETED fixture (everyone gets the spread free),
+    # OR each fixture the user has bought field-spy on, precompute the totals
+    # so the template can render the spread inline without a JS fetch.
+    field_totals = {}
+    for fix in fixture_lookup.values():
+        fid = fix["id"]
+        is_revealed = (
+            fid in aggregate_spy_set
+            or bool(fix.get("result"))
+            or _is_locked(fix.get("kick_off"))
+        )
+        if is_revealed:
+            field_totals[fid] = db.get_fixture_pick_totals(
+                pool_id, fid, knockout=db.is_knockout_stage(fix.get("stage") or "")
+            )
+
+    my_rank, pool_size = db.get_member_rank(user["id"], pool_id)
+
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
@@ -324,8 +369,13 @@ def pool_page(pool_id):
         my_balance=my_balance,
         scoring_config=scoring_config,
         spy_count=spy_count,
+        spy_set=spy_set,
+        aggregate_spy_set=aggregate_spy_set,
+        field_totals=field_totals,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
+        my_rank=my_rank,
+        pool_size=pool_size,
     )
 
 
@@ -474,6 +524,84 @@ def fixture_picks(pool_id, fixture_id):
         "ok": True,
         "is_knockout": db.is_knockout_stage(fixture["stage"]),
         "picks": [dict(r) for r in pick_rows],
+    })
+
+
+@app.route("/pool/<pool_id>/fixture/<fixture_id>/field-spy", methods=["POST"])
+@login_required
+def field_spy(pool_id, fixture_id):
+    """
+    Purchase or refresh the field-spy: H/D/A vote distribution for one fixture.
+
+    First purchase deducts aggregate_spy_cost. Subsequent calls (same buyer,
+    same fixture) return the current spread free of charge — so the player
+    can re-check until kick-off without paying again.
+
+    Once a fixture has been kicked-off (passes lock time) or has a recorded
+    result, the spread is free for everyone in the pool.
+    """
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"ok": False, "error": "Not a pool member."}), 403
+
+    conn = db.get_db()
+    fixture = conn.execute(
+        "SELECT kick_off, stage, result FROM fixtures WHERE id=?", (fixture_id,)
+    ).fetchone()
+    conn.close()
+    if not fixture:
+        return jsonify({"ok": False, "error": "Fixture not found."}), 404
+
+    knockout = db.is_knockout_stage(fixture["stage"] or "")
+    locked_or_done = _is_locked(fixture["kick_off"]) or fixture["result"]
+    already_bought = db.has_bought_aggregate_spy(user["id"], pool_id, fixture_id)
+    config = db.get_active_scoring_config()
+    cost = round(config.get("aggregate_spy_cost", 2.0), 2)
+
+    if already_bought or locked_or_done:
+        # Free path — return spread, don't charge
+        totals = db.get_fixture_pick_totals(pool_id, fixture_id, knockout=knockout)
+        return jsonify({"ok": True, "free": True,
+                        "new_balance": db.get_member_balance(user["id"], pool_id),
+                        "totals": totals, "is_knockout": knockout})
+
+    balance = db.get_member_balance(user["id"], pool_id)
+    if balance < cost:
+        return jsonify({"ok": False, "error": f"Insufficient balance. Need ${cost:.2f}."}), 400
+
+    charged = db.record_aggregate_spy(
+        spy_id=str(uuid.uuid4()), tx_id=str(uuid.uuid4()),
+        user_id=user["id"], pool_id=pool_id, fixture_id=fixture_id, cost=cost
+    )
+    totals = db.get_fixture_pick_totals(pool_id, fixture_id, knockout=knockout)
+    return jsonify({
+        "ok": True, "free": (not charged), "cost": cost,
+        "new_balance": db.get_member_balance(user["id"], pool_id),
+        "totals": totals, "is_knockout": knockout,
+    })
+
+
+@app.route("/pool/<pool_id>/fixture/<fixture_id>/spy-list")
+@login_required
+def spy_list(pool_id, fixture_id):
+    """Return other pool members for the 'Spy on Someone' modal."""
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"ok": False, "error": "Not a pool member."}), 403
+
+    members = db.get_pool_members_for_spy_list(user["id"], pool_id, fixture_id)
+    spy_count = db.get_spy_count_for_user_in_pool(user["id"], pool_id)
+    config = db.get_active_scoring_config()
+    next_cost = round(config["spy_base_cost"] + config["spy_increment"] * spy_count, 2)
+    return jsonify({
+        "ok": True,
+        "next_spy_cost": next_cost,
+        "my_balance": db.get_member_balance(user["id"], pool_id),
+        "members": [
+            {"display_name": m["display_name"], "email": m["email"],
+             "balance": round(m["balance"], 2), "already_spied": bool(m["already_spied"])}
+            for m in members
+        ],
     })
 
 

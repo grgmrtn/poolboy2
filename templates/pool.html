@@ -29,26 +29,69 @@
   }
   .stage-tab:hover { color: var(--text); text-decoration: none; }
   .stage-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  /* "Hide completed" filter sits at the end of the stage nav, right-aligned */
+  .stage-toggle {
+    flex-shrink: 0; margin-left: auto;
+    padding: 0.3rem 0.7rem;
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .stage-toggle:hover { color: var(--text); border-color: var(--border-hi); }
+  .stage-toggle.active {
+    color: var(--accent); border-color: var(--accent);
+    background: rgba(200,255,87,0.10);
+  }
 
   /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
     display: grid;
-    grid-template-columns: 1fr 220px;
-    gap: 2rem; align-items: start;
+    grid-template-columns: 1fr 300px;
+    gap: 2.25rem; align-items: start;
   }
   @media (max-width: 820px) { .pool-layout { grid-template-columns: 1fr; } }
   .sticky-sidebar { position: sticky; top: 106px; }
 
+  /* Collapsible stage heading — caret rotates on open */
   .stage-heading {
-    font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--text-muted); margin: 2rem 0 0.5rem;
-    padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
+    font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-muted); margin: 2rem 0 0.6rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.5rem;
+    cursor: pointer; user-select: none;
   }
+  .stage-heading:hover { color: var(--text); }
+  .stage-heading .caret {
+    display: inline-block; transition: transform 0.2s;
+    color: var(--text-dim); font-size: 0.75rem;
+  }
+  .stage-heading.collapsed .caret { transform: rotate(-90deg); }
+  .stage-heading.collapsed + .stage-section { display: none; }
 
   /* ── Fixture row ─────────────────────────────────────────────────── */
   .fixture-row {
     display: flex; align-items: flex-start;
-    gap: 0.55rem; margin-bottom: 0.45rem;
+    gap: 0.65rem; margin-bottom: 1rem;
+    padding: 0.45rem 0;
+  }
+  /* Allow users to filter the page to upcoming/in-progress fixtures only */
+  body.hide-completed .fixture-row.is-completed { display: none; }
+
+  /* On wider screens, render fixtures within a stage in two columns;
+     iPhone falls back to single column with more breathing room. */
+  .stage-section {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 1.5rem;
+  }
+  @media (max-width: 820px) {
+    .stage-section { grid-template-columns: 1fr; }
+    .fixture-row { gap: 0.75rem; margin-bottom: 1.25rem; }
   }
   .fixture-meta-col {
     flex-shrink: 0; width: 50px; text-align: center; padding-top: 12px;
@@ -63,14 +106,26 @@
   }
 
   /* ── Fixture content col ─────────────────────────────────────────── */
-  .fixture-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+  .fixture-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.45rem; }
 
-  .fixture-pills {
+  /* Match row holds the (bigger) match pill on its own line. */
+  .match-row {
+    position: relative;
     display: flex; align-items: center;
-    gap: 0.3rem; overflow-x: auto; scrollbar-width: none;
-    flex-wrap: nowrap;
+    gap: 0.5rem;
   }
-  .fixture-pills::-webkit-scrollbar { display: none; }
+  /* Action area below the match pill: my pick + spy controls + revealed
+     other-player pills wrap onto multiple lines as needed. */
+  .fixture-actions {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0.35rem 0.45rem;
+    padding-top: 0.1rem;
+  }
+  /* Kept for backward compat of older child styling targeting fixture-pills */
+  .fixture-pills {
+    display: flex; align-items: center; gap: 0.3rem;
+    flex-wrap: wrap;
+  }
 
   .fixture-score {
     font-size: 0.72rem; color: var(--text-muted);
@@ -86,9 +141,18 @@
   .match-pill {
     display: flex; align-items: stretch;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; overflow: hidden;
-    height: 44px; flex-shrink: 0; width: 220px;
-    transition: border-color 0.15s;
+    border-radius: 10px; overflow: hidden;
+    height: 56px; flex: 1; min-width: 0; width: 100%;
+    transition: border-color 0.15s, box-shadow 0.4s;
+  }
+  /* Glow only the match pill on save, not the whole row. */
+  .match-pill.saved-pulse {
+    animation: matchPillGlow 0.95s ease-out 1;
+  }
+  @keyframes matchPillGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(200,255,87,0.0); }
+    20%  { box-shadow: 0 0 0 4px rgba(200,255,87,0.45); }
+    100% { box-shadow: 0 0 0 0 rgba(200,255,87,0.0); }
   }
   .match-pill.has-pick    { border-color: rgba(200,255,87,0.20); }
   .match-pill.completed   { border-color: rgba(255,190,87,0.18); }
@@ -222,6 +286,19 @@
   .walk-text li { margin-bottom: 0.35rem; }
   .walk-text li::marker { color: var(--text-dim); }
 
+  /* ── Spy on Someone modal rows ─────────────────────────────────────── */
+  .spy-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border);
+    gap: 0.75rem;
+  }
+  .spy-row:first-child { border-top: none; }
+  .spy-row-name { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+  .spy-row-display { color: var(--text); font-weight: 600; font-size: 0.92rem;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spy-row-balance { color: var(--text-muted); font-size: 0.74rem; }
+
   /* ── Knockout betting form ───────────────────────────────────────── */
   .ko-bet-row {
     display: flex; align-items: center; gap: 0.35rem;
@@ -274,11 +351,66 @@
   /* ── Player pill ─────────────────────────────────────────────────── */
   .player-pill {
     display: flex; align-items: center; gap: 0.3rem;
-    padding: 0 0.55rem; height: 44px;
+    padding: 0 0.7rem; height: 44px;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); flex-shrink: 0;
-    font-size: 0.75rem; color: var(--text-muted);
+    font-size: 0.78rem; color: var(--text-muted);
     white-space: nowrap; transition: border-color 0.15s;
+  }
+  /* "You" pill is always a fixed width so the row stays aligned regardless
+     of pick label length (e.g. "France" vs "USA II"). */
+  .player-pill.is-me {
+    width: 150px;
+    justify-content: flex-start;
+    gap: 0.4rem;
+  }
+  .player-pill.is-me .pill-choice {
+    flex: 1; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; min-width: 0;
+  }
+  /* Compact variant for revealed other-player pills */
+  .player-pill.compact {
+    padding: 0 0.5rem; height: 40px;
+    font-size: 0.72rem; gap: 0.25rem;
+  }
+  .player-pill.compact .pill-name { max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Field pill (Spy the Field) ──────────────────────────────────── */
+  .field-pill {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    height: 44px; padding: 0 0.8rem;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: transparent;
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
+    color: var(--text-muted); flex-shrink: 0;
+    cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .field-pill.buy { color: var(--accent); border-color: rgba(200,255,87,0.32);
+                    background: rgba(200,255,87,0.06); }
+  .field-pill.buy:hover { border-color: var(--accent); background: rgba(200,255,87,0.12); }
+  .field-pill.revealed { color: var(--text); background: var(--surface);
+                         border-color: var(--border-hi); cursor: default; }
+  .field-pill .field-icon { font-size: 0.95rem; line-height: 1; }
+  .field-pill .field-cost { color: var(--text-muted); font-weight: 500; font-size: 0.72rem;
+                            margin-left: -0.2rem; }
+  .field-pill .field-side { display: inline-flex; align-items: baseline; gap: 0.15rem; }
+  .field-pill .field-side b { color: var(--accent); font-weight: 700; }
+  .field-pill .field-side.dim { color: var(--text-dim); }
+  .field-pill .field-side.dim b { color: var(--text-muted); }
+
+  /* ── Spy on Someone button ───────────────────────────────────────── */
+  .spy-someone-pill {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    height: 40px; padding: 0 0.85rem;
+    border-radius: 8px; border: 1px dashed var(--border);
+    background: transparent; flex-shrink: 0;
+    font-family: var(--mono); font-size: 0.74rem; font-weight: 600;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s; white-space: nowrap; letter-spacing: 0.03em;
+  }
+  .spy-someone-pill:hover {
+    border-style: solid; border-color: var(--amber); color: var(--amber);
   }
   .player-pill.player-hidden { display: none; }
   .player-pill.is-me { border-color: rgba(200,255,87,0.20); color: var(--text); }
@@ -295,29 +427,28 @@
   .pill-no-pick{ font-style: italic; opacity: 0.55; font-size: 0.68rem; }
   .pill-bet    { font-size: 0.66rem; color: var(--text-muted); }
 
+  /* Saved confirmation, centred over the match pill so it draws the eye
+     where the user just clicked. Floats above without affecting layout. */
   .saved-flash {
-    font-size: 0.72rem; font-weight: 700;
-    color: var(--accent); letter-spacing: 0.08em;
-    padding: 0.18rem 0.5rem;
-    background: rgba(200,255,87,0.10);
-    border: 1px solid rgba(200,255,87,0.28);
-    border-radius: 14px;
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.92);
+    z-index: 5;
+    font-size: 0.82rem; font-weight: 700;
+    color: var(--accent); letter-spacing: 0.06em;
+    padding: 0.5rem 1rem;
+    background: rgba(10,10,15,0.90);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
     opacity: 0;
-    transform: translateY(-2px);
-    transition: opacity 0.25s, transform 0.25s;
-    flex-shrink: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
     white-space: nowrap;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.40);
   }
-  .saved-flash.show { opacity: 1; transform: translateY(0); }
-
-  /* Brief glow on the whole fixture row to reinforce 'saved' */
-  .fixture-row.saved-pulse {
-    animation: fixtureSavedGlow 0.9s ease-out 1;
-  }
-  @keyframes fixtureSavedGlow {
-    0%   { box-shadow: 0 0 0 0 rgba(200,255,87,0); }
-    20%  { box-shadow: 0 0 0 3px rgba(200,255,87,0.35); }
-    100% { box-shadow: 0 0 0 0 rgba(200,255,87,0); }
+  .saved-flash.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 
   /* ── Spy button ──────────────────────────────────────────────────── */
@@ -438,6 +569,11 @@
       {{ SHORT.get(stage, stage.replace('Group ', '')) }}
     </a>
   {% endfor %}
+  <button class="stage-toggle" id="hide-completed-toggle"
+          onclick="toggleHideCompleted(this)"
+          title="Hide fixtures already played">
+    Hide completed
+  </button>
 </nav>
 
 <div class="page">
@@ -491,7 +627,10 @@
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
           <div class="stage-section" id="stage-{{ loop.index0 }}" data-idx="{{ loop.index0 }}">
-            <div class="stage-heading">{{ stage }}</div>
+            <div class="stage-heading" onclick="this.classList.toggle('collapsed')">
+              <span class="caret">▼</span>
+              <span>{{ stage }}</span>
+            </div>
 
             {% for f in fixtures %}
               {# Lock time = kick_off - LOCK_MIN minutes #}
@@ -531,7 +670,8 @@
                 {% set pill_cls = 'match-pill' %}
               {% endif %}
 
-              <div class="fixture-row" id="fixture-{{ f.id }}"
+              <div class="fixture-row {% if is_completed %}is-completed{% endif %}"
+                   id="fixture-{{ f.id }}"
                    data-fixture-id="{{ f.id }}"
                    data-kick-off="{{ f.kick_off or '' }}"
                    data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
@@ -563,9 +703,9 @@
 
                 <!-- Pill column -->
                 <div class="fixture-col">
-                  <div class="fixture-pills">
 
-                    <!-- Match pill -->
+                  <!-- Match pill (top) -->
+                  <div class="match-row">
                     <div class="{{ pill_cls }}"
                          data-home-flag="{{ f.home_flag_code or 'un' }}"
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
@@ -620,6 +760,13 @@
                         </button>
                       {% endif %}
                     </div><!-- /.match-pill -->
+                    {% if not is_completed %}
+                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
+                    {% endif %}
+                  </div><!-- /.match-row -->
+
+                  <!-- Action area (everything else lives below the match pill) -->
+                  <div class="fixture-actions">
 
                     <!-- My pick pill -->
                     {% if is_completed %}
@@ -660,51 +807,66 @@
                           {%- else %}<span class="pill-no-pick">–</span>{% endif -%}
                         </span>
                       </div>
-                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
                     {% endif %}
 
-                    <!-- Other players -->
+                    {# ── Spy The Field: spread pill or buy button ───────── #}
+                    {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
+                    {% if field_revealed and field_totals.get(f.id) %}
+                      {% set t = field_totals[f.id] %}
+                      <div class="field-pill revealed" id="field-{{ f.id }}">
+                        <span class="field-side"><b>{{ t.H.count }}</b>H</span>
+                        {% if not is_ko_stage %}<span class="field-side"><b>{{ t.D.count }}</b>D</span>{% endif %}
+                        <span class="field-side"><b>{{ t.A.count }}</b>A</span>
+                        {% if t.no_pick %}<span class="field-side dim">{{ t.no_pick }}—</span>{% endif %}
+                      </div>
+                    {% elif not is_completed %}
+                      <button class="field-pill buy" id="field-{{ f.id }}"
+                              onclick="openFieldModal('{{ f.id }}', {{ scoring_config.aggregate_spy_cost }})">
+                        <span class="field-icon">📊</span>
+                        Spy the Field
+                        <span class="field-cost">${{ "%g"|format(scoring_config.aggregate_spy_cost) }}</span>
+                      </button>
+                    {% endif %}
+
+                    {# ── Pills for picks the user has individually spied on (always shown for at-a-glance reading) ── #}
                     {% for o in others %}
                       {% if o.email != current_user.email %}
                         {% if is_completed %}
                           {% set opt_cls = 'scored-pos' if (o.get('points_awarded') and o.get('points_awarded', 0) > 0) else 'scored-zero' %}
-                          <div class="player-pill {{ opt_cls }}" data-player="{{ o.email }}">
+                          <div class="player-pill compact {{ opt_cls }}" data-player="{{ o.email }}">
                             <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
                             {% if o.predicted_result %}
                               <span class="pill-choice">
-                                {%- if o.predicted_result == 'H' -%}{{ f.home_team }}{%- elif o.predicted_result == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                                {%- if o.predicted_result == 'H' -%}{{ (f.home_team or 'HME')[:3].upper() }}{%- elif o.predicted_result == 'A' -%}{{ (f.away_team or 'AWY')[:3].upper() }}{%- else -%}D{%- endif -%}
                               </span>
                             {% endif %}
                             {% if o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
                           </div>
                         {% elif o.visible %}
-                          <div class="player-pill pick-{{ o.predicted_result or '' }}"
+                          <div class="player-pill compact pick-{{ o.predicted_result or '' }}"
                                id="ppill-{{ f.id }}-{{ o.user_id }}"
                                data-player="{{ o.email }}">
                             <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
                             {% if o.predicted_result %}
                               <span class="pill-choice">
-                                {%- if o.predicted_result == 'H' -%}{{ f.home_team }}{%- elif o.predicted_result == 'A' -%}{{ f.away_team }}{%- else -%}Draw{%- endif -%}
+                                {%- if o.predicted_result == 'H' -%}{{ (f.home_team or 'HME')[:3].upper() }}{%- elif o.predicted_result == 'A' -%}{{ (f.away_team or 'AWY')[:3].upper() }}{%- else -%}D{%- endif -%}
                               </span>
                             {% endif %}
                             {% if is_ko_stage and o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
                           </div>
-                        {% else %}
-                          <button class="spy-pill"
-                                  id="spy-{{ f.id }}-{{ o.user_id }}"
-                                  data-fixture="{{ f.id }}"
-                                  data-target-email="{{ o.email }}"
-                                  data-target-id="{{ o.user_id }}"
-                                  onclick="buySpy('{{ pool.id }}','{{ f.id }}','{{ o.email }}','{{ o.user_id }}',this)">
-                            <span>👁</span>
-                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
-                            <span class="spy-cost" id="spy-cost-{{ f.id }}-{{ o.user_id }}"></span>
-                          </button>
                         {% endif %}
                       {% endif %}
                     {% endfor %}
 
-                  </div><!-- /.fixture-pills -->
+                    {# ── Spy on Someone (hidden once everyone is visible: locked/done) ── #}
+                    {% if not is_completed and not is_started %}
+                      <button class="spy-someone-pill"
+                              onclick="openSpySomeoneModal('{{ pool.id }}','{{ f.id }}')">
+                        + Spy on someone
+                      </button>
+                    {% endif %}
+
+                  </div><!-- /.fixture-actions -->
 
                   <!-- Knockout bet form (below pills, before lock, not completed) -->
                   {% if is_ko_stage and not is_completed and not is_started %}
@@ -832,16 +994,13 @@
         <div class="standings-toggle open" id="lb-toggle" onclick="toggleLeaderboard()" style="margin-bottom:0">
           <span class="arrow">▶</span>
           <span>Leaderboard</span>
-          <span style="margin-left:auto;color:var(--accent);font-weight:700;font-size:0.8rem" id="my-balance-display">
-            ${{ "%.2f"|format(my_balance) }}
-          </span>
         </div>
         <div id="lb-body">
           {% for row in leaderboard %}
             <div class="lb-row{% if row.email == current_user.email %} lb-me{% endif %}">
               <span class="lb-rank">{{ loop.index }}</span>
               <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
-              <span class="lb-pts">${{ "%.2f"|format(row.balance) }}</span>
+              <span class="lb-pts">${{ "%.0f"|format(row.balance) }}</span>
               {% if row.email != current_user.email %}
                 {% set default_checked = loop.index <= 3 %}
                 <input type="checkbox" class="lb-check" data-player="{{ row.email }}"
@@ -862,6 +1021,41 @@
 
   </div><!-- /.pool-layout -->
 </div><!-- /.page -->
+
+<!-- ── Spy The Field modal ───────────────────────────────────────────── -->
+<div id="field-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeFieldModal()">
+  <div class="modal-box">
+    <div class="modal-title">📊 Spy the Field</div>
+    <div class="modal-body" id="field-modal-explain">
+      You'll see how many players picked each side for this match — counts only, no names.
+      <br><br>
+      Cost: <strong id="field-modal-cost">$2</strong>. After purchase you can <strong>re-check the
+      live spread any time until kick-off</strong>, no extra charge. Once the match locks, the
+      spread becomes visible to everyone for free.
+    </div>
+    <div id="field-modal-result" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeFieldModal()">Close</button>
+      <button class="btn btn-primary" id="field-modal-confirm" onclick="confirmFieldSpy()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Spy on Someone modal ─────────────────────────────────────────── -->
+<div id="spy-someone-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeSpySomeoneModal()">
+  <div class="modal-box walk-box">
+    <div class="modal-title">👁 Spy on a Player</div>
+    <div class="modal-body">
+      Pay to reveal one player's pick on this match. Cost goes up with each spy
+      you buy this round (see the price next to each name). Choose carefully — players are
+      sorted by current balance, highest first.
+    </div>
+    <div id="spy-someone-list" style="margin-bottom:1rem"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeSpySomeoneModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <div id="spy-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)spyModalCancel()">
   <div class="modal-box">
@@ -1268,6 +1462,155 @@
   let spyModalSeen = !!sessionStorage.getItem('spyConfirmed');
   let _pendingSpy  = null;
 
+  // ── Hide / show completed fixtures ────────────────────────────────────
+  function toggleHideCompleted(btn) {
+    const on = document.body.classList.toggle('hide-completed');
+    if (btn) {
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? 'Show completed' : 'Hide completed';
+    }
+    try { localStorage.setItem('wc26_hide_completed', on ? '1' : '0'); } catch(e) {}
+  }
+  // Restore previous toggle state on page load
+  (function restoreHideCompleted() {
+    try {
+      if (localStorage.getItem('wc26_hide_completed') === '1') {
+        document.addEventListener('DOMContentLoaded', () => {
+          const t = document.getElementById('hide-completed-toggle');
+          if (t) toggleHideCompleted(t);
+        });
+      }
+    } catch(e) {}
+  })();
+
+  // ── Spy The Field modal ────────────────────────────────────────────────
+  let _fieldFixtureId = null;
+  function openFieldModal(fixtureId, cost) {
+    _fieldFixtureId = fixtureId;
+    document.getElementById('field-modal-cost').textContent = '$' + cost;
+    document.getElementById('field-modal-result').style.display = 'none';
+    document.getElementById('field-modal-explain').style.display = '';
+    document.getElementById('field-modal-confirm').style.display = '';
+    document.getElementById('field-modal').style.display = 'flex';
+  }
+  function closeFieldModal() {
+    document.getElementById('field-modal').style.display = 'none';
+    _fieldFixtureId = null;
+  }
+  async function confirmFieldSpy() {
+    if (!_fieldFixtureId) return;
+    const btn = document.getElementById('field-modal-confirm');
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      const r = await fetch(`/pool/${POOL_ID}/fixture/${_fieldFixtureId}/field-spy`, {method:'POST'});
+      const data = await r.json();
+      if (!data.ok) {
+        alert(data.error || 'Could not spy the field.');
+        btn.disabled = false; btn.textContent = 'Confirm';
+        return;
+      }
+      // Update balance + replace the row's buy button with the revealed spread
+      myBalance = data.new_balance;
+      updateBalanceDisplay(myBalance);
+      renderFieldSpread(_fieldFixtureId, data.totals, data.is_knockout);
+      // Show the result in-modal too so users see the immediate payoff
+      const isKo = data.is_knockout;
+      const t = data.totals;
+      const wagered = (side) => (isKo && t[side].wagered) ? ` ($${Math.round(t[side].wagered)})` : '';
+      const parts = [
+        `<strong>${t.H.count}</strong> Home${wagered('H')}`,
+      ];
+      if (!isKo) parts.push(`<strong>${t.D.count}</strong> Draw`);
+      parts.push(`<strong>${t.A.count}</strong> Away${wagered('A')}`);
+      if (t.no_pick) parts.push(`<span style="color:var(--text-dim)">${t.no_pick} not yet picked</span>`);
+      const resultEl = document.getElementById('field-modal-result');
+      resultEl.innerHTML = `<div style="padding:0.75rem 0;font-size:0.95rem;line-height:1.7">${parts.join(' · ')}</div>`;
+      resultEl.style.display = '';
+      document.getElementById('field-modal-explain').style.display = 'none';
+      btn.style.display = 'none';
+    } catch (e) {
+      alert('Network error.');
+      btn.disabled = false; btn.textContent = 'Confirm';
+    }
+  }
+  function renderFieldSpread(fixtureId, totals, isKo) {
+    const el = document.getElementById('field-' + fixtureId);
+    if (!el) return;
+    const wagered = (side) => (isKo && totals[side].wagered)
+      ? ` <span style="color:var(--text-dim);font-size:0.66rem">$${Math.round(totals[side].wagered)}</span>`
+      : '';
+    let html = `<span class="field-side"><b>${totals.H.count}</b>H${wagered('H')}</span>`;
+    if (!isKo) html += `<span class="field-side"><b>${totals.D.count}</b>D</span>`;
+    html += `<span class="field-side"><b>${totals.A.count}</b>A${wagered('A')}</span>`;
+    if (totals.no_pick) html += `<span class="field-side dim">${totals.no_pick}—</span>`;
+    el.outerHTML = `<div class="field-pill revealed" id="field-${fixtureId}">${html}</div>`;
+  }
+
+  // ── Spy on Someone modal ───────────────────────────────────────────────
+  let _spySomeonePool = null;
+  let _spySomeoneFix  = null;
+  async function openSpySomeoneModal(poolId, fixtureId) {
+    _spySomeonePool = poolId;
+    _spySomeoneFix  = fixtureId;
+    const list = document.getElementById('spy-someone-list');
+    list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
+    document.getElementById('spy-someone-modal').style.display = 'flex';
+    try {
+      const r = await fetch(`/pool/${poolId}/fixture/${fixtureId}/spy-list`);
+      const data = await r.json();
+      if (!data.ok) { list.innerHTML = `<div style="padding:1rem;color:var(--red)">${data.error}</div>`; return; }
+      const cost = data.next_spy_cost;
+      const html = data.members.map(m => {
+        const disabled = m.already_spied ? 'data-revealed="1"' : '';
+        const label = m.already_spied ? 'Revealed' : `$${cost.toFixed(2)}`;
+        const cls   = m.already_spied ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm';
+        return `
+          <div class="spy-row">
+            <div class="spy-row-name">
+              <span class="spy-row-display">${escHtml(m.display_name)}</span>
+              <span class="spy-row-balance">$${Math.round(m.balance)}</span>
+            </div>
+            <button class="${cls}" ${m.already_spied ? 'disabled' : ''}
+                    onclick="spyOnPlayerFromModal('${escHtml(m.email)}', this)">
+              ${label}
+            </button>
+          </div>`;
+      }).join('');
+      list.innerHTML = html || '<div style="padding:1rem;color:var(--text-dim)">No other players in this pool yet.</div>';
+    } catch (e) {
+      list.innerHTML = '<div style="padding:1rem;color:var(--red)">Network error.</div>';
+    }
+  }
+  function closeSpySomeoneModal() {
+    document.getElementById('spy-someone-modal').style.display = 'none';
+    _spySomeonePool = null; _spySomeoneFix = null;
+  }
+  async function spyOnPlayerFromModal(email, btn) {
+    if (!_spySomeonePool || !_spySomeoneFix) return;
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      const r = await fetch(`/pool/${_spySomeonePool}/spy`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({fixture_id: _spySomeoneFix, target_email: email})
+      });
+      const data = await r.json();
+      if (!data.ok) { alert(data.error || 'Failed.'); btn.disabled = false; btn.textContent = 'Try again'; return; }
+      if (data.new_balance !== undefined) {
+        myBalance = data.new_balance;
+        updateBalanceDisplay(myBalance);
+      }
+      // Reflect "revealed" in the modal
+      btn.textContent = 'Revealed';
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.disabled = true;
+      // Reload page after a short delay so the row picks up the revealed pick
+      setTimeout(() => { window.location.reload(); }, 600);
+    } catch (e) {
+      alert('Network error.');
+      btn.disabled = false; btn.textContent = 'Try again';
+    }
+  }
+
   function buySpy(poolId, fixtureId, targetEmail, targetId, btn) {
     const cost = (spyCostBase + spyCostInc * spyCount).toFixed(2);
     if (!spyModalSeen) {
@@ -1359,16 +1702,17 @@
   function showSavedFeedback(fixtureId) {
     const row   = document.getElementById('fixture-' + fixtureId);
     const flash = document.getElementById('status-' + fixtureId);
+    const pill  = row ? row.querySelector('.match-pill') : null;
     if (flash) {
       flash.classList.add('show');
-      setTimeout(() => flash.classList.remove('show'), 2200);
+      setTimeout(() => flash.classList.remove('show'), 1600);
     }
-    if (row) {
+    if (pill) {
       // Restart the CSS animation by removing + reflowing + re-adding.
-      row.classList.remove('saved-pulse');
-      void row.offsetWidth;
-      row.classList.add('saved-pulse');
-      setTimeout(() => row.classList.remove('saved-pulse'), 1000);
+      pill.classList.remove('saved-pulse');
+      void pill.offsetWidth;
+      pill.classList.add('saved-pulse');
+      setTimeout(() => pill.classList.remove('saved-pulse'), 1000);
     }
   }
 

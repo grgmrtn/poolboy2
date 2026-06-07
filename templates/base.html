@@ -111,6 +111,38 @@
     }
     .nav-logout:hover { color: var(--text); border-color: var(--border-hi); text-decoration: none; }
 
+    /* ── Nav rank/balance pill ────────────────────────────────────────── */
+    .nav-rank {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.55rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      background: rgba(200,255,87,0.10);
+      border: 1px solid rgba(200,255,87,0.32);
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .nav-rank .nav-balance { color: var(--accent); font-size: 1rem; }
+    .nav-rank .nav-rank-fraction {
+      color: var(--text-muted); font-weight: 500;
+      font-size: 0.78rem;
+    }
+    .nav-rank-fraction .nav-rank-pos { color: var(--text); font-weight: 700; }
+    /* Centre the pill on mid+ screens; on narrow iPhone we let it float left */
+    @media (min-width: 701px) {
+      .navbar { display: grid; grid-template-columns: 1fr auto 1fr; }
+      .navbar-right { justify-content: flex-end; }
+      .nav-center { display: flex; justify-content: center; }
+    }
+    @media (max-width: 700px) {
+      .nav-rank { font-size: 0.85rem; padding: 0.3rem 0.7rem; }
+      .nav-rank .nav-balance { font-size: 0.92rem; }
+      .nav-rank .nav-rank-fraction { font-size: 0.7rem; }
+    }
+
     /* ── Page wrapper ─────────────────────────────────────────────────── */
     .page {
       position: relative;
@@ -280,6 +312,20 @@
     <a href="{{ url_for('home') }}" class="navbar-brand" style="text-decoration:none">
       WC<span>26</span> Pool
     </a>
+    {# Centre slot: balance + rank if user is in at least one pool #}
+    <div class="nav-center">
+      {% if current_user.nav_balance is not none and current_user.nav_pool_id %}
+      <a href="{{ url_for('pool_page', pool_id=current_user.nav_pool_id) }}"
+         class="nav-rank" style="text-decoration:none">
+        <span class="nav-balance">${{ "%.0f"|format(current_user.nav_balance) }}</span>
+        {% if current_user.nav_rank %}
+        <span class="nav-rank-fraction">
+          <span class="nav-rank-pos">{{ current_user.nav_rank }}</span>/{{ current_user.nav_pool_size }}
+        </span>
+        {% endif %}
+      </a>
+      {% endif %}
+    </div>
     <div class="navbar-right">
       <span class="navbar-user">{{ current_user.display_name }}</span>
       {% if current_user.is_admin %}
