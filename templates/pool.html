@@ -148,12 +148,15 @@
   }
 
   /* ── Reveal grid: 3 columns aligned with the match pill (home/draw/away).
-        Field-spy counts and individually-revealed player names live here. ─ */
+        Now lives INSIDE .match-container so the pill + reveal data render as
+        one unified card. Top border separates it from the pill content. ─ */
   .reveal-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 0.5rem;
-    padding: 0.55rem 0 0.2rem;
+    padding: 0.55rem 0.5rem 0.6rem;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.12);    /* subtle deeper shade to differentiate from pill */
   }
   .reveal-grid.is-ko-grid .reveal-draw { visibility: hidden; }
   .reveal-col {
@@ -187,6 +190,12 @@
                                           background: rgba(200,255,87,0.10); }
   .reveal-name-bet { color: var(--text-muted); font-weight: 500;
                      font-size: 0.7rem; margin-left: 0.25rem; }
+  /* "+ N players" badge shown after lock when there are more picks than top-N names */
+  .reveal-rest {
+    margin-top: 0.2rem;
+    font-size: 0.7rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.03em;
+  }
   /* Action area below the match pill: my pick + spy controls + revealed
      other-player pills wrap onto multiple lines as needed. */
   .fixture-actions {
@@ -210,15 +219,28 @@
   .score-pts-zero { color: var(--text-muted); }
   .score-pts-neg  { color: var(--red); font-weight: 700; }
 
+  /* Match container groups the match-pill and (optional) reveal-grid into
+     one bordered card. Match-pill stays the same 56px-tall element on top;
+     reveal-grid stretches the card downward when spy data exists. */
+  .match-container {
+    flex: 1; min-width: 0; width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.4s;
+  }
+
   /* ── Match pill ──────────────────────────────────────────────────── */
   .match-pill {
     display: flex; align-items: stretch;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; overflow: hidden;
-    height: 56px; flex: 1; min-width: 0; width: 100%;
-    transition: border-color 0.15s, box-shadow 0.4s;
+    background: transparent;
+    border: none;
+    height: 56px; flex: none; width: 100%;
+    box-sizing: border-box;
   }
-  /* Glow only the match pill on save, not the whole row. */
+  /* Glow on save: now applied to the container (which holds the visible
+     border) so the lime ring frames the whole match card cleanly. */
+  .match-container.saved-pulse,
   .match-pill.saved-pulse {
     animation: matchPillGlow 0.95s ease-out 1;
   }
@@ -227,11 +249,15 @@
     20%  { box-shadow: 0 0 0 4px rgba(200,255,87,0.45); }
     100% { box-shadow: 0 0 0 0 rgba(200,255,87,0.0); }
   }
-  .match-pill.has-pick    { border-color: rgba(200,255,87,0.20); }
-  .match-pill.completed   { border-color: rgba(255,190,87,0.18); }
-  .match-pill.scored-win  { border-color: rgba(200,255,87,0.32); }
-  .match-pill.scored-loss { border-color: rgba(255,87,87,0.18); }
-  .match-pill.locked      { border-color: rgba(255,190,87,0.12); }
+  /* Border tints live on the container now, since the pill itself is
+     borderless. has-pick / completed / etc. classes are copied to both
+     elements at render time so old JS that targets .match-pill still works. */
+  .match-pill.has-pick    ~ *, .match-pill.has-pick   { /* legacy: leave for backcompat */ }
+  .match-container:has(.match-pill.has-pick)    { border-color: rgba(200,255,87,0.20); }
+  .match-container:has(.match-pill.completed)   { border-color: rgba(255,190,87,0.18); }
+  .match-container:has(.match-pill.scored-win)  { border-color: rgba(200,255,87,0.32); }
+  .match-container:has(.match-pill.scored-loss) { border-color: rgba(255,87,87,0.18); }
+  .match-container:has(.match-pill.locked)      { border-color: rgba(255,190,87,0.12); }
 
   .pill-side {
     flex: 1 1 0; min-width: 0;
@@ -530,6 +556,22 @@
   }
   /* Keep the action row vertically centred so 88px and 44px elements line up */
   .fixture-actions { align-items: center; }
+
+  /* ── Mobile: tighten the action row so You + Spy + picks-in all fit on one
+        line on iPhones (375–430 CSS px viewports). Without these reductions,
+        the picks-in element gets pushed to a second line. ── */
+  @media (max-width: 700px) {
+    .player-pill.is-me { width: 120px; padding: 0 0.5rem; gap: 0.3rem; }
+    .spy-trigger      { padding: 0 0.7rem; gap: 0.3rem; font-size: 0.8rem; }
+    .picks-in-count   { padding: 0 0.5rem; height: 78px; }
+    .picks-in-count .picks-num { font-size: 1.55rem; }
+    .picks-in-count .picks-label { font-size: 0.52rem; }
+    .fixture-actions  { gap: 0.25rem 0.35rem; }
+  }
+  @media (max-width: 380px) {
+    .player-pill.is-me { width: 100px; }
+    .picks-in-count .picks-num { font-size: 1.4rem; }
+  }
 
   /* ── Unified Spy modal: field option at top + player list below ── */
   .spy-modal-section {
@@ -862,8 +904,9 @@
                 <!-- Pill column -->
                 <div class="fixture-col">
 
-                  <!-- Match pill (top) -->
+                  <!-- Match pill (top) + reveal grid (bottom) unified into one card -->
                   <div class="match-row">
+                    <div class="match-container">
                     <div class="{{ pill_cls }}"
                          data-home-flag="{{ f.home_flag_code or 'un' }}"
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
@@ -918,10 +961,6 @@
                         </button>
                       {% endif %}
                     </div><!-- /.match-pill -->
-                    {% if not is_completed %}
-                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
-                    {% endif %}
-                  </div><!-- /.match-row -->
 
                   {# ── Reveal grid: counts + names aligned with H/D/A sides ── #}
                   {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
@@ -933,57 +972,63 @@
                     {% endif %}
                   {% endfor %}
                   {% if t or has_any_visible_other.val %}
+                  {# After a fixture has locked or finished, every pick is auto-revealed.
+                     Showing all N names would clutter the grid, so we display top-5
+                     player names by current balance (tie-cap of 2 per balance bucket)
+                     and roll the rest into a "+ N players" badge per side. Pre-lock,
+                     we still show every individually-spied name. #}
+                  {% set lock_mode = is_completed or is_started %}
+                  {% macro side_render(side) %}
+                    {# Walk picks for this side, separating top-N names from the rest #}
+                    {% set side_count = namespace(total=0, shown=0) %}
+                    {% for o in others %}
+                      {% if o.email != current_user.email and o.visible and o.predicted_result == side %}
+                        {% set side_count.total = side_count.total + 1 %}
+                      {% endif %}
+                    {% endfor %}
+                    {% for o in others %}
+                      {% if o.email != current_user.email and o.visible and o.predicted_result == side %}
+                        {% set show_this = (not lock_mode) or (o.email in top_player_emails) %}
+                        {% if show_this %}
+                          <div class="reveal-name">
+                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
+                          </div>
+                          {% set side_count.shown = side_count.shown + 1 %}
+                        {% endif %}
+                      {% endif %}
+                    {% endfor %}
+                    {% set rest = side_count.total - side_count.shown %}
+                    {% if lock_mode and rest > 0 %}
+                      <div class="reveal-rest">+ {{ rest }} {{ 'player' if rest == 1 else 'players' }}</div>
+                    {% endif %}
+                  {% endmacro %}
                   <div class="reveal-grid {% if is_ko_stage %}is-ko-grid{% endif %}"
                        id="reveal-{{ f.id }}">
-                    {# HOME column #}
                     <div class="reveal-col reveal-home">
-                      {% if t %}
-                        <div class="reveal-count"><b>{{ t.H.count }}</b>
-                          <span class="reveal-count-label">{{ 'player' if t.H.count == 1 else 'players' }}</span>
-                        </div>
-                      {% endif %}
-                      {% for o in others %}
-                        {% if o.email != current_user.email and o.visible and o.predicted_result == 'H' %}
-                          <div class="reveal-name">
-                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
-                          </div>
-                        {% endif %}
-                      {% endfor %}
+                      {% if t %}<div class="reveal-count"><b>{{ t.H.count }}</b>
+                        <span class="reveal-count-label">{{ 'player' if t.H.count == 1 else 'players' }}</span>
+                      </div>{% endif %}
+                      {{ side_render('H') }}
                     </div>
-
-                    {# DRAW column — empty for KO so the middle slot stays balanced #}
                     <div class="reveal-col reveal-draw">
-                      {% if t and not is_ko_stage %}
-                        <div class="reveal-count"><b>{{ t.D.count }}</b>
-                          <span class="reveal-count-label">{{ 'player' if t.D.count == 1 else 'players' }}</span>
-                        </div>
-                      {% endif %}
-                      {% if not is_ko_stage %}
-                        {% for o in others %}
-                          {% if o.email != current_user.email and o.visible and o.predicted_result == 'D' %}
-                            <div class="reveal-name">{{ o.display_name.split(' ')[0] }}</div>
-                          {% endif %}
-                        {% endfor %}
-                      {% endif %}
+                      {% if t and not is_ko_stage %}<div class="reveal-count"><b>{{ t.D.count }}</b>
+                        <span class="reveal-count-label">{{ 'player' if t.D.count == 1 else 'players' }}</span>
+                      </div>{% endif %}
+                      {% if not is_ko_stage %}{{ side_render('D') }}{% endif %}
                     </div>
-
-                    {# AWAY column #}
                     <div class="reveal-col reveal-away">
-                      {% if t %}
-                        <div class="reveal-count"><b>{{ t.A.count }}</b>
-                          <span class="reveal-count-label">{{ 'player' if t.A.count == 1 else 'players' }}</span>
-                        </div>
-                      {% endif %}
-                      {% for o in others %}
-                        {% if o.email != current_user.email and o.visible and o.predicted_result == 'A' %}
-                          <div class="reveal-name">
-                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
-                          </div>
-                        {% endif %}
-                      {% endfor %}
+                      {% if t %}<div class="reveal-count"><b>{{ t.A.count }}</b>
+                        <span class="reveal-count-label">{{ 'player' if t.A.count == 1 else 'players' }}</span>
+                      </div>{% endif %}
+                      {{ side_render('A') }}
                     </div>
                   </div>
                   {% endif %}
+                    </div><!-- /.match-container -->
+                    {% if not is_completed %}
+                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
+                    {% endif %}
+                  </div><!-- /.match-row -->
 
                   <!-- Action area (everything else lives below the match pill) -->
                   <div class="fixture-actions">

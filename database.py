@@ -932,6 +932,39 @@ def get_fixture_pick_totals(pool_id, fixture_id, knockout=False):
     }
 
 
+def get_top_n_player_emails(pool_id, n=5, tie_cap=2):
+    """
+    Return a set of emails for the top N players in a pool by balance.
+    Within any tied bucket, at most `tie_cap` players are included. This
+    keeps the lock-time "top picks" list compact even when several players
+    are clustered at the same balance.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT u.email, COALESCE(pm.balance, 100.0) AS bal "
+        "FROM pool_members pm JOIN users u ON u.id = pm.user_id "
+        "WHERE pm.pool_id = ? "
+        "ORDER BY bal DESC, pm.joined_at ASC",
+        (pool_id,)
+    ).fetchall()
+    conn.close()
+
+    emails = []
+    i = 0
+    while i < len(rows) and len(emails) < n:
+        # Walk to the end of the current tied group (≈ same balance)
+        j = i + 1
+        current_bal = float(rows[i]["bal"] or 0)
+        while j < len(rows) and abs(float(rows[j]["bal"] or 0) - current_bal) < 0.005:
+            j += 1
+        # Take up to tie_cap from this group, bounded by remaining slots
+        take = min(tie_cap, j - i, n - len(emails))
+        for k in range(take):
+            emails.append(rows[i + k]["email"])
+        i = j
+    return frozenset(emails)
+
+
 def get_member_rank(user_id, pool_id):
     """
     Return (rank, total_members) for the user in this pool's leaderboard,

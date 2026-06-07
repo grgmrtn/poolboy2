@@ -409,6 +409,7 @@ def pool_page(pool_id):
 
     my_rank, pool_size = db.get_member_rank(user["id"], pool_id)
     pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
+    top_player_emails = db.get_top_n_player_emails(pool_id, n=5, tie_cap=2)
 
     return render_template("pool.html",
         pool=pool,
@@ -426,6 +427,7 @@ def pool_page(pool_id):
         aggregate_spy_set=aggregate_spy_set,
         field_totals=field_totals,
         pick_counts_by_fixture=pick_counts_by_fixture,
+        top_player_emails=top_player_emails,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
