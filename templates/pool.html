@@ -52,6 +52,23 @@
     background: rgba(200,255,87,0.10);
   }
 
+  /* Quick-explainer banner that sits above the leaderboard split */
+  .pool-intro {
+    background: linear-gradient(135deg, rgba(200,255,87,0.06), rgba(200,255,87,0.02));
+    border: 1px solid rgba(200,255,87,0.22);
+    border-radius: var(--radius-lg);
+    padding: 0.9rem 1.15rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .pool-intro strong { color: var(--accent); font-weight: 700; }
+  .pool-intro em {
+    font-style: normal; color: var(--text-muted);
+    display: block; margin-top: 0.25rem; font-size: 0.85rem;
+  }
+
   /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
     display: grid;
@@ -631,6 +648,15 @@
     <p style="color:var(--text-dim);font-size:0.7rem;margin-top:0.4rem;letter-spacing:0.04em">
       All kickoff times shown in New York time (ET).
     </p>
+  </div>
+
+  <!-- ── Quick-explainer banner ─────────────────────────────────────── -->
+  <div class="pool-intro">
+    Build your cash pile during the group stage:
+    <strong>${{ "%g"|format(scoring_config.group_win_payout) }}</strong> for a win,
+    <strong>${{ "%g"|format(scoring_config.group_draw_payout) }}</strong> for a draw.
+    Then bet as big or as small as you want during the knockouts.
+    <em>It's never over as long as you play smart.</em>
   </div>
 
   {% if pool.entry_fee and not has_paid %}
