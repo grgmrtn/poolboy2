@@ -68,6 +68,14 @@
     font-style: normal; color: var(--text-muted);
     display: block; margin-top: 0.25rem; font-size: 0.85rem;
   }
+  .pool-intro-link {
+    display: inline-block;
+    margin-top: 0.55rem;
+    color: var(--accent); font-weight: 700;
+    font-size: 0.78rem; letter-spacing: 0.04em;
+    text-decoration: none;
+  }
+  .pool-intro-link:hover { text-decoration: underline; }
 
   /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
@@ -473,9 +481,11 @@
   }
   .picks-in-count .picks-label {
     color: var(--text-muted);
-    font-size: 0.6rem; font-weight: 600;
-    letter-spacing: 0.12em; text-transform: uppercase;
+    font-size: 0.56rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
     margin-top: 0.3rem;
+    white-space: nowrap;          /* prevent the 3-line wrap */
+    line-height: 1;
   }
   /* Keep the action row vertically centred so 88px and 44px elements line up */
   .fixture-actions { align-items: center; }
@@ -670,32 +680,29 @@
 
 <div class="page">
 
-  <div style="margin-bottom:1.5rem">
+  <div style="margin-bottom:1rem">
     <div style="display:flex;align-items:baseline;gap:1rem">
       <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
-      <a href="javascript:void(0)" onclick="openWalkthrough()"
-         style="color:var(--accent);font-size:0.78rem;margin-left:auto;letter-spacing:0.04em">
-        How it works ?
-      </a>
       <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
-         style="color:var(--text-dim);font-size:0.78rem">stats →</a>
+         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">stats →</a>
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
-    {% if pool.description %}
-      <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem">{{ pool.description }}</p>
-    {% endif %}
-    <p style="color:var(--text-dim);font-size:0.7rem;margin-top:0.4rem;letter-spacing:0.04em">
-      All kickoff times shown in New York time (ET).
+    <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
+      All times EST
     </p>
   </div>
 
-  <!-- ── Quick-explainer banner ─────────────────────────────────────── -->
+  <!-- ── Quick-explainer banner (with embedded "Get More Info" link) ─── -->
   <div class="pool-intro">
     Build your cash pile during the group stage:
     <strong>${{ "%g"|format(scoring_config.group_win_payout) }}</strong> for a win,
     <strong>${{ "%g"|format(scoring_config.group_draw_payout) }}</strong> for a draw.
+    Spend to spy on other players or see how the whole field is betting.
     Then bet as big or as small as you want during the knockouts.
     <em>It's never over as long as you play smart.</em>
+    <a href="javascript:void(0)" onclick="openWalkthrough()" class="pool-intro-link">
+      Get more info →
+    </a>
   </div>
 
   {% if pool.entry_fee and not has_paid %}
