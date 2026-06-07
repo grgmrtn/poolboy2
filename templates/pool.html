@@ -296,10 +296,29 @@
   .pill-bet    { font-size: 0.66rem; color: var(--text-muted); }
 
   .saved-flash {
-    font-size: 0.7rem; color: var(--accent); letter-spacing: 0.08em;
-    opacity: 0; transition: opacity 0.3s; flex-shrink: 0;
+    font-size: 0.72rem; font-weight: 700;
+    color: var(--accent); letter-spacing: 0.08em;
+    padding: 0.18rem 0.5rem;
+    background: rgba(200,255,87,0.10);
+    border: 1px solid rgba(200,255,87,0.28);
+    border-radius: 14px;
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.25s, transform 0.25s;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
-  .saved-flash.show { opacity: 1; }
+  .saved-flash.show { opacity: 1; transform: translateY(0); }
+
+  /* Brief glow on the whole fixture row to reinforce 'saved' */
+  .fixture-row.saved-pulse {
+    animation: fixtureSavedGlow 0.9s ease-out 1;
+  }
+  @keyframes fixtureSavedGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(200,255,87,0); }
+    20%  { box-shadow: 0 0 0 3px rgba(200,255,87,0.35); }
+    100% { box-shadow: 0 0 0 0 rgba(200,255,87,0); }
+  }
 
   /* ── Spy button ──────────────────────────────────────────────────── */
   .spy-pill {
@@ -444,20 +463,20 @@
 
   {% if pool.entry_fee and not has_paid %}
   <div style="
-    background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.3);
+    background: rgba(200,255,87,0.06); border: 1px solid rgba(200,255,87,0.25);
     border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem;
     display: flex; align-items: flex-start; gap: 0.75rem;
   ">
-    <span style="font-size:1.1rem;flex-shrink:0">⚠</span>
+    <span style="font-size:1.1rem;flex-shrink:0">💰</span>
     <div>
       <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.3rem">
-        Payment required — {{ pool.entry_fee }} entry fee
+        Entry fee outstanding — {{ pool.entry_fee }}
       </div>
       {% if pool.payment_instructions %}
         <div style="font-size:0.8rem;color:var(--text-muted)">{{ pool.payment_instructions }}</div>
       {% endif %}
       <div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem">
-        Picks are locked until an admin confirms your payment.
+        Pick away — the admin will confirm your payment manually. This reminder disappears once you're marked paid.
       </div>
     </div>
   </div>
@@ -585,7 +604,8 @@
 
                       {% else %}
                         <!-- Group stage: H/D/A pick buttons -->
-                        {% set picks_locked = pool.entry_fee and not has_paid %}
+                        {# Payment is admin-tracked, not enforced — picks always open #}
+                        {% set picks_locked = false %}
                         <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
                                 {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)"{% endif %}>
                           <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
@@ -640,7 +660,7 @@
                           {%- else %}<span class="pill-no-pick">–</span>{% endif -%}
                         </span>
                       </div>
-                      <span class="saved-flash" id="status-{{ f.id }}">✓</span>
+                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
                     {% endif %}
 
                     <!-- Other players -->
@@ -1147,18 +1167,32 @@
         revealFixturePicks(fixtureId, poolId);
         return;
       }
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      if (h > 0) {
-        el.textContent = `${h}h ${m}m lock`;
-      } else if (m > 0) {
-        el.textContent = `${m}m ${s}s lock`;
+      // Pick the two largest non-zero units so the countdown stays compact
+      // regardless of how far away the fixture is. We refresh every 60s when
+      // the lock is hours+ away (saves render churn), every 1s in the final
+      // minute (per-second urgency).
+      const totalSec  = Math.floor(remaining / 1000);
+      const weeks     = Math.floor(totalSec / 604800);
+      const days      = Math.floor((totalSec %  604800) / 86400);
+      const hours     = Math.floor((totalSec %   86400) /  3600);
+      const minutes   = Math.floor((totalSec %    3600) /    60);
+      const seconds   =  totalSec %      60;
+      let label;
+      if (weeks > 0) {
+        label = `${weeks}w ${days}d lock`;
+      } else if (days > 0) {
+        label = `${days}d ${hours}h lock`;
+      } else if (hours > 0) {
+        label = `${hours}h ${minutes}m lock`;
+      } else if (minutes > 0) {
+        label = `${minutes}m ${seconds}s lock`;
       } else {
-        el.textContent = `${s}s lock`;
+        label = `${seconds}s lock`;
         el.style.color = 'var(--red)';
       }
-      activeTimers[fixtureId] = setTimeout(tick, 1000);
+      el.textContent = label;
+      const nextDelay = remaining > 60000 ? 60000 : 1000;
+      activeTimers[fixtureId] = setTimeout(tick, nextDelay);
     }
     tick();
   }
@@ -1320,6 +1354,24 @@
   }
 
   // ── Group stage pick via AJAX ──────────────────────────────────────────
+  // ── Shared "Saved" feedback used by both group + KO pick handlers ────
+  // Shows the .saved-flash pill, briefly pulses the row, then resets.
+  function showSavedFeedback(fixtureId) {
+    const row   = document.getElementById('fixture-' + fixtureId);
+    const flash = document.getElementById('status-' + fixtureId);
+    if (flash) {
+      flash.classList.add('show');
+      setTimeout(() => flash.classList.remove('show'), 2200);
+    }
+    if (row) {
+      // Restart the CSS animation by removing + reflowing + re-adding.
+      row.classList.remove('saved-pulse');
+      void row.offsetWidth;
+      row.classList.add('saved-pulse');
+      setTimeout(() => row.classList.remove('saved-pulse'), 1000);
+    }
+  }
+
   async function savePick(poolId, fixtureId, prediction, btn) {
     const row     = document.getElementById('fixture-' + fixtureId);
     const buttons = row.querySelectorAll('.pick-home, .pick-draw, .pick-away');
@@ -1346,8 +1398,7 @@
         }
         if (choice) choice.innerHTML = `<span>${escHtml(pickLabel(prediction, fixtureId))}</span>`;
 
-        const flash = document.getElementById('status-' + fixtureId);
-        if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+        showSavedFeedback(fixtureId);
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
       }
@@ -1447,8 +1498,7 @@
           choice.innerHTML = `<span>${escHtml(pickLabel(prediction, fixtureId))}</span><span class="pill-bet">$${Math.round(bet_amount)}</span>`;
         }
 
-        const flash = document.getElementById('status-' + fixtureId);
-        if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+        showSavedFeedback(fixtureId);
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
         submitBtn.disabled = false;

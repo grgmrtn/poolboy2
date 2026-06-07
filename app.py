@@ -222,7 +222,8 @@ def join_pool(pool_id):
                  has_paid=has_paid, balance=starting_balance)
 
     if pool["entry_fee"]:
-        flash(f"You're registered for {pool['name']}. Complete your payment to unlock picks.", "success")
+        flash(f"Welcome to {pool['name']}! Don't forget to send your {pool['entry_fee']} entry "
+              f"fee — picks are open right away.", "success")
     else:
         flash(f"You joined {pool['name']}!", "success")
     return redirect(url_for("pool_page", pool_id=pool_id))
@@ -357,10 +358,9 @@ def submit_pick(pool_id):
     if not db.is_pool_member(user["id"], pool_id):
         return jsonify({"ok": False, "error": "Not a pool member."}), 403
 
-    membership = db.get_pool_membership(user["id"], pool_id)
-    pool = db.get_pool_by_id(pool_id)
-    if pool and pool["entry_fee"] and membership and not membership["has_paid"]:
-        return jsonify({"ok": False, "error": "Payment required to make picks."}), 403
+    # Payment is tracked in pool_members.has_paid for admin bookkeeping but
+    # not enforced here — players can pick immediately on join. The admin
+    # reconciles e-transfers manually via /admin.
 
     # Fetch fixture for lock-time and stage checks
     conn = db.get_db()
@@ -501,12 +501,8 @@ def spy_pick(pool_id):
     if not db.is_pool_member(user["id"], pool_id):
         return jsonify({"ok": False, "error": "Not a pool member."}), 403
 
-    # Enforce the same payment gate as picks — an unpaid user shouldn't be able
-    # to drain their starting balance on spies before settling the entry fee.
-    membership = db.get_pool_membership(user["id"], pool_id)
-    pool = db.get_pool_by_id(pool_id)
-    if pool and pool["entry_fee"] and membership and not membership["has_paid"]:
-        return jsonify({"ok": False, "error": "Payment required to use spy."}), 403
+    # Spies (like picks) are not payment-gated — admin reconciles entry fees
+    # via the has_paid flag in /admin, but the site doesn't block playing.
 
     target = db.get_user_by_email(target_email)
     if not target:
