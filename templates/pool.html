@@ -184,6 +184,44 @@
   .modal-body strong { color: var(--accent); }
   .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
 
+  /* ── Walkthrough modal (larger, sectioned) ─────────────────────────── */
+  .walk-box {
+    max-width: 480px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .walk-body { font-size: 0.85rem; color: var(--text-muted); line-height: 1.55; }
+  .walk-section {
+    padding: 0.85rem 0;
+    border-top: 1px solid var(--border);
+  }
+  .walk-section:first-child { border-top: none; padding-top: 0.25rem; }
+  .walk-head {
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+  .walk-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(200,255,87,0.15);
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .walk-text strong { color: var(--accent); font-weight: 700; }
+  .walk-text ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .walk-text li { margin-bottom: 0.35rem; }
+  .walk-text li::marker { color: var(--text-dim); }
+
   /* ── Knockout betting form ───────────────────────────────────────── */
   .ko-bet-row {
     display: flex; align-items: center; gap: 0.35rem;
@@ -388,8 +426,12 @@
   <div style="margin-bottom:1.5rem">
     <div style="display:flex;align-items:baseline;gap:1rem">
       <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
+      <a href="javascript:void(0)" onclick="openWalkthrough()"
+         style="color:var(--accent);font-size:0.78rem;margin-left:auto;letter-spacing:0.04em">
+        How it works ?
+      </a>
       <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
-         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">stats →</a>
+         style="color:var(--text-dim);font-size:0.78rem">stats →</a>
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     {% if pool.description %}
@@ -815,6 +857,75 @@
   </div>
 </div>
 
+<!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
+<div id="walk-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeWalkthrough()">
+  <div class="modal-box walk-box">
+    <div class="modal-title">How {{ pool.name }} works</div>
+    <div class="walk-body">
+
+      <div class="walk-section">
+        <div class="walk-head"><span class="walk-num">1</span> Group stage — free picks</div>
+        <div class="walk-text">
+          Tap <strong>Home</strong>, <strong>Draw</strong>, or <strong>Away</strong> on each
+          group-stage match. No bet, no cost.
+          <ul>
+            <li>Pick the right side and earn
+              <strong>${{ "%g"|format(scoring_config.group_win_payout) }}</strong>.
+            </li>
+            <li>Correctly predict a draw and earn
+              <strong>${{ "%g"|format(scoring_config.group_draw_payout) }}</strong>.
+            </li>
+            <li>Wrong pick? Nothing happens to your balance — picks lock 15 minutes before kick-off.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="walk-section">
+        <div class="walk-head"><span class="walk-num">2</span> Knockouts — wager on the winner</div>
+        <div class="walk-text">
+          Knockout matches accept real bets. Pick a side, enter a stake, and submit.
+          <ul>
+            <li>Your bet is deducted from your balance the moment you confirm.</li>
+            <li>If your side wins, you receive <strong>bet × the odds shown next to the team</strong>.
+              For example, a $10 bet at 1.8× pays $18.00.</li>
+            <li>If your side loses, you forfeit the stake. ET + penalties always count for knockouts.</li>
+            <li>You can change your bet up until 15 minutes before kick-off; old stakes are refunded.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="walk-section">
+        <div class="walk-head"><span class="walk-num">3</span> Spying — peek at someone's pick</div>
+        <div class="walk-text">
+          Every other player's pick is hidden until kick-off. If you want to see one early,
+          tap the <strong>👁 player name</strong> button next to a match.
+          <ul>
+            <li>First spy costs <strong>${{ "%g"|format(scoring_config.spy_base_cost) }}</strong>.
+              Each additional spy costs
+              <strong>${{ "%g"|format(scoring_config.spy_increment) }}</strong> more than the last.</li>
+            <li>Once you've revealed someone's pick on a fixture, you can re-check it for free.</li>
+            <li>After kick-off all picks become visible automatically (no cost).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="walk-section">
+        <div class="walk-head"><span class="walk-num">4</span> Winning</div>
+        <div class="walk-text">
+          Everyone starts at <strong>${{ "%g"|format(scoring_config.starting_balance) }}</strong>.
+          Whoever has the largest balance after the final whistle wins.
+          You can track standings any time on the
+          <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" style="color:var(--accent)">stats page</a>.
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-actions" style="margin-top:0.5rem">
+      <button class="btn btn-primary" onclick="closeWalkthrough()">Got it</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ── Constants injected from server ────────────────────────────────────
   const POOL_ID      = {{ pool.id | tojson }};
@@ -824,6 +935,31 @@
   let spyCostBase    = {{ scoring_config.spy_base_cost }};
   let spyCostInc     = {{ scoring_config.spy_increment }};
   let myBalance      = {{ my_balance }};
+
+  // ── Walkthrough modal ─────────────────────────────────────────────────
+  // Auto-shows once per pool, per browser, on first visit.
+  // localStorage key is namespaced by pool id so updating the walkthrough
+  // (or joining a different pool) can trigger a re-show by bumping the
+  // schema version below.
+  const WALK_KEY = `wc26_walk_v2_${POOL_ID}`;
+
+  function openWalkthrough() {
+    const m = document.getElementById('walk-modal');
+    if (m) m.style.display = 'flex';
+  }
+  function closeWalkthrough() {
+    const m = document.getElementById('walk-modal');
+    if (m) m.style.display = 'none';
+    try { localStorage.setItem(WALK_KEY, '1'); } catch (e) { /* private mode etc. */ }
+  }
+  function maybeAutoShowWalkthrough() {
+    try {
+      if (localStorage.getItem(WALK_KEY) !== '1') openWalkthrough();
+    } catch (e) {
+      // localStorage unavailable — show anyway, dismissal won't persist
+      openWalkthrough();
+    }
+  }
 
   // ── Country colours (flag code → hex) ─────────────────────────────────
   const COUNTRY_COLORS = {
@@ -933,6 +1069,7 @@
     });
 
     updateAllSpyCosts();
+    maybeAutoShowWalkthrough();
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────

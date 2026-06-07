@@ -500,6 +500,13 @@ def spy_pick(pool_id):
     if not db.is_pool_member(user["id"], pool_id):
         return jsonify({"ok": False, "error": "Not a pool member."}), 403
 
+    # Enforce the same payment gate as picks — an unpaid user shouldn't be able
+    # to drain their starting balance on spies before settling the entry fee.
+    membership = db.get_pool_membership(user["id"], pool_id)
+    pool = db.get_pool_by_id(pool_id)
+    if pool and pool["entry_fee"] and membership and not membership["has_paid"]:
+        return jsonify({"ok": False, "error": "Payment required to use spy."}), 403
+
     target = db.get_user_by_email(target_email)
     if not target:
         return jsonify({"ok": False, "error": "Target user not found."}), 404
