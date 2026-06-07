@@ -218,6 +218,16 @@ def init_db():
         )
     """)
 
+    # One row per successful login — drives the daily admin digest.
+    # Append-only; not pruned. Cheap to keep at this scale (10s of rows/day).
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS login_log (
+            id          TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL REFERENCES users(id),
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Migrations: add columns to existing tables that pre-date this schema version.
     if _USE_POSTGRES:
         for sql in [
@@ -321,6 +331,21 @@ def get_user_by_id(user_id):
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     return user
+
+
+def record_login(user_id):
+    """Insert a login_log row. Best-effort: swallows any DB error."""
+    import uuid as _uuid
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO login_log (id, user_id) VALUES (?,?)",
+            (str(_uuid.uuid4()), user_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def create_user(user_id, display_name, email, password_hash, is_admin=0):

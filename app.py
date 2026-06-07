@@ -156,6 +156,7 @@ def login():
         user = db.get_user_by_email(email)
         if user and check_password_hash(user["password_hash"], password):
             session["user_id"] = user["id"]
+            db.record_login(user["id"])  # for daily admin digest
             next_page = request.args.get("next", url_for("home"))
             return redirect(next_page)
         else:
