@@ -146,6 +146,47 @@
     display: flex; align-items: center;
     gap: 0.5rem;
   }
+
+  /* ── Reveal grid: 3 columns aligned with the match pill (home/draw/away).
+        Field-spy counts and individually-revealed player names live here. ─ */
+  .reveal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.55rem 0 0.2rem;
+  }
+  .reveal-grid.is-ko-grid .reveal-draw { visibility: hidden; }
+  .reveal-col {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    gap: 0.18rem;
+    min-width: 0; text-align: center;
+  }
+  .reveal-count {
+    display: inline-flex; align-items: baseline; gap: 0.3rem;
+    font-size: 0.78rem; font-weight: 500; color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+  .reveal-count b { color: var(--text); font-weight: 700; font-size: 1rem;
+                    font-variant-numeric: tabular-nums; }
+  .reveal-count-label { color: var(--text-muted); }
+  .reveal-name {
+    font-size: 0.78rem; font-weight: 700;
+    color: var(--text);
+    max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+  }
+  .reveal-col.reveal-home .reveal-name { color: var(--home-color, var(--blue));
+                                          background: var(--home-bg, rgba(87,179,255,0.10)); }
+  .reveal-col.reveal-away .reveal-name { color: var(--away-color, var(--red));
+                                          background: var(--away-bg, rgba(255,87,87,0.10)); }
+  .reveal-col.reveal-draw .reveal-name { color: var(--accent);
+                                          background: rgba(200,255,87,0.10); }
+  .reveal-name-bet { color: var(--text-muted); font-weight: 500;
+                     font-size: 0.7rem; margin-left: 0.25rem; }
   /* Action area below the match pill: my pick + spy controls + revealed
      other-player pills wrap onto multiple lines as needed. */
   .fixture-actions {
@@ -882,6 +923,68 @@
                     {% endif %}
                   </div><!-- /.match-row -->
 
+                  {# ── Reveal grid: counts + names aligned with H/D/A sides ── #}
+                  {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
+                  {% set t = field_totals.get(f.id) if field_revealed else None %}
+                  {% set has_any_visible_other = namespace(val=false) %}
+                  {% for o in others %}
+                    {% if o.email != current_user.email and o.visible %}
+                      {% set has_any_visible_other.val = true %}
+                    {% endif %}
+                  {% endfor %}
+                  {% if t or has_any_visible_other.val %}
+                  <div class="reveal-grid {% if is_ko_stage %}is-ko-grid{% endif %}"
+                       id="reveal-{{ f.id }}">
+                    {# HOME column #}
+                    <div class="reveal-col reveal-home">
+                      {% if t %}
+                        <div class="reveal-count"><b>{{ t.H.count }}</b>
+                          <span class="reveal-count-label">{{ 'player' if t.H.count == 1 else 'players' }}</span>
+                        </div>
+                      {% endif %}
+                      {% for o in others %}
+                        {% if o.email != current_user.email and o.visible and o.predicted_result == 'H' %}
+                          <div class="reveal-name">
+                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
+                          </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+
+                    {# DRAW column — empty for KO so the middle slot stays balanced #}
+                    <div class="reveal-col reveal-draw">
+                      {% if t and not is_ko_stage %}
+                        <div class="reveal-count"><b>{{ t.D.count }}</b>
+                          <span class="reveal-count-label">{{ 'player' if t.D.count == 1 else 'players' }}</span>
+                        </div>
+                      {% endif %}
+                      {% if not is_ko_stage %}
+                        {% for o in others %}
+                          {% if o.email != current_user.email and o.visible and o.predicted_result == 'D' %}
+                            <div class="reveal-name">{{ o.display_name.split(' ')[0] }}</div>
+                          {% endif %}
+                        {% endfor %}
+                      {% endif %}
+                    </div>
+
+                    {# AWAY column #}
+                    <div class="reveal-col reveal-away">
+                      {% if t %}
+                        <div class="reveal-count"><b>{{ t.A.count }}</b>
+                          <span class="reveal-count-label">{{ 'player' if t.A.count == 1 else 'players' }}</span>
+                        </div>
+                      {% endif %}
+                      {% for o in others %}
+                        {% if o.email != current_user.email and o.visible and o.predicted_result == 'A' %}
+                          <div class="reveal-name">
+                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
+                          </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  </div>
+                  {% endif %}
+
                   <!-- Action area (everything else lives below the match pill) -->
                   <div class="fixture-actions">
 
@@ -926,17 +1029,9 @@
                       </div>
                     {% endif %}
 
-                    {# ── Field spread: visible whenever revealed (bought, locked, or completed) ── #}
-                    {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
-                    {% if field_revealed and field_totals.get(f.id) %}
-                      {% set t = field_totals[f.id] %}
-                      <div class="field-pill revealed" id="field-{{ f.id }}">
-                        <span class="field-side"><b>{{ t.H.count }}</b>H</span>
-                        {% if not is_ko_stage %}<span class="field-side"><b>{{ t.D.count }}</b>D</span>{% endif %}
-                        <span class="field-side"><b>{{ t.A.count }}</b>A</span>
-                        {% if t.no_pick %}<span class="field-side dim">{{ t.no_pick }}—</span>{% endif %}
-                      </div>
-                    {% endif %}
+                    {# Field spread + revealed names now render in .reveal-grid
+                       above (between match pill and action row), aligned with
+                       the H/D/A columns of the match pill. #}
 
                     {# ── Single Spy button + "X picks in" count ── #}
                     {% if not is_completed and not is_started %}
@@ -950,36 +1045,6 @@
                         <span class="picks-label">{{ 'pick' if picks_so_far == 1 else 'picks' }} in</span>
                       </span>
                     {% endif %}
-
-                    {# ── Pills for picks the user has individually spied on ── #}
-                    {% for o in others %}
-                      {% if o.email != current_user.email %}
-                        {% if is_completed %}
-                          {% set opt_cls = 'scored-pos' if (o.get('points_awarded') and o.get('points_awarded', 0) > 0) else 'scored-zero' %}
-                          <div class="player-pill compact {{ opt_cls }}" data-player="{{ o.email }}">
-                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
-                            {% if o.predicted_result %}
-                              <span class="pill-choice">
-                                {%- if o.predicted_result == 'H' -%}{{ (f.home_team or 'HME')[:3].upper() }}{%- elif o.predicted_result == 'A' -%}{{ (f.away_team or 'AWY')[:3].upper() }}{%- else -%}D{%- endif -%}
-                              </span>
-                            {% endif %}
-                            {% if o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
-                          </div>
-                        {% elif o.visible %}
-                          <div class="player-pill compact pick-{{ o.predicted_result or '' }}"
-                               id="ppill-{{ f.id }}-{{ o.user_id }}"
-                               data-player="{{ o.email }}">
-                            <span class="pill-name">{{ o.display_name.split(' ')[0] }}</span>
-                            {% if o.predicted_result %}
-                              <span class="pill-choice">
-                                {%- if o.predicted_result == 'H' -%}{{ (f.home_team or 'HME')[:3].upper() }}{%- elif o.predicted_result == 'A' -%}{{ (f.away_team or 'AWY')[:3].upper() }}{%- else -%}D{%- endif -%}
-                              </span>
-                            {% endif %}
-                            {% if is_ko_stage and o.bet_amount %}<span class="pill-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
-                          </div>
-                        {% endif %}
-                      {% endif %}
-                    {% endfor %}
 
                   </div><!-- /.fixture-actions -->
 
@@ -1220,7 +1285,20 @@
           Everyone starts at <strong>${{ "%g"|format(scoring_config.starting_balance) }}</strong>.
           Whoever has the largest balance after the final whistle wins.
           You can track standings any time on the
-          <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" style="color:var(--accent)">stats page</a>.
+          <a href="{{ url_for('leaderboard_page', pool_id=pool.id) }}" style="color:var(--accent)">leaderboard</a>.
+        </div>
+      </div>
+
+      <div class="walk-section">
+        <div class="walk-head"><span class="walk-num">5</span> The payout</div>
+        <div class="walk-text">
+          Real-money prize pool: <strong>number of players × $10 each</strong>.
+          When the tournament ends, the in-game balance leaderboard is final.
+          <ul>
+            <li><strong>1st place</strong> — wins the rest of the pool</li>
+            <li><strong>2nd place</strong> — wins <strong>$40</strong></li>
+            <li><strong>3rd place</strong> — wins <strong>$20</strong></li>
+          </ul>
         </div>
       </div>
 
@@ -1682,6 +1760,13 @@
       buyBtn.disabled = false;
       document.getElementById('spy-field-explain').innerHTML =
         'You\'ve revealed the field. Re-check any time until kick-off, free.';
+
+      // On a fresh purchase (not a silent re-check), reload the page so the
+      // .reveal-grid under the match pill populates from server-rendered HTML
+      // (counts in the right column, no extra JS to keep in sync).
+      if (!opts.silent) {
+        setTimeout(() => { window.location.reload(); }, 700);
+      }
     } catch (e) {
       alert('Network error.');
       buyBtn.disabled = false;
