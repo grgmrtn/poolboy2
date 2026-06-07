@@ -60,10 +60,25 @@ def _to_display_iso(utc_iso_str):
         return utc_iso_str
 
 
+def _day_abbrev(utc_iso_str):
+    """Return 'Mon'/'Tue'/... in DISPLAY_TZ for a UTC kickoff, or ''."""
+    if not utc_iso_str:
+        return ""
+    try:
+        s = utc_iso_str.rstrip("Z").rstrip()
+        dt = datetime.fromisoformat(s[:19])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(DISPLAY_TZ).strftime("%a")
+    except (ValueError, TypeError):
+        return ""
+
+
 def _attach_display_times(fixtures):
-    """Add f['kick_off_display'] to each fixture dict in-place."""
+    """Add f['kick_off_display'] and f['kick_off_dow'] to each fixture dict."""
     for f in fixtures:
         f["kick_off_display"] = _to_display_iso(f.get("kick_off"))
+        f["kick_off_dow"]     = _day_abbrev(f.get("kick_off"))
     return fixtures
 
 
@@ -289,9 +304,25 @@ def pool_page(pool_id):
         flash("You're not a member of that pool.", "error")
         return redirect(url_for("home"))
 
-    grouped_fixtures = fx.get_all_fixtures()
-    for stage_fixtures in grouped_fixtures.values():
+    grouped_fixtures_raw = fx.get_all_fixtures()
+    for stage_fixtures in grouped_fixtures_raw.values():
         _attach_display_times(stage_fixtures)
+
+    # Move every completed fixture into a synthesised "Completed" stage so
+    # users can hide/expand the finished games as one group. Preserves the
+    # within-stage ordering by sorting completed fixtures by kick_off DESC
+    # (most recent finish first) inside the new bucket.
+    grouped_fixtures = {}
+    completed_fixtures = []
+    for stage_name, fixtures in grouped_fixtures_raw.items():
+        upcoming = [f for f in fixtures if not f.get("result")]
+        completed_fixtures.extend(f for f in fixtures if f.get("result"))
+        if upcoming:
+            grouped_fixtures[stage_name] = upcoming
+    if completed_fixtures:
+        completed_fixtures.sort(key=lambda f: f.get("kick_off") or "", reverse=True)
+        grouped_fixtures["Completed"] = completed_fixtures
+
     existing_picks   = db.get_picks_full_for_user_in_pool(user["id"], pool_id)
     membership       = db.get_pool_membership(user["id"], pool_id)
     has_paid         = bool(membership and membership["has_paid"])
@@ -377,6 +408,7 @@ def pool_page(pool_id):
             )
 
     my_rank, pool_size = db.get_member_rank(user["id"], pool_id)
+    pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
 
     return render_template("pool.html",
         pool=pool,
@@ -393,10 +425,35 @@ def pool_page(pool_id):
         spy_set=spy_set,
         aggregate_spy_set=aggregate_spy_set,
         field_totals=field_totals,
+        pick_counts_by_fixture=pick_counts_by_fixture,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
         pool_size=pool_size,
+    )
+
+
+@app.route("/pool/<pool_id>/leaderboard")
+@login_required
+def leaderboard_page(pool_id):
+    """Dedicated leaderboard page — moved off the main pool page."""
+    g.nav_pool_id = pool_id
+    user = current_user()
+    pool = db.get_pool_by_id(pool_id)
+    if not pool:
+        flash("Pool not found.", "error")
+        return redirect(url_for("home"))
+    if not db.is_pool_member(user["id"], pool_id):
+        flash("You're not a member of that pool.", "error")
+        return redirect(url_for("home"))
+
+    leaderboard = db.get_pool_leaderboard(pool_id)
+    members_with_balance = db.get_pool_members_with_balances(pool_id)
+    return render_template("leaderboard.html",
+        pool=pool,
+        leaderboard=leaderboard,
+        members_with_balance=members_with_balance,
+        my_balance=db.get_member_balance(user["id"], pool_id),
     )
 
 

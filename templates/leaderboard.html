@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }} — Leaderboard{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lb-page { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
+  .lb-back { color: var(--text-muted); font-size: 0.8rem; text-decoration: none; letter-spacing: 0.04em; }
+  .lb-back:hover { color: var(--text); text-decoration: none; }
+  .lb-title {
+    font-size: 1.6rem; font-weight: 700; margin: 0.5rem 0 0.25rem;
+    letter-spacing: 0.02em;
+  }
+  .lb-sub  { color: var(--text-muted); font-size: 0.86rem; margin-bottom: 1.75rem; }
+
+  .lb-table {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .lb-table-row {
+    display: flex; align-items: center; gap: 0.85rem;
+    padding: 0.85rem 1.1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.95rem;
+  }
+  .lb-table-row:first-child { border-top: none; }
+  .lb-table-row.is-me {
+    background: rgba(200,255,87,0.06);
+    border-top-color: rgba(200,255,87,0.18);
+  }
+  .lb-table-row .rank {
+    color: var(--text-muted); font-weight: 700;
+    min-width: 2.2rem; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-table-row.is-me .rank { color: var(--accent); }
+  .lb-table-row .name {
+    flex: 1; color: var(--text); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lb-table-row .balance {
+    color: var(--accent); font-weight: 700;
+    font-size: 1.05rem; min-width: 4.5rem; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-table-row .paid {
+    font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .lb-table-row .paid.pending {
+    color: var(--amber);
+  }
+
+  /* Top-3 highlight bar on the left */
+  .lb-table-row.rank-1 { box-shadow: inset 3px 0 0 var(--accent); }
+  .lb-table-row.rank-2 { box-shadow: inset 3px 0 0 rgba(200,255,87,0.55); }
+  .lb-table-row.rank-3 { box-shadow: inset 3px 0 0 rgba(200,255,87,0.30); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lb-page">
+
+  <a href="{{ url_for('pool_page', pool_id=pool.id) }}" class="lb-back">← Back to {{ pool.name }}</a>
+  <h1 class="lb-title">Leaderboard</h1>
+  <div class="lb-sub">
+    {{ leaderboard|length }} {{ 'players' if leaderboard|length != 1 else 'player' }} · sorted by current balance
+  </div>
+
+  <div class="lb-table">
+    {% for row in leaderboard %}
+      <div class="lb-table-row rank-{{ loop.index }}{% if row.email == current_user.email %} is-me{% endif %}">
+        <span class="rank">{{ loop.index }}</span>
+        <span class="name">{{ row.display_name }}</span>
+        <span class="balance">${{ "%.0f"|format(row.balance) }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

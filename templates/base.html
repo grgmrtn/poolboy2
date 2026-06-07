@@ -315,8 +315,9 @@
     {# Centre slot: balance + rank if user is in at least one pool #}
     <div class="nav-center">
       {% if current_user.nav_balance is not none and current_user.nav_pool_id %}
-      <a href="{{ url_for('pool_page', pool_id=current_user.nav_pool_id) }}"
-         class="nav-rank" style="text-decoration:none">
+      <a href="{{ url_for('leaderboard_page', pool_id=current_user.nav_pool_id) }}"
+         class="nav-rank" style="text-decoration:none"
+         title="View leaderboard">
         <span class="nav-balance">${{ "%.0f"|format(current_user.nav_balance) }}</span>
         {% if current_user.nav_rank %}
         <span class="nav-rank-fraction">

@@ -872,6 +872,20 @@ def record_aggregate_spy(spy_id, tx_id, user_id, pool_id, fixture_id, cost):
     return True
 
 
+def get_pick_counts_for_pool(pool_id):
+    """
+    Return {fixture_id: int} — how many picks have been submitted on each fixture
+    by anyone in this pool. Just a count; no per-side breakdown (that's a spy).
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT fixture_id, COUNT(*) AS n FROM picks WHERE pool_id=? GROUP BY fixture_id",
+        (pool_id,)
+    ).fetchall()
+    conn.close()
+    return {r["fixture_id"]: r["n"] for r in rows}
+
+
 def get_fixture_pick_totals(pool_id, fixture_id, knockout=False):
     """
     Vote distribution for one fixture in one pool. Counts each predicted

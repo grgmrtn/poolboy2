@@ -71,12 +71,8 @@
 
   /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 2.25rem; align-items: start;
+    display: block;
   }
-  @media (max-width: 820px) { .pool-layout { grid-template-columns: 1fr; } }
-  .sticky-sidebar { position: sticky; top: 106px; }
 
   /* Collapsible stage heading — caret rotates on open */
   .stage-heading {
@@ -103,9 +99,10 @@
     gap: 0.65rem; margin-bottom: 1rem;
     padding: 0.45rem 0;
   }
-  /* Allow users to filter the page to upcoming/in-progress fixtures only.
-     !important so the rule beats display:flex / grid item rules. */
-  body.hide-completed .fixture-row.is-completed { display: none !important; }
+  /* "Hide Completed Picks" hides any fixture where the user has placed a pick,
+     regardless of whether the game has finished. Completed *games* are moved
+     server-side into a separate auto-collapsed "Completed" stage. */
+  body.hide-completed .fixture-row.has-my-pick { display: none !important; }
 
   /* On wider screens, render fixtures within a stage in two columns;
      iPhone falls back to single column with more breathing room. */
@@ -121,6 +118,8 @@
   .fixture-meta-col {
     flex-shrink: 0; width: 50px; text-align: center; padding-top: 12px;
   }
+  .meta-dow   { font-size: 0.6rem; color: var(--text-muted); font-weight: 700;
+                letter-spacing: 0.1em; text-transform: uppercase; line-height: 1; }
   .meta-date  { font-size: 0.78rem; color: var(--text); font-weight: 600; line-height: 1.2; }
   .meta-time  { font-size: 0.68rem; color: var(--text-muted); }
   .meta-group { font-size: 0.62rem; color: var(--accent); letter-spacing: 0.06em;
@@ -275,6 +274,19 @@
   .modal-body strong { color: var(--accent); }
   .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
 
+  /* X-close button anchored top-right of every modal-box */
+  .modal-box { position: relative; }
+  .modal-x-close {
+    position: absolute; top: 0.6rem; right: 0.65rem;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 1.35rem; line-height: 1;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .modal-x-close:hover { color: var(--text); background: var(--surface2); }
+
   /* ── Walkthrough modal (larger, sectioned) ─────────────────────────── */
   .walk-box {
     max-width: 480px;
@@ -426,13 +438,14 @@
   .field-pill .field-side.dim { color: var(--text-dim); }
   .field-pill .field-side.dim b { color: var(--text-muted); }
 
-  /* ── Unified Spy button ──────────────────────────────────────────── */
+  /* ── Unified Spy button — sized to match the "You" player pill ───── */
   .spy-trigger {
-    display: inline-flex; align-items: center; gap: 0.4rem;
-    height: 40px; padding: 0 0.95rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 0.45rem;
+    height: 44px; padding: 0 1.05rem;
     border-radius: 8px; border: 1px solid var(--border);
-    background: transparent; flex-shrink: 0;
-    font-family: var(--mono); font-size: 0.8rem; font-weight: 700;
+    background: var(--surface); flex-shrink: 0;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
     color: var(--text-muted); cursor: pointer;
     transition: all 0.15s; white-space: nowrap; letter-spacing: 0.03em;
   }
@@ -440,7 +453,15 @@
     border-color: var(--amber); color: var(--amber);
     background: rgba(255,200,112,0.06);
   }
-  .spy-trigger span:first-child { font-size: 0.95rem; line-height: 1; }
+  .spy-trigger span:first-child { font-size: 1rem; line-height: 1; }
+
+  /* "X picks in" badge — quiet grey to the right of the Spy button */
+  .picks-in-count {
+    display: inline-flex; align-items: center;
+    height: 44px; padding: 0 0.6rem;
+    color: var(--text-dim); font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.03em; white-space: nowrap;
+  }
 
   /* ── Unified Spy modal: field option at top + player list below ── */
   .spy-modal-section {
@@ -613,7 +634,8 @@
   'Matchday 1': 'MD1', 'Matchday 2': 'MD2', 'Matchday 3': 'MD3',
   'Round of 32': 'R32', 'Round of 16': 'R16',
   'Quarter-Finals': 'QF', 'Semi-Finals': 'SF',
-  'Third Place': '3P', 'Final': 'F'
+  'Third Place': '3P', 'Final': 'F',
+  'Completed': 'DONE'
 } %}
 <nav class="stage-nav" id="stage-nav">
   {% for stage in grouped_fixtures %}
@@ -688,9 +710,15 @@
         {% for stage, fixtures in grouped_fixtures.items() %}
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
-          <div class="stage-heading" onclick="toggleStageHeading(this)">
+          <div class="stage-heading {% if stage == 'Completed' %}collapsed{% endif %}"
+               onclick="toggleStageHeading(this)">
             <span class="caret">▼</span>
             <span>{{ stage }}</span>
+            {% if stage == 'Completed' %}
+              <span style="margin-left:auto;color:var(--text-dim);font-size:0.7rem;letter-spacing:0.04em;text-transform:none">
+                {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }}
+              </span>
+            {% endif %}
           </div>
           <div class="stage-section" id="stage-{{ loop.index0 }}" data-idx="{{ loop.index0 }}">
 
@@ -732,7 +760,7 @@
                 {% set pill_cls = 'match-pill' %}
               {% endif %}
 
-              <div class="fixture-row {% if is_completed %}is-completed{% endif %}"
+              <div class="fixture-row {% if is_completed %}is-completed{% endif %} {% if my_pick %}has-my-pick{% endif %}"
                    id="fixture-{{ f.id }}"
                    data-fixture-id="{{ f.id }}"
                    data-kick-off="{{ f.kick_off or '' }}"
@@ -745,6 +773,9 @@
                 <!-- Date/time + countdown -->
                 <div class="fixture-meta-col">
                   {% if f.kick_off %}
+                    {% if f.kick_off_dow %}
+                      <div class="meta-dow">{{ f.kick_off_dow }}</div>
+                    {% endif %}
                     <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
                     <div class="meta-time">{{ ko_time }}</div>
                   {% else %}
@@ -883,12 +914,16 @@
                       </div>
                     {% endif %}
 
-                    {# ── Single Spy button: opens modal offering field + per-player options ── #}
+                    {# ── Single Spy button + "X picks in" count ── #}
                     {% if not is_completed and not is_started %}
                       <button class="spy-trigger"
                               onclick="openSpyModal('{{ pool.id }}','{{ f.id }}', {{ scoring_config.aggregate_spy_cost }}, {{ 'true' if (f.id in aggregate_spy_set) else 'false' }})">
                         <span>👁</span> Spy
                       </button>
+                      {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
+                      <span class="picks-in-count" title="Picks submitted on this match so far">
+                        {{ picks_so_far }} {{ 'pick' if picks_so_far == 1 else 'picks' }} in
+                      </span>
                     {% endif %}
 
                     {# ── Pills for picks the user has individually spied on ── #}
@@ -1043,43 +1078,13 @@
 
     </div><!-- /.fixtures column -->
 
-    <!-- ── Leaderboard sidebar ──────────────────────────────────── -->
-    <div class="sticky-sidebar">
-      <div class="card">
-        <div class="standings-toggle open" id="lb-toggle" onclick="toggleLeaderboard()" style="margin-bottom:0">
-          <span class="arrow">▶</span>
-          <span>Leaderboard</span>
-        </div>
-        <div id="lb-body">
-          {% for row in leaderboard %}
-            <div class="lb-row{% if row.email == current_user.email %} lb-me{% endif %}">
-              <span class="lb-rank">{{ loop.index }}</span>
-              <span class="lb-name" title="{{ row.display_name }}">{{ row.display_name }}</span>
-              <span class="lb-pts">${{ "%.0f"|format(row.balance) }}</span>
-              {% if row.email != current_user.email %}
-                {% set default_checked = loop.index <= 3 %}
-                <input type="checkbox" class="lb-check" data-player="{{ row.email }}"
-                       {% if default_checked %}checked{% endif %}
-                       onchange="togglePlayer('{{ row.email }}', this.checked)"
-                       title="Show {{ row.display_name }}'s picks">
-              {% else %}
-                <span style="width:14px;margin-left:0.35rem"></span>
-              {% endif %}
-            </div>
-          {% endfor %}
-          {% if not leaderboard %}
-            <div style="color:var(--text-dim);font-size:0.78rem">No members yet.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
   </div><!-- /.pool-layout -->
 </div><!-- /.page -->
 
 <!-- ── Unified Spy modal: Field + per-player options together ────────── -->
 <div id="spy-modal-unified" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeSpyModal()">
   <div class="modal-box walk-box">
+    <button class="modal-x-close" aria-label="Close" onclick="closeSpyModal()">×</button>
     <div class="modal-title">👁 Spy on this match</div>
 
     <!-- Section 1: Spy the Field -->
@@ -1107,14 +1112,12 @@
       <div id="spy-someone-list"></div>
     </div>
 
-    <div class="modal-actions">
-      <button class="btn" onclick="closeSpyModal()">Close</button>
-    </div>
   </div>
 </div>
 
 <div id="spy-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)spyModalCancel()">
   <div class="modal-box">
+    <button class="modal-x-close" aria-label="Close" onclick="spyModalCancel()">×</button>
     <div class="modal-title">👁 Reveal pick</div>
     <div class="modal-body">
       This will cost <strong id="spy-modal-cost">$0.00</strong> to reveal one player's pick.
@@ -1130,6 +1133,7 @@
 <!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
 <div id="walk-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeWalkthrough()">
   <div class="modal-box walk-box">
+    <button class="modal-x-close" aria-label="Close" onclick="closeWalkthrough()">×</button>
     <div class="modal-title">How {{ pool.name }} works</div>
     <div class="walk-body">
 
@@ -1201,6 +1205,9 @@
     </div>
   </div>
 </div>
+
+<!-- legacy spy-modal Cancel/Confirm buttons retained for buySpy flow -->
+
 
 <script>
   // ── Constants injected from server ────────────────────────────────────
