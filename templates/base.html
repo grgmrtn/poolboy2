@@ -61,20 +61,25 @@
 
     /* ── Navbar ───────────────────────────────────────────────────────── */
     .navbar {
+      position: -webkit-sticky;            /* older iOS Safari fallback */
       position: sticky;
-      top: 0;
-      top: env(safe-area-inset-top, 0);    /* respect iPhone notch/dynamic island */
+      top: 0;                              /* always pinned to viewport top */
       z-index: 100;
-      background: rgba(10, 10, 15, 0.94);
+      background: rgba(10, 10, 15, 0.96);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px); /* iOS Safari support */
       border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
+      /* Pad the top by the safe-area inset (iPhone notch/dynamic island) and
+         the sides by the horizontal insets. Keeping `top: 0` keeps the sticky
+         behaviour reliable across iOS — the previous `top: env(...)` override
+         was breaking position:sticky on notched devices. */
+      padding-top: env(safe-area-inset-top, 0);
       padding-left:  max(2rem, env(safe-area-inset-left));
       padding-right: max(2rem, env(safe-area-inset-right));
       display: flex; align-items: center; justify-content: space-between;
-      height: 56px;
-      font-size: 0.85rem;                  /* +0.07rem for better legibility */
+      box-sizing: content-box;
+      height: 56px;                        /* content area; safe-area pad is on top */
+      font-size: 0.85rem;
       letter-spacing: 0.03em;
     }
     .navbar-brand {

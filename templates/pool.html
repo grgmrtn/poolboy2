@@ -455,13 +455,30 @@
   }
   .spy-trigger span:first-child { font-size: 1rem; line-height: 1; }
 
-  /* "X picks in" badge — quiet grey to the right of the Spy button */
+  /* "Picks in" count — big number on top, small label below, double the
+     height of the other action elements so the number gets visual weight
+     while still sitting on the same line as Your pick + Spy button. */
   .picks-in-count {
-    display: inline-flex; align-items: center;
-    height: 44px; padding: 0 0.6rem;
-    color: var(--text-dim); font-size: 0.78rem; font-weight: 500;
-    letter-spacing: 0.03em; white-space: nowrap;
+    display: inline-flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 88px; padding: 0 0.85rem;
+    line-height: 1;
+    flex-shrink: 0;
   }
+  .picks-in-count .picks-num {
+    color: var(--text);
+    font-size: 1.85rem; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .picks-in-count .picks-label {
+    color: var(--text-muted);
+    font-size: 0.6rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    margin-top: 0.3rem;
+  }
+  /* Keep the action row vertically centred so 88px and 44px elements line up */
+  .fixture-actions { align-items: center; }
 
   /* ── Unified Spy modal: field option at top + player list below ── */
   .spy-modal-section {
@@ -922,7 +939,8 @@
                       </button>
                       {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
                       <span class="picks-in-count" title="Picks submitted on this match so far">
-                        {{ picks_so_far }} {{ 'pick' if picks_so_far == 1 else 'picks' }} in
+                        <span class="picks-num">{{ picks_so_far }}</span>
+                        <span class="picks-label">{{ 'pick' if picks_so_far == 1 else 'picks' }} in</span>
                       </span>
                     {% endif %}
 
