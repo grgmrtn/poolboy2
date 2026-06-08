@@ -49,14 +49,27 @@ def fmt_kickoff(ko):
 
 
 def main():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        description="Send reminder emails to paid pool members with outstanding picks. "
+                    "Defaults to a DRY-RUN that only prints what would be sent — pass "
+                    "--send to actually deliver. This guardrail exists because real "
+                    "users get the emails."
+    )
     p.add_argument("--min-hours", type=float, default=1,
                    help="lower bound on hours until kickoff (default 1)")
     p.add_argument("--max-hours", type=float, default=6,
                    help="upper bound on hours until kickoff (default 6)")
-    p.add_argument("--dry-run",   action="store_true",
-                   help="print emails instead of sending")
+    p.add_argument("--send", action="store_true",
+                   help="Actually send the emails. Without this flag the script runs "
+                        "in dry-run mode and just prints what would be sent.")
+    # Back-compat: --dry-run is implied by default, but keep accepting the
+    # flag so older invocations don't break.
+    p.add_argument("--dry-run", action="store_true", help=argparse.SUPPRESS)
     args = p.parse_args()
+    # Effective dry-run: anything other than an explicit --send is preview-only.
+    effective_dry_run = not args.send
+    if effective_dry_run:
+        print("=== DRY-RUN (no emails sent). Add --send to actually deliver. ===\n")
 
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
@@ -161,7 +174,7 @@ def main():
         subject = (f"WC26: {n} pick{'s' if n != 1 else ''} "
                    f"outstanding before kickoff")
         try:
-            send_email(email, subject, body, dry_run=args.dry_run)
+            send_email(email, subject, body, dry_run=effective_dry_run)
             sent_any = True
             print(f"  ✓ {email}  ({n} fixture{'s' if n != 1 else ''})")
         except Exception as e:
@@ -170,7 +183,7 @@ def main():
             continue
 
         # Record reminder keys ONLY for this user's items, after successful send
-        if not args.dry_run:
+        if not effective_dry_run:
             for m, f in items:
                 key = f"{META_PREFIX}:{m['user_id']}:{f['id']}"
                 cur.execute("""
@@ -180,7 +193,7 @@ def main():
                 """, (key, now_utc.isoformat()))
             conn.commit()
 
-    if sent_any and args.dry_run:
+    if sent_any and effective_dry_run:
         print(f"\n(dry-run — meta dedupe rows NOT written; will re-send on next real run)")
 
     cur.close()

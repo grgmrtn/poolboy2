@@ -29,10 +29,19 @@ ET = ZoneInfo("America/New_York")
 
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--hours",    type=int, default=24, help="look-back window")
-    p.add_argument("--dry-run",  action="store_true",  help="print instead of send")
+    p = argparse.ArgumentParser(
+        description="Email a daily admin summary to ADMIN_EMAILS. Defaults to "
+                    "DRY-RUN (prints to terminal). Pass --send to actually send."
+    )
+    p.add_argument("--hours", type=int, default=24, help="look-back window")
+    p.add_argument("--send",  action="store_true",
+                   help="Actually send the email. Default is dry-run preview.")
+    # Back-compat
+    p.add_argument("--dry-run", action="store_true", help=argparse.SUPPRESS)
     args = p.parse_args()
+    effective_dry_run = not args.send
+    if effective_dry_run:
+        print("=== DRY-RUN (no email sent). Add --send to actually deliver. ===\n")
 
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
@@ -155,8 +164,8 @@ def main():
     subject = f"[WC26] Daily digest — {n_picks} picks, {n_logins} logins, {len(upcoming)} fixtures upcoming"
 
     # ── Send ───────────────────────────────────────────────────────────────
-    sent_to = send_email(admin_emails, subject, body, dry_run=args.dry_run)
-    if not args.dry_run:
+    sent_to = send_email(admin_emails, subject, body, dry_run=effective_dry_run)
+    if not effective_dry_run:
         print(f"sent to: {sent_to}")
 
     cur.close()
