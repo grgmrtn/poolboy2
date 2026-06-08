@@ -232,12 +232,45 @@
 
   /* ── Match pill ──────────────────────────────────────────────────── */
   .match-pill {
-    display: flex; align-items: stretch;
+    display: flex; flex-direction: column;
     background: transparent;
     border: none;
-    height: 56px; flex: none; width: 100%;
+    width: 100%;
     box-sizing: border-box;
   }
+  /* Each pill-row is a 3-col grid so home / draw / away widths are exactly
+     equal regardless of content (longer team names no longer make the away
+     side wider than home). */
+  .match-pill-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: stretch;
+    width: 100%;
+  }
+  .match-pill-row.pick-row {
+    height: 56px;
+  }
+  .match-pill-row.count-row {
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.18);
+  }
+  .pill-count {
+    display: flex; align-items: baseline; justify-content: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.45rem;
+    border-right: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    min-width: 0;
+  }
+  .pill-count:last-child { border-right: none; }
+  .pill-count b { font-weight: 700; font-size: 0.98rem; letter-spacing: -0.01em;
+                  font-variant-numeric: tabular-nums; }
+  .pill-count-label { color: var(--text-muted); }
+  .pill-count-home b { color: var(--home-color, var(--blue)); }
+  .pill-count-away b { color: var(--away-color, var(--red));  }
+  .pill-count-draw b { color: var(--accent); }
+  .count-row.is-ko-row .pill-count-draw { visibility: hidden; }
   /* Glow on save: now applied to the container (which holds the visible
      border) so the lime ring frames the whole match card cleanly. */
   .match-container.saved-pulse,
@@ -259,17 +292,17 @@
   .match-container:has(.match-pill.scored-loss) { border-color: rgba(255,87,87,0.18); }
   .match-container:has(.match-pill.locked)      { border-color: rgba(255,190,87,0.12); }
 
+  /* Grid cells inside .pick-row; flex inside each cell centres its content */
   .pill-side {
-    flex: 1 1 0; min-width: 0;
+    min-width: 0;
     display: flex; align-items: center; gap: 0.45rem;
     padding: 0 0.85rem;
     justify-content: center;
   }
   .pill-side.home { border-right: 1px solid var(--border); }
   .pill-side.away { border-left: 1px solid var(--border); flex-direction: row-reverse; }
-
   .pill-centre {
-    flex: 1 1 0; min-width: 0;
+    min-width: 0;
     display: flex; align-items: center; justify-content: center;
   }
 
@@ -284,12 +317,12 @@
     display: flex; align-items: center;
   }
   .pick-home {
-    flex: 1 1 0; min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
+    min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
     border-right: 1px solid var(--border);
     height: 100%; justify-content: center;
   }
   .pick-away {
-    flex: 1 1 0; min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
+    min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
     border-left: 1px solid var(--border);
     flex-direction: row-reverse; height: 100%;
     justify-content: center;
@@ -297,7 +330,7 @@
   .pick-home .team-abbr, .pick-away .team-abbr { color: var(--text-muted); }
 
   .pick-draw {
-    flex: 1 1 0; min-width: 0; height: 100%; justify-content: center;
+    min-width: 0; height: 100%; justify-content: center;
     font-size: 0.92rem; font-weight: 600; letter-spacing: 0.07em;
     text-transform: uppercase; color: var(--text-muted);
   }
@@ -530,47 +563,43 @@
   }
   .spy-trigger span:first-child { font-size: 1rem; line-height: 1; }
 
-  /* "Picks in" count — big number on top, small label below, double the
-     height of the other action elements so the number gets visual weight
-     while still sitting on the same line as Your pick + Spy button. */
+  /* "Picks in" count — sized to match the other action-row elements (44px),
+     number left, label right, both on the same line. */
   .picks-in-count {
-    display: inline-flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    height: 88px; padding: 0 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 0.35rem;
+    height: 44px; padding: 0 0.8rem;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
     line-height: 1;
     flex-shrink: 0;
+    white-space: nowrap;
   }
   .picks-in-count .picks-num {
     color: var(--text);
-    font-size: 1.85rem; font-weight: 700;
+    font-size: 1.1rem; font-weight: 700;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
   }
   .picks-in-count .picks-label {
     color: var(--text-muted);
-    font-size: 0.56rem; font-weight: 600;
+    font-size: 0.6rem; font-weight: 600;
     letter-spacing: 0.06em; text-transform: uppercase;
-    margin-top: 0.3rem;
-    white-space: nowrap;          /* prevent the 3-line wrap */
-    line-height: 1;
   }
-  /* Keep the action row vertically centred so 88px and 44px elements line up */
   .fixture-actions { align-items: center; }
 
-  /* ── Mobile: tighten the action row so You + Spy + picks-in all fit on one
-        line on iPhones (375–430 CSS px viewports). Without these reductions,
-        the picks-in element gets pushed to a second line. ── */
+  /* Mobile: tighten so You + Spy + picks-in fit on one line on iPhones */
   @media (max-width: 700px) {
-    .player-pill.is-me { width: 120px; padding: 0 0.5rem; gap: 0.3rem; }
-    .spy-trigger      { padding: 0 0.7rem; gap: 0.3rem; font-size: 0.8rem; }
-    .picks-in-count   { padding: 0 0.5rem; height: 78px; }
-    .picks-in-count .picks-num { font-size: 1.55rem; }
-    .picks-in-count .picks-label { font-size: 0.52rem; }
+    .player-pill.is-me { width: 110px; padding: 0 0.45rem; gap: 0.3rem; }
+    .spy-trigger      { padding: 0 0.7rem; gap: 0.3rem; font-size: 0.78rem; }
+    .picks-in-count   { padding: 0 0.55rem; gap: 0.25rem; }
+    .picks-in-count .picks-num   { font-size: 1rem; }
+    .picks-in-count .picks-label { font-size: 0.55rem; }
     .fixture-actions  { gap: 0.25rem 0.35rem; }
   }
   @media (max-width: 380px) {
-    .player-pill.is-me { width: 100px; }
-    .picks-in-count .picks-num { font-size: 1.4rem; }
+    .player-pill.is-me { width: 95px; }
+    .picks-in-count   { padding: 0 0.45rem; }
   }
 
   /* ── Unified Spy modal: field option at top + player list below ── */
@@ -771,7 +800,7 @@
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
-      All times EST
+      All times EST; picks lock 15 minutes before kickoff
     </p>
   </div>
 
@@ -907,15 +936,46 @@
                   <!-- Match pill (top) + reveal grid (bottom) unified into one card -->
                   <div class="match-row">
                     <div class="match-container">
+                    {# Friendlier team abbreviations than the default first-3-chars
+                       (so e.g. "United States" -> "USA" not "UNI"). Falls back to
+                       first 3 chars for anything not in the table. Defined here
+                       in the template so no DB migration needed. #}
+                    {% set ABBR = {
+                      'United States':'USA','South Korea':'KOR','Saudi Arabia':'KSA',
+                      'New Zealand':'NZL','South Africa':'RSA','Czech Republic':'CZE',
+                      'Ivory Coast':'CIV','Costa Rica':'CRC','Cape Verde Islands':'CPV',
+                      'Bosnia-Herzegovina':'BIH','El Salvador':'ESA','Congo DR':'COD',
+                      'Curaçao':'CUW','Czechia':'CZE',
+                      'Argentina':'ARG','Brazil':'BRA','Belgium':'BEL','Mexico':'MEX',
+                      'Canada':'CAN','England':'ENG','France':'FRA','Germany':'GER',
+                      'Spain':'ESP','Portugal':'POR','Netherlands':'NED','Italy':'ITA',
+                      'Croatia':'CRO','Switzerland':'SUI','Denmark':'DEN','Sweden':'SWE',
+                      'Poland':'POL','Serbia':'SRB','Senegal':'SEN','Morocco':'MAR',
+                      'Australia':'AUS','Japan':'JPN','Iran':'IRN','Iraq':'IRQ',
+                      'Algeria':'ALG','Tunisia':'TUN','Cameroon':'CMR','Ghana':'GHA',
+                      'Nigeria':'NGA','Egypt':'EGY','Jordan':'JOR','Qatar':'QAT',
+                      'Uruguay':'URU','Colombia':'COL','Ecuador':'ECU','Peru':'PER',
+                      'Chile':'CHI','Paraguay':'PAR','Bolivia':'BOL','Venezuela':'VEN',
+                      'Panama':'PAN','Honduras':'HON','Haiti':'HAI',
+                      'Norway':'NOR','Uzbekistan':'UZB','Scotland':'SCO','Wales':'WAL',
+                      'Turkey':'TUR','Ukraine':'UKR','Hungary':'HUN','Romania':'ROU',
+                      'Slovakia':'SVK','Slovenia':'SVN','Austria':'AUT','Georgia':'GEO',
+                      'Albania':'ALB','Indonesia':'IDN','Mali':'MLI','Zambia':'ZAM',
+                      'Dominican Republic':'DOM'
+                    } %}
+                    {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
+                    {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
+
                     <div class="{{ pill_cls }}"
                          data-home-flag="{{ f.home_flag_code or 'un' }}"
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
 
+                      {# ─── Top row: pick buttons OR score display, 3-col grid ─── #}
+                      <div class="match-pill-row pick-row">
                       {% if is_completed or is_started %}
-                        <!-- Display-only -->
                         <div class="pill-side home">
                           <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
-                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                          <span class="team-abbr">{{ home_abbr }}</span>
                         </div>
                         <div class="pill-centre">
                           {% if is_completed %}
@@ -925,40 +985,60 @@
                           {% endif %}
                         </div>
                         <div class="pill-side away">
-                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                          <span class="team-abbr">{{ away_abbr }}</span>
                           <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                         </div>
 
                       {% elif is_ko_stage %}
-                        <!-- Knockout: display-only pill (bet form is below) -->
                         <div class="pill-side home">
                           <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
-                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                          <span class="team-abbr">{{ home_abbr }}</span>
                         </div>
                         <div class="pill-centre">
                           <span style="font-size:0.55rem;color:var(--text-dim);letter-spacing:0.08em">KO</span>
                         </div>
                         <div class="pill-side away">
-                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                          <span class="team-abbr">{{ away_abbr }}</span>
                           <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                         </div>
 
                       {% else %}
-                        <!-- Group stage: H/D/A pick buttons -->
-                        {# Payment is admin-tracked, not enforced — picks always open #}
                         {% set picks_locked = false %}
                         <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
-                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)"{% endif %}>
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
                           <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
-                          <span class="team-abbr">{{ (f.home_team or 'HME')[:3].upper() }}</span>
+                          <span class="team-abbr">{{ home_abbr }}</span>
                         </button>
                         <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
-                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)"{% endif %}>Draw</button>
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
                         <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
-                                {% if picks_locked %}disabled title="Payment required"{% else %}onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)"{% endif %}>
-                          <span class="team-abbr">{{ (f.away_team or 'AWY')[:3].upper() }}</span>
+                                onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
+                          <span class="team-abbr">{{ away_abbr }}</span>
                           <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                         </button>
+                      {% endif %}
+                      </div><!-- /.pick-row -->
+
+                      {# ─── Field-spy counts row INSIDE the pill, only when revealed ─── #}
+                      {% set field_revealed_for_pill = is_completed or is_started or (f.id in aggregate_spy_set) %}
+                      {% set t_pill = field_totals.get(f.id) if field_revealed_for_pill else None %}
+                      {% if t_pill %}
+                        <div class="match-pill-row count-row {% if is_ko_stage %}is-ko-row{% endif %}">
+                          <div class="pill-count pill-count-home">
+                            <b>{{ t_pill.H.count }}</b>
+                            <span class="pill-count-label">{{ 'player' if t_pill.H.count == 1 else 'players' }}</span>
+                          </div>
+                          <div class="pill-count pill-count-draw">
+                            {% if not is_ko_stage %}
+                              <b>{{ t_pill.D.count }}</b>
+                              <span class="pill-count-label">{{ 'player' if t_pill.D.count == 1 else 'players' }}</span>
+                            {% endif %}
+                          </div>
+                          <div class="pill-count pill-count-away">
+                            <b>{{ t_pill.A.count }}</b>
+                            <span class="pill-count-label">{{ 'player' if t_pill.A.count == 1 else 'players' }}</span>
+                          </div>
+                        </div>
                       {% endif %}
                     </div><!-- /.match-pill -->
 
@@ -971,7 +1051,6 @@
                       {% set has_any_visible_other.val = true %}
                     {% endif %}
                   {% endfor %}
-                  {% if t or has_any_visible_other.val %}
                   {# After a fixture has locked or finished, every pick is auto-revealed.
                      Showing all N names would clutter the grid, so we display top-5
                      player names by current balance (tie-cap of 2 per balance bucket)
@@ -1002,26 +1081,14 @@
                       <div class="reveal-rest">+ {{ rest }} {{ 'player' if rest == 1 else 'players' }}</div>
                     {% endif %}
                   {% endmacro %}
+                  {# Counts now render INSIDE the pill (count-row above). This grid
+                     holds only the per-player revealed names + "+N more" rest badge. #}
+                  {% if has_any_visible_other.val %}
                   <div class="reveal-grid {% if is_ko_stage %}is-ko-grid{% endif %}"
                        id="reveal-{{ f.id }}">
-                    <div class="reveal-col reveal-home">
-                      {% if t %}<div class="reveal-count"><b>{{ t.H.count }}</b>
-                        <span class="reveal-count-label">{{ 'player' if t.H.count == 1 else 'players' }}</span>
-                      </div>{% endif %}
-                      {{ side_render('H') }}
-                    </div>
-                    <div class="reveal-col reveal-draw">
-                      {% if t and not is_ko_stage %}<div class="reveal-count"><b>{{ t.D.count }}</b>
-                        <span class="reveal-count-label">{{ 'player' if t.D.count == 1 else 'players' }}</span>
-                      </div>{% endif %}
-                      {% if not is_ko_stage %}{{ side_render('D') }}{% endif %}
-                    </div>
-                    <div class="reveal-col reveal-away">
-                      {% if t %}<div class="reveal-count"><b>{{ t.A.count }}</b>
-                        <span class="reveal-count-label">{{ 'player' if t.A.count == 1 else 'players' }}</span>
-                      </div>{% endif %}
-                      {{ side_render('A') }}
-                    </div>
+                    <div class="reveal-col reveal-home">{{ side_render('H') }}</div>
+                    <div class="reveal-col reveal-draw">{% if not is_ko_stage %}{{ side_render('D') }}{% endif %}</div>
+                    <div class="reveal-col reveal-away">{{ side_render('A') }}</div>
                   </div>
                   {% endif %}
                     </div><!-- /.match-container -->
@@ -1085,7 +1152,10 @@
                         <span>👁</span> Spy
                       </button>
                       {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
-                      <span class="picks-in-count" title="Picks submitted on this match so far">
+                      <span class="picks-in-count" id="picks-in-{{ f.id }}"
+                            data-picks="{{ picks_so_far }}"
+                            data-i-have-picked="{{ '1' if my_pick else '0' }}"
+                            title="Picks submitted on this match so far">
                         <span class="picks-num">{{ picks_so_far }}</span>
                         <span class="picks-label">{{ 'pick' if picks_so_far == 1 else 'picks' }} in</span>
                       </span>
@@ -1707,6 +1777,12 @@
   let _spyPool = null, _spyFix = null, _spyFieldBought = false;
 
   async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
+    // Defensive: explicitly hide the modal first, in case a previous open
+    // left the .style.display in an inconsistent state (this was preventing
+    // the modal from re-opening on a second click).
+    const modalEl = document.getElementById('spy-modal-unified');
+    modalEl.style.display = 'none';
+
     _spyPool = poolId; _spyFix = fixtureId;
     _spyFieldBought = !!alreadyFieldRevealed;
 
@@ -1736,7 +1812,10 @@
     const list = document.getElementById('spy-someone-list');
     list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
 
-    document.getElementById('spy-modal-unified').style.display = 'flex';
+    // Force a reflow before the show so the browser doesn't optimise out the
+    // display change when it's logically the same value as a previous mount.
+    void modalEl.offsetWidth;
+    modalEl.style.display = 'flex';
 
     // Fire the spy-list fetch (no charge)
     try {
@@ -1952,6 +2031,23 @@
   // ── Group stage pick via AJAX ──────────────────────────────────────────
   // ── Shared "Saved" feedback used by both group + KO pick handlers ────
   // Shows the .saved-flash pill, briefly pulses the row, then resets.
+  // Bump the visible "X picks in" count after the user places a NEW pick
+  // (changing an existing pick doesn't grow the count). Tracked via the
+  // data-i-have-picked flag on the element so we never double-count.
+  function bumpPicksIn(fixtureId) {
+    const el = document.getElementById('picks-in-' + fixtureId);
+    if (!el) return;
+    if (el.dataset.iHavePicked === '1') return;   // already counted
+    const current = parseInt(el.dataset.picks || '0', 10);
+    const next = current + 1;
+    el.dataset.picks = String(next);
+    el.dataset.iHavePicked = '1';
+    const numEl   = el.querySelector('.picks-num');
+    const labelEl = el.querySelector('.picks-label');
+    if (numEl)   numEl.textContent = String(next);
+    if (labelEl) labelEl.textContent = (next === 1 ? 'pick' : 'picks') + ' in';
+  }
+
   function showSavedFeedback(fixtureId) {
     const row   = document.getElementById('fixture-' + fixtureId);
     const flash = document.getElementById('status-' + fixtureId);
@@ -1996,6 +2092,7 @@
         if (choice) choice.innerHTML = `<span>${escHtml(pickLabel(prediction, fixtureId))}</span>`;
 
         showSavedFeedback(fixtureId);
+        bumpPicksIn(fixtureId);
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
       }
@@ -2096,6 +2193,7 @@
         }
 
         showSavedFeedback(fixtureId);
+        bumpPicksIn(fixtureId);
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
         submitBtn.disabled = false;
