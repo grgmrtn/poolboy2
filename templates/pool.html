@@ -746,19 +746,22 @@
   .standings-pts { font-weight: 700; color: var(--accent); }
 
   /* ── Mobile tweaks ───────────────────────────────────────────────── */
+  /* Note: match-pill is now a grid container that spans its parent's full
+     width on all viewports. Any explicit `width: 200px` style override here
+     would shrink it while .match-container stays 100%, producing the
+     phantom "fourth column" the grid never asked for. Don't reintroduce. */
   @media (max-width: 500px) {
     .fixture-meta-col { width: 42px; }
-    .match-pill { width: 200px; }
-    .pill-side, .pick-home, .pick-away { width: 70px; padding: 0 0.45rem; }
-    .team-abbr { font-size: 0.82rem; }
+    .pill-side, .pick-home, .pick-away { padding: 0 0.45rem; }
+    .team-abbr { font-size: 0.95rem; }
     .stage-nav { padding: 0 1rem; }
     .standings-grid { grid-template-columns: 1fr; }
   }
   /* Narrowest iPhone (SE/12 mini) */
   @media (max-width: 380px) {
     .fixture-meta-col { width: 38px; }
-    .match-pill { width: 185px; }
-    .pill-side, .pick-home, .pick-away { width: 64px; padding: 0 0.35rem; }
+    .pill-side, .pick-home, .pick-away { padding: 0 0.35rem; }
+    .team-abbr { font-size: 0.88rem; }
   }
 </style>
 {% endblock %}
