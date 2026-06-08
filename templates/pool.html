@@ -541,29 +541,7 @@
   }
   .player-pill.compact .pill-name { max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
 
-  /* ── Field pill (Spy the Field) ──────────────────────────────────── */
-  .field-pill {
-    display: inline-flex; align-items: center; gap: 0.5rem;
-    height: 44px; padding: 0 0.8rem;
-    border-radius: 8px; border: 1px solid var(--border);
-    background: transparent;
-    font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
-    color: var(--text-muted); flex-shrink: 0;
-    cursor: pointer; transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .field-pill.buy { color: var(--accent); border-color: rgba(200,255,87,0.32);
-                    background: rgba(200,255,87,0.06); }
-  .field-pill.buy:hover { border-color: var(--accent); background: rgba(200,255,87,0.12); }
-  .field-pill.revealed { color: var(--text); background: var(--surface);
-                         border-color: var(--border-hi); cursor: default; }
-  .field-pill .field-icon { font-size: 0.95rem; line-height: 1; }
-  .field-pill .field-cost { color: var(--text-muted); font-weight: 500; font-size: 0.72rem;
-                            margin-left: -0.2rem; }
-  .field-pill .field-side { display: inline-flex; align-items: baseline; gap: 0.15rem; }
-  .field-pill .field-side b { color: var(--accent); font-weight: 700; }
-  .field-pill .field-side.dim { color: var(--text-dim); }
-  .field-pill .field-side.dim b { color: var(--text-muted); }
+  /* .field-pill removed: counts now render in count-row inside .match-pill */
 
   /* ── Unified Spy button — sized to match the "You" player pill ───── */
   .spy-trigger {
@@ -1350,20 +1328,8 @@
   </div>
 </div>
 
-<div id="spy-modal" class="modal-backdrop" onclick="if(event.target===this)spyModalCancel()">
-  <div class="modal-box">
-    <button class="modal-x-close" aria-label="Close" onclick="spyModalCancel()">×</button>
-    <div class="modal-title">👁 Reveal pick</div>
-    <div class="modal-body">
-      This will cost <strong id="spy-modal-cost">$0.00</strong> to reveal one player's pick.
-      Each spy costs a little more than the last.
-    </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="spyModalCancel()">Cancel</button>
-      <button class="btn btn-primary" id="spy-modal-confirm" onclick="spyModalConfirm()">Confirm</button>
-    </div>
-  </div>
-</div>
+<!-- Legacy single-target spy confirmation modal removed. The unified Spy modal
+     (#spy-modal-unified above) now handles both field + targeted spies. -->
 
 <!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
 <div id="walk-modal" class="modal-backdrop" onclick="if(event.target===this)closeWalkthrough()">
@@ -1776,8 +1742,7 @@
   }
 
   // ── Spy modal ──────────────────────────────────────────────────────────
-  let spyModalSeen = !!sessionStorage.getItem('spyConfirmed');
-  let _pendingSpy  = null;
+  // (legacy spy-modal state removed)
 
   // ── Odds format toggle: decimal (1.8) ↔ American (-125 / +180) ───────
   function decimalToAmerican(d) {
@@ -1846,7 +1811,22 @@
   let _spyPool = null, _spyFix = null, _spyFieldBought = false;
 
   async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
+    // Defensive cleanup before opening: tear down ANY other modal that's
+    // currently open, scrub any inline display style left behind from older
+    // code paths, and reset our own backdrop element to a known-good state.
+    // This kills the "first click breaks every other Spy button" bug — that
+    // was the result of a stale modal still occupying the page (even if
+    // visually empty) and intercepting clicks before they reached buttons.
+    document.querySelectorAll('.modal-backdrop').forEach(m => {
+      m.classList.remove('open');
+      // Wipe any inline display style from older cached HTML
+      if (m.style && m.style.display) m.style.display = '';
+    });
+
     const modalEl = document.getElementById('spy-modal-unified');
+    if (!modalEl) {
+      console.warn('Spy modal markup missing'); return;
+    }
 
     _spyPool = poolId; _spyFix = fixtureId;
     _spyFieldBought = !!alreadyFieldRevealed;
@@ -1903,8 +1883,14 @@
       list.innerHTML = '<div style="padding:1rem;color:var(--red)">Network error.</div>';
     }
 
-    // If the user already bought field-spy, also pre-fetch + render the spread
-    if (_spyFieldBought) confirmFieldSpy({silent: true});
+    // If the user already bought field-spy, pre-fetch + render the spread
+    // on a fresh task so an unhandled rejection in confirmFieldSpy can't
+    // break the caller (the click handler) and prevent future opens.
+    if (_spyFieldBought) {
+      setTimeout(() => {
+        confirmFieldSpy({silent: true}).catch(err => console.warn('silent field-spy failed:', err));
+      }, 0);
+    }
   }
 
   function closeSpyModal() {
@@ -1928,7 +1914,9 @@
       }
       myBalance = data.new_balance;
       updateBalanceDisplay(myBalance);
-      renderFieldSpread(_spyFix, data.totals, data.is_knockout);
+      // Note: counts in the match pill come from server-render now (count-row
+      // inside .match-pill). No client-side injection needed — page reload
+      // after a fresh purchase below will repaint them.
 
       // Render the spread inside the modal too
       const t = data.totals; const isKo = data.is_knockout;
@@ -1960,26 +1948,8 @@
     }
   }
 
-  function renderFieldSpread(fixtureId, totals, isKo) {
-    const actions = document.querySelector(`#fixture-${fixtureId} .fixture-actions`);
-    if (!actions) return;
-    let el = document.getElementById('field-' + fixtureId);
-    const w = (s) => (isKo && totals[s].wagered)
-      ? ` <span style="color:var(--text-dim);font-size:0.66rem">$${Math.round(totals[s].wagered)}</span>` : '';
-    let html = `<span class="field-side"><b>${totals.H.count}</b>H${w('H')}</span>`;
-    if (!isKo) html += `<span class="field-side"><b>${totals.D.count}</b>D</span>`;
-    html += `<span class="field-side"><b>${totals.A.count}</b>A${w('A')}</span>`;
-    if (totals.no_pick) html += `<span class="field-side dim">${totals.no_pick}—</span>`;
-    if (el) {
-      el.outerHTML = `<div class="field-pill revealed" id="field-${fixtureId}">${html}</div>`;
-    } else {
-      const div = document.createElement('div');
-      div.className = 'field-pill revealed';
-      div.id = 'field-' + fixtureId;
-      div.innerHTML = html;
-      actions.insertBefore(div, actions.firstChild.nextSibling);
-    }
-  }
+  // renderFieldSpread() removed — its job (paint a row-level field-pill)
+  // is now done server-side via the count-row inside .match-pill.
 
   async function spyOnPlayerFromModal(email, btn) {
     if (!_spyPool || !_spyFix) return;
@@ -2006,32 +1976,9 @@
     }
   }
 
-  function buySpy(poolId, fixtureId, targetEmail, targetId, btn) {
-    const cost = (spyCostBase + spyCostInc * spyCount).toFixed(2);
-    if (!spyModalSeen) {
-      _pendingSpy = { poolId, fixtureId, targetEmail, targetId, btn };
-      document.getElementById('spy-modal-cost').textContent = `$${cost}`;
-      document.getElementById('spy-modal').classList.add('open');
-      return;
-    }
-    doSpy(poolId, fixtureId, targetEmail, targetId, btn);
-  }
-
-  function spyModalConfirm() {
-    document.getElementById('spy-modal').classList.remove('open');
-    spyModalSeen = true;
-    sessionStorage.setItem('spyConfirmed', '1');
-    if (_pendingSpy) {
-      const { poolId, fixtureId, targetEmail, targetId, btn } = _pendingSpy;
-      _pendingSpy = null;
-      doSpy(poolId, fixtureId, targetEmail, targetId, btn);
-    }
-  }
-
-  function spyModalCancel() {
-    document.getElementById('spy-modal').classList.remove('open');
-    _pendingSpy = null;
-  }
+  // buySpy / spyModal* removed: replaced by the unified Spy modal flow
+  // (openSpyModal -> spyOnPlayerFromModal). No more per-target buttons in
+  // the row, no more first-time confirmation interstitial.
 
   // ── Spy purchase ───────────────────────────────────────────────────────
   function updateAllSpyCosts() {
