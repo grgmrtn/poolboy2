@@ -373,11 +373,20 @@
   }
   .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
 
-  /* ── Spy modal ───────────────────────────────────────────────────── */
+  /* ── Spy modal ─────────────────────────────────────────────────────
+     Hidden by default. JS toggles a single `.open` class to show. This
+     avoids the previous fragility where re-clicking the same Spy button
+     could fail to re-open because the inline style.display had been
+     mutated in a way the browser optimised out. !important wins over
+     any stale inline style that might still be in older client caches. */
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 1000;
-    background: rgba(0,0,0,0.6); display: flex;
+    background: rgba(0,0,0,0.6);
+    display: none !important;
     align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open {
+    display: flex !important;
   }
   .modal-box {
     background: var(--surface); border: 1px solid var(--border);
@@ -1308,7 +1317,7 @@
 </div><!-- /.page -->
 
 <!-- ── Unified Spy modal: Field + per-player options together ────────── -->
-<div id="spy-modal-unified" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeSpyModal()">
+<div id="spy-modal-unified" class="modal-backdrop" onclick="if(event.target===this)closeSpyModal()">
   <div class="modal-box walk-box">
     <button class="modal-x-close" aria-label="Close" onclick="closeSpyModal()">×</button>
     <div class="modal-title">👁 Spy on this match</div>
@@ -1341,7 +1350,7 @@
   </div>
 </div>
 
-<div id="spy-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)spyModalCancel()">
+<div id="spy-modal" class="modal-backdrop" onclick="if(event.target===this)spyModalCancel()">
   <div class="modal-box">
     <button class="modal-x-close" aria-label="Close" onclick="spyModalCancel()">×</button>
     <div class="modal-title">👁 Reveal pick</div>
@@ -1357,7 +1366,7 @@
 </div>
 
 <!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
-<div id="walk-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeWalkthrough()">
+<div id="walk-modal" class="modal-backdrop" onclick="if(event.target===this)closeWalkthrough()">
   <div class="modal-box walk-box">
     <button class="modal-x-close" aria-label="Close" onclick="closeWalkthrough()">×</button>
     <div class="modal-title">How {{ pool.name }} works</div>
@@ -1467,11 +1476,11 @@
 
   function openWalkthrough() {
     const m = document.getElementById('walk-modal');
-    if (m) m.style.display = 'flex';
+    if (m) m.classList.add('open');
   }
   function closeWalkthrough() {
     const m = document.getElementById('walk-modal');
-    if (m) m.style.display = 'none';
+    if (m) m.classList.remove('open');
     try { localStorage.setItem(WALK_KEY, '1'); } catch (e) { /* private mode etc. */ }
   }
   function maybeAutoShowWalkthrough() {
@@ -1837,11 +1846,7 @@
   let _spyPool = null, _spyFix = null, _spyFieldBought = false;
 
   async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
-    // Defensive: explicitly hide the modal first, in case a previous open
-    // left the .style.display in an inconsistent state (this was preventing
-    // the modal from re-opening on a second click).
     const modalEl = document.getElementById('spy-modal-unified');
-    modalEl.style.display = 'none';
 
     _spyPool = poolId; _spyFix = fixtureId;
     _spyFieldBought = !!alreadyFieldRevealed;
@@ -1872,10 +1877,8 @@
     const list = document.getElementById('spy-someone-list');
     list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
 
-    // Force a reflow before the show so the browser doesn't optimise out the
-    // display change when it's logically the same value as a previous mount.
-    void modalEl.offsetWidth;
-    modalEl.style.display = 'flex';
+    // Class-based show so we don't fight inline style state from a previous mount.
+    modalEl.classList.add('open');
 
     // Fire the spy-list fetch (no charge)
     try {
@@ -1905,7 +1908,7 @@
   }
 
   function closeSpyModal() {
-    document.getElementById('spy-modal-unified').style.display = 'none';
+    document.getElementById('spy-modal-unified').classList.remove('open');
     _spyPool = null; _spyFix = null;
   }
 
@@ -2008,14 +2011,14 @@
     if (!spyModalSeen) {
       _pendingSpy = { poolId, fixtureId, targetEmail, targetId, btn };
       document.getElementById('spy-modal-cost').textContent = `$${cost}`;
-      document.getElementById('spy-modal').style.display = 'flex';
+      document.getElementById('spy-modal').classList.add('open');
       return;
     }
     doSpy(poolId, fixtureId, targetEmail, targetId, btn);
   }
 
   function spyModalConfirm() {
-    document.getElementById('spy-modal').style.display = 'none';
+    document.getElementById('spy-modal').classList.remove('open');
     spyModalSeen = true;
     sessionStorage.setItem('spyConfirmed', '1');
     if (_pendingSpy) {
@@ -2026,7 +2029,7 @@
   }
 
   function spyModalCancel() {
-    document.getElementById('spy-modal').style.display = 'none';
+    document.getElementById('spy-modal').classList.remove('open');
     _pendingSpy = null;
   }
 
