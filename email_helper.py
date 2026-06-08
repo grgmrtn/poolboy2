@@ -64,7 +64,16 @@ def send_email(to_addrs, subject, body, body_html=None, dry_run=None):
         print("─" * 60)
         return list(to_addrs)
 
-    ctx = ssl.create_default_context()
+    # macOS Python.org builds don't trust the system keychain by default; the
+    # bundled "Install Certificates.command" can fix this, but every machine
+    # that runs the email scripts must remember to run it. Prefer certifi's
+    # bundle (already a transitive dep of requests, which the smoke tests
+    # use) so SSL verification just works out of the box.
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
     with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as s:
         s.ehlo()
         s.starttls(context=ctx)
