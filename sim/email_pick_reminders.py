@@ -70,13 +70,17 @@ def main():
     lo = now_utc + timedelta(hours=args.min_hours)
     hi = now_utc + timedelta(hours=args.max_hours)
 
-    # Fixtures eligible for reminders: kicking off in window, not yet completed
+    # Fixtures eligible for reminders: kicking off in window, not yet completed.
+    # fixtures.kick_off is declared TEXT (so the schema works on sqlite too);
+    # cast explicitly on Postgres so comparing against bound timestamps works.
     cur.execute("""
         SELECT id, stage, home_team, away_team, kick_off
         FROM fixtures
-        WHERE kick_off >= %s AND kick_off <= %s AND result IS NULL
-        ORDER BY kick_off
-    """, (lo.isoformat(), hi.isoformat()))
+        WHERE kick_off::timestamptz >= %s
+          AND kick_off::timestamptz <= %s
+          AND result IS NULL
+        ORDER BY kick_off::timestamptz
+    """, (lo, hi))
     fixtures = cur.fetchall()
     if not fixtures:
         print(f"no fixtures in [{args.min_hours}h, {args.max_hours}h] from now — nothing to do")

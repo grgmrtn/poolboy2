@@ -46,13 +46,17 @@ def main():
     since = (datetime.now(timezone.utc) - timedelta(hours=args.hours)).replace(microsecond=0)
 
     # ── Totals over the window ─────────────────────────────────────────────
-    cur.execute("SELECT COUNT(*) AS n FROM picks WHERE submitted_at >= %s", (since,))
+    # Schema declares submitted_at / created_at as TEXT (so the same DDL works
+    # on sqlite). On Postgres we must cast TEXT -> TIMESTAMPTZ explicitly to
+    # compare against a bound datetime parameter; otherwise the engine errors
+    # with "operator does not exist: text >= timestamp with time zone".
+    cur.execute("SELECT COUNT(*) AS n FROM picks WHERE submitted_at::timestamptz >= %s", (since,))
     n_picks = cur.fetchone()["n"]
-    cur.execute("SELECT COUNT(*) AS n FROM login_log WHERE created_at >= %s", (since,))
+    cur.execute("SELECT COUNT(*) AS n FROM login_log WHERE created_at::timestamptz >= %s", (since,))
     n_logins = cur.fetchone()["n"]
-    cur.execute("SELECT COUNT(DISTINCT user_id) AS n FROM login_log WHERE created_at >= %s", (since,))
+    cur.execute("SELECT COUNT(DISTINCT user_id) AS n FROM login_log WHERE created_at::timestamptz >= %s", (since,))
     n_unique_loggers = cur.fetchone()["n"]
-    cur.execute("SELECT COUNT(*) AS n FROM users WHERE created_at >= %s AND is_admin = 0", (since,))
+    cur.execute("SELECT COUNT(*) AS n FROM users WHERE created_at::timestamptz >= %s AND is_admin = 0", (since,))
     n_registrations = cur.fetchone()["n"]
     cur.execute("SELECT COUNT(*) AS n FROM users WHERE is_admin = 0")
     n_total_users = cur.fetchone()["n"]
@@ -70,8 +74,8 @@ def main():
         paid = cur.fetchone()["n"]
         cur.execute("SELECT COALESCE(SUM(amount),0) AS s FROM transactions WHERE pool_id=%s", (pid,))
         tx_sum = float(cur.fetchone()["s"])
-        # Window-scoped pick count for this pool
-        cur.execute("SELECT COUNT(*) AS n FROM picks WHERE pool_id=%s AND submitted_at >= %s",
+        # Window-scoped pick count for this pool (same TEXT->TIMESTAMPTZ cast)
+        cur.execute("SELECT COUNT(*) AS n FROM picks WHERE pool_id=%s AND submitted_at::timestamptz >= %s",
                     (pid, since))
         new_picks = cur.fetchone()["n"]
         n_members = m["n"]; total_bal = float(m["bal"] or 0)
@@ -87,15 +91,19 @@ def main():
         })
 
     # ── Upcoming fixtures (24h) ────────────────────────────────────────────
+    # fixtures.kick_off is also TEXT. Cast explicitly so the bound datetime
+    # params compare cleanly regardless of which engine is in use.
     now_utc = datetime.now(timezone.utc).replace(microsecond=0)
     horizon = now_utc + timedelta(hours=24)
     cur.execute("""
         SELECT f.id, f.stage, f.home_team, f.away_team, f.kick_off,
                (SELECT COUNT(*) FROM picks p WHERE p.fixture_id = f.id) AS pick_count
         FROM fixtures f
-        WHERE f.kick_off >= %s AND f.kick_off <= %s AND f.result IS NULL
-        ORDER BY f.kick_off
-    """, (now_utc.isoformat(), horizon.isoformat()))
+        WHERE f.kick_off::timestamptz >= %s
+          AND f.kick_off::timestamptz <= %s
+          AND f.result IS NULL
+        ORDER BY f.kick_off::timestamptz
+    """, (now_utc, horizon))
     upcoming = cur.fetchall()
 
     # ── Build the email body ───────────────────────────────────────────────
