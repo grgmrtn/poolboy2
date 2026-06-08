@@ -1307,12 +1307,22 @@
     <div class="spy-modal-section">
       <h4>📊 Spy the Field</h4>
       <div class="spy-field-row">
-        <div class="spy-field-explain" id="spy-field-explain">
-          See how many players picked each side — counts only, no names.
-          Costs <strong id="spy-field-cost">$2</strong> the first time;
-          after that, re-check the live spread any time until kick-off, free.
+        <div class="spy-field-explain">
+          {# Two parallel explanation lines; JS toggles which is visible
+             based on whether the user has already bought the field-spy on
+             this fixture. Critically, the spy-field-cost element lives
+             permanently in the DOM — it must never be innerHTML-replaced,
+             or subsequent openSpyModal calls null-ref on it. #}
+          <span id="spy-field-explain-buy">
+            See how many players picked each side — counts only, no names.
+            Costs <strong id="spy-field-cost">$2</strong> the first time;
+            after that, re-check the live spread any time until kick-off, free.
+          </span>
+          <span id="spy-field-explain-bought" style="display:none">
+            You've already revealed the field for this match — re-check it any time, free.
+          </span>
         </div>
-        <button class="btn btn-primary btn-sm" id="spy-field-buy"
+        <button type="button" class="btn btn-primary btn-sm" id="spy-field-buy"
                 onclick="confirmFieldSpy()">Reveal Field</button>
       </div>
       <div class="spy-field-spread" id="spy-field-spread" style="display:none"></div>
@@ -1861,22 +1871,27 @@
     _spyPool = poolId; _spyFix = fixtureId;
     _spyFieldBought = !!alreadyFieldRevealed;
 
-    // Reset field section UI
-    document.getElementById('spy-field-cost').textContent = '$' + fieldCost;
-    const explainEl = document.getElementById('spy-field-explain');
+    // Reset field section UI. NEVER overwrite innerHTML on a parent of
+    // spy-field-cost — destroying that element causes every subsequent
+    // openSpyModal call to throw a null-ref TypeError.
+    const costEl    = document.getElementById('spy-field-cost');
+    const buyText   = document.getElementById('spy-field-explain-buy');
+    const boughtTxt = document.getElementById('spy-field-explain-bought');
     const buyBtn    = document.getElementById('spy-field-buy');
     const spreadEl  = document.getElementById('spy-field-spread');
+    if (costEl) costEl.textContent = '$' + fieldCost;
     spreadEl.style.display = 'none';
     spreadEl.innerHTML = '';
     if (_spyFieldBought) {
-      // Field already bought — pre-fetch + render the spread; hide buy button.
-      explainEl.innerHTML = 'You\'ve already revealed the field for this match — re-check it any time, free.';
+      // Field already bought — show the "already revealed" line.
+      if (buyText)   buyText.style.display   = 'none';
+      if (boughtTxt) boughtTxt.style.display = '';
       buyBtn.textContent = 'Refresh';
       buyBtn.classList.remove('btn-primary');
       buyBtn.classList.add('btn-ghost');
     } else {
-      explainEl.innerHTML = 'See how many players picked each side — counts only, no names. ' +
-        'Costs <strong>$' + fieldCost + '</strong> the first time; after that, re-check the live spread any time until kick-off, free.';
+      if (buyText)   buyText.style.display   = '';
+      if (boughtTxt) boughtTxt.style.display = 'none';
       buyBtn.textContent = 'Reveal Field';
       buyBtn.classList.remove('btn-ghost');
       buyBtn.classList.add('btn-primary');
@@ -1964,8 +1979,12 @@
       buyBtn.classList.remove('btn-primary');
       buyBtn.classList.add('btn-ghost');
       buyBtn.disabled = false;
-      document.getElementById('spy-field-explain').innerHTML =
-        'You\'ve revealed the field. Re-check any time until kick-off, free.';
+      // Toggle the two pre-rendered explanation spans rather than overwriting
+      // a parent element's innerHTML — see openSpyModal for the why.
+      const _buyText   = document.getElementById('spy-field-explain-buy');
+      const _boughtTxt = document.getElementById('spy-field-explain-bought');
+      if (_buyText)   _buyText.style.display   = 'none';
+      if (_boughtTxt) _boughtTxt.style.display = '';
 
       // On a fresh purchase (not a silent re-check), reload the page so the
       // .reveal-grid under the match pill populates from server-rendered HTML
