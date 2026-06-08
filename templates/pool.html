@@ -1155,8 +1155,11 @@
 
                     {# ── Single Spy button + "X picks in" count ── #}
                     {% if not is_completed and not is_started %}
-                      <button class="spy-trigger"
-                              onclick="openSpyModal('{{ pool.id }}','{{ f.id }}', {{ scoring_config.aggregate_spy_cost }}, {{ 'true' if (f.id in aggregate_spy_set) else 'false' }})">
+                      <button type="button" class="spy-trigger"
+                              data-pool="{{ pool.id }}"
+                              data-fixture="{{ f.id }}"
+                              data-field-cost="{{ scoring_config.aggregate_spy_cost }}"
+                              data-field-bought="{{ 'true' if (f.id in aggregate_spy_set) else 'false' }}">
                         <span>👁</span> Spy
                       </button>
                       {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
@@ -1295,9 +1298,9 @@
 </div><!-- /.page -->
 
 <!-- ── Unified Spy modal: Field + per-player options together ────────── -->
-<div id="spy-modal-unified" class="modal-backdrop" onclick="if(event.target===this)closeSpyModal()">
+<div id="spy-modal-unified" class="modal-backdrop" data-modal-close="spy">
   <div class="modal-box walk-box">
-    <button class="modal-x-close" aria-label="Close" onclick="closeSpyModal()">×</button>
+    <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="spy">×</button>
     <div class="modal-title">👁 Spy on this match</div>
 
     <!-- Section 1: Spy the Field -->
@@ -1332,9 +1335,9 @@
      (#spy-modal-unified above) now handles both field + targeted spies. -->
 
 <!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
-<div id="walk-modal" class="modal-backdrop" onclick="if(event.target===this)closeWalkthrough()">
+<div id="walk-modal" class="modal-backdrop" data-modal-close="walk">
   <div class="modal-box walk-box">
-    <button class="modal-x-close" aria-label="Close" onclick="closeWalkthrough()">×</button>
+    <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="walk">×</button>
     <div class="modal-title">How {{ pool.name }} works</div>
     <div class="walk-body">
 
@@ -1810,22 +1813,49 @@
   // ── Unified Spy modal (field + player list together) ──────────────────
   let _spyPool = null, _spyFix = null, _spyFieldBought = false;
 
+  // ── Event delegation for the Spy flow ──────────────────────────────────
+  // Single document-level click handler. Works even if a button's inline
+  // onclick attribute fails to parse, the modal stacking gets weird, or
+  // some other code mutates the DOM. Easier to reason about than per-button
+  // onclick + harder to break with bad state.
+  document.addEventListener('click', function (e) {
+    // Close-any-modal trigger (X buttons, backdrop click-outside)
+    const closer = e.target.closest('[data-modal-close]');
+    if (closer) {
+      const which = closer.dataset.modalClose;
+      // Backdrop clicks should only close if the click landed on the backdrop
+      // itself (not on a child of modal-box).
+      if (closer.classList.contains('modal-backdrop') && e.target !== closer) return;
+      if (which === 'spy') closeSpyModal();
+      else if (which === 'walk') closeWalkthrough();
+      return;
+    }
+    // Spy trigger
+    const trigger = e.target.closest('.spy-trigger');
+    if (trigger) {
+      e.preventDefault();
+      const poolId  = trigger.dataset.pool;
+      const fixId   = trigger.dataset.fixture;
+      const cost    = parseFloat(trigger.dataset.fieldCost);
+      const bought  = trigger.dataset.fieldBought === 'true';
+      console.log('[spy] click', { poolId, fixId, cost, bought });
+      openSpyModal(poolId, fixId, cost, bought).catch(err => {
+        console.error('[spy] openSpyModal threw:', err);
+      });
+    }
+  });
+
   async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
-    // Defensive cleanup before opening: tear down ANY other modal that's
-    // currently open, scrub any inline display style left behind from older
-    // code paths, and reset our own backdrop element to a known-good state.
-    // This kills the "first click breaks every other Spy button" bug — that
-    // was the result of a stale modal still occupying the page (even if
-    // visually empty) and intercepting clicks before they reached buttons.
+    console.log('[spy] openSpyModal start', { fixtureId, alreadyFieldRevealed });
+    // Force-close every modal-backdrop on the page before opening this one.
     document.querySelectorAll('.modal-backdrop').forEach(m => {
       m.classList.remove('open');
-      // Wipe any inline display style from older cached HTML
       if (m.style && m.style.display) m.style.display = '';
     });
 
     const modalEl = document.getElementById('spy-modal-unified');
     if (!modalEl) {
-      console.warn('Spy modal markup missing'); return;
+      console.warn('[spy] spy-modal-unified element missing'); return;
     }
 
     _spyPool = poolId; _spyFix = fixtureId;
@@ -1894,6 +1924,7 @@
   }
 
   function closeSpyModal() {
+    console.log('[spy] closeSpyModal');
     document.getElementById('spy-modal-unified').classList.remove('open');
     _spyPool = null; _spyFix = null;
   }
