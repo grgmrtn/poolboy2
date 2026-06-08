@@ -33,7 +33,7 @@
      Padding is slimmer than the global .btn so it doesn't stick out from the
      56px-tall navbar element. */
   .stage-toggle {
-    flex-shrink: 0; margin-left: auto;
+    flex-shrink: 0;
     align-self: center;
     padding: 0.22rem 0.55rem;
     font-family: var(--mono); font-size: 0.65rem; font-weight: 600;
@@ -51,6 +51,9 @@
     color: var(--accent); border-color: var(--accent);
     background: rgba(200,255,87,0.10);
   }
+  /* Push the first stage-toggle (and any subsequent ones) to the right end */
+  .stage-toggle:nth-of-type(1) { margin-left: auto; }
+  .stage-toggle + .stage-toggle { margin-left: 0.4rem; }
 
   /* Quick-explainer banner that sits above the leaderboard split */
   .pool-intro {
@@ -190,6 +193,12 @@
                                           background: rgba(200,255,87,0.10); }
   .reveal-name-bet { color: var(--text-muted); font-weight: 500;
                      font-size: 0.7rem; margin-left: 0.25rem; }
+  .reveal-name-pay {
+    margin-left: 0.35rem; font-weight: 700;
+    font-size: 0.72rem; font-variant-numeric: tabular-nums;
+  }
+  .reveal-name-pay.pay-pos { color: var(--accent); }
+  .reveal-name-pay.pay-neg { color: var(--red); }
   /* "+ N players" badge shown after lock when there are more picks than top-N names */
   .reveal-rest {
     margin-top: 0.2rem;
@@ -358,10 +367,11 @@
     width: auto; padding: 0 0.3rem;
   }
   .pill-score {
-    font-size: 0.82rem; font-weight: 700; color: var(--text);
+    font-size: 1.4rem; font-weight: 700; color: var(--text);
     line-height: 1; white-space: nowrap; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
   }
-  .score-sep { color: var(--text-dim); margin: 0 1px; font-weight: 400; }
+  .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
 
   /* ── Spy modal ───────────────────────────────────────────────────── */
   .modal-backdrop {
@@ -786,6 +796,11 @@
       {{ SHORT.get(stage, stage.replace('Group ', '')) }}
     </a>
   {% endfor %}
+  <button class="stage-toggle" id="odds-format-toggle"
+          onclick="toggleOddsFormat(this)"
+          title="Switch between decimal and American odds">
+    Odds: dec
+  </button>
   <button class="stage-toggle" id="hide-completed-toggle"
           onclick="toggleHideCompleted(this)"
           title="Hide picks for fixtures already played">
@@ -849,13 +864,14 @@
         {% for stage, fixtures in grouped_fixtures.items() %}
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
-          <div class="stage-heading {% if stage == 'Completed' %}collapsed{% endif %}"
+          {% set is_completed_stage = stage == 'Completed' or stage in fully_complete_stages %}
+          <div class="stage-heading {% if is_completed_stage %}collapsed{% endif %}"
                onclick="toggleStageHeading(this)">
             <span class="caret">▼</span>
             <span>{{ stage }}</span>
-            {% if stage == 'Completed' %}
+            {% if is_completed_stage %}
               <span style="margin-left:auto;color:var(--text-dim);font-size:0.7rem;letter-spacing:0.04em;text-transform:none">
-                {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }}
+                {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }} · done
               </span>
             {% endif %}
           </div>
@@ -1060,6 +1076,7 @@
                      and roll the rest into a "+ N players" badge per side. Pre-lock,
                      we still show every individually-spied name. #}
                   {% set lock_mode = is_completed or is_started %}
+                  {% set fixture_payouts = payouts_by_fixture.get(f.id, {}) %}
                   {% macro side_render(side) %}
                     {# Walk picks for this side, separating top-N names from the rest #}
                     {% set side_count = namespace(total=0, shown=0) %}
@@ -1072,8 +1089,9 @@
                       {% if o.email != current_user.email and o.visible and o.predicted_result == side %}
                         {% set show_this = (not lock_mode) or (o.email in top_player_emails) %}
                         {% if show_this %}
+                          {% set pay = fixture_payouts.get(o.email) %}
                           <div class="reveal-name">
-                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}
+                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}{% if is_completed and pay is not none and pay != 0 %} <span class="reveal-name-pay {% if pay > 0 %}pay-pos{% else %}pay-neg{% endif %}">{% if pay > 0 %}+{% endif %}${{ "%.0f"|format(pay) }}</span>{% endif %}
                           </div>
                           {% set side_count.shown = side_count.shown + 1 %}
                         {% endif %}
@@ -1751,6 +1769,45 @@
   // ── Spy modal ──────────────────────────────────────────────────────────
   let spyModalSeen = !!sessionStorage.getItem('spyConfirmed');
   let _pendingSpy  = null;
+
+  // ── Odds format toggle: decimal (1.8) ↔ American (-125 / +180) ───────
+  function decimalToAmerican(d) {
+    if (!isFinite(d) || d <= 1) return d;
+    const am = d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1));
+    return (am > 0 ? '+' : '') + am;
+  }
+  function formatOdds(decimalValue, mode) {
+    const d = parseFloat(decimalValue);
+    if (!isFinite(d)) return '';
+    return mode === 'american' ? decimalToAmerican(d) + '×' : (+d).toString() + '×';
+  }
+  function applyOddsFormat(mode) {
+    document.querySelectorAll('.ko-odds').forEach(el => {
+      if (!el.dataset.decimal) el.dataset.decimal = el.textContent.replace('×','').trim();
+      el.textContent = formatOdds(el.dataset.decimal, mode);
+    });
+    const btn = document.getElementById('odds-format-toggle');
+    if (btn) {
+      btn.textContent = 'Odds: ' + (mode === 'american' ? 'am' : 'dec');
+      btn.classList.toggle('active', mode === 'american');
+    }
+  }
+  function toggleOddsFormat(btn) {
+    const current = (function() {
+      try { return localStorage.getItem('wc26_odds_format') || 'decimal'; }
+      catch (e) { return 'decimal'; }
+    })();
+    const next = current === 'american' ? 'decimal' : 'american';
+    try { localStorage.setItem('wc26_odds_format', next); } catch (e) {}
+    applyOddsFormat(next);
+  }
+  // Apply persisted choice on initial load
+  (function restoreOddsFormat() {
+    try {
+      const mode = localStorage.getItem('wc26_odds_format') || 'decimal';
+      document.addEventListener('DOMContentLoaded', () => applyOddsFormat(mode));
+    } catch (e) {}
+  })();
 
   // ── Hide / show completed fixtures ────────────────────────────────────
   function toggleHideCompleted(btn) {

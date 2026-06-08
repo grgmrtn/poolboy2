@@ -411,6 +411,28 @@ def pool_page(pool_id):
     pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
     top_player_emails = db.get_top_n_player_emails(pool_id, n=5, tie_cap=2)
 
+    # Stages where every fixture has a result render collapsed by default —
+    # keeps the page short once a matchday or round is finished. Excludes
+    # the synthesised "Completed" stage (already collapsed via its own logic).
+    fully_complete_stages = {
+        stage_name for stage_name, fixs in grouped_fixtures.items()
+        if stage_name != "Completed" and fixs and all(f.get("result") for f in fixs)
+    }
+
+    # payouts_by_fixture[fixture_id][user_email] = amount — used to show each
+    # revealed player's +$X / -$X on completed fixtures.
+    conn = db.get_db()
+    payout_rows = conn.execute("""
+        SELECT t.fixture_id, u.email, t.amount
+        FROM transactions t
+        JOIN users u ON u.id = t.user_id
+        WHERE t.pool_id=? AND t.type='payout'
+    """, (pool_id,)).fetchall()
+    conn.close()
+    payouts_by_fixture = {}
+    for r in payout_rows:
+        payouts_by_fixture.setdefault(r["fixture_id"], {})[r["email"]] = float(r["amount"] or 0)
+
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
@@ -428,6 +450,8 @@ def pool_page(pool_id):
         field_totals=field_totals,
         pick_counts_by_fixture=pick_counts_by_fixture,
         top_player_emails=top_player_emails,
+        payouts_by_fixture=payouts_by_fixture,
+        fully_complete_stages=fully_complete_stages,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
