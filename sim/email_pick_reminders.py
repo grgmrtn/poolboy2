@@ -36,6 +36,13 @@ from email_helper import send_email
 ET = ZoneInfo("America/New_York")
 META_PREFIX = "reminder_sent"  # key format: reminder_sent:<user_id>:<fixture_id>
 
+# Always send a "preview" copy of the reminder to these addresses on every run,
+# regardless of whether they have outstanding picks. Used by the admin to
+# eyeball what the field is receiving + spot-check the rendering. The preview
+# email lists the full in-window slate (not just the admin's own outstanding
+# picks) so it doubles as a "what's coming up" digest.
+ALWAYS_NOTIFY_EMAILS = {"gregmartin93@gmail.com"}
+
 
 def fmt_kickoff(ko):
     """Format an ISO/dt kick_off as 'Tue Jun 11 14:00 ET'."""
@@ -203,7 +210,10 @@ def main():
         return
     print(f"{len(fixtures)} fixture(s) in window")
 
-    # All pool members eligible to pick (paid, or pool has no entry fee)
+    # All pool members — payment status no longer gates reminders; we want
+    # unpaid members reminded too (they're playing along anyway and the
+    # nudge sometimes drives the payment). The pick-status filter below
+    # still ensures anyone who already submitted a pick is correctly skipped.
     cur.execute("""
         SELECT pm.user_id, pm.pool_id, pm.has_paid,
                u.email, u.display_name,
@@ -213,10 +223,12 @@ def main():
         JOIN pools p ON p.id = pm.pool_id
     """)
     members = cur.fetchall()
-    eligible_members = [m for m in members
-                        if not m["entry_fee"] or m["has_paid"]]
+    eligible_members = members  # everyone is eligible; pick-status filter is below
 
-    # Existing picks (so we skip users who already picked)
+    # Existing picks (so we skip users who already picked).
+    # Source of truth: the picks table. Anyone with a row here for
+    # (user_id, pool_id, fixture_id) gets the ✓ on the pool page and is
+    # excluded from reminders — including users who paid AND picked.
     cur.execute("SELECT user_id, pool_id, fixture_id FROM picks")
     existing = {(r["user_id"], r["pool_id"], r["fixture_id"]) for r in cur.fetchall()}
 
@@ -238,6 +250,23 @@ def main():
                 continue
             per_user_outstanding[m["email"]].append((m, f))
             new_keys_to_record.append(key)
+
+    # Always-notify admins: ensure each ALWAYS_NOTIFY_EMAILS address gets an
+    # email this run. If the admin already has outstanding picks, the normal
+    # flow handles them. If not, build a synthetic entry covering the full
+    # in-window slate so the admin sees what the field is receiving.
+    for admin_email in ALWAYS_NOTIFY_EMAILS:
+        if admin_email in per_user_outstanding:
+            continue  # already getting one through the normal path
+        admin_member = next((m for m in members if m["email"] == admin_email), None)
+        if not admin_member:
+            print(f"  (always-notify '{admin_email}' not found in pool_members — skipping)")
+            continue
+        # Synthesise a list pointing at every in-window fixture so the admin
+        # sees the full slate. We do NOT record meta keys for these synthetic
+        # entries — that would block the admin from getting their own genuine
+        # reminders if a fixture later actually applies to them.
+        per_user_outstanding[admin_email] = [(admin_member, f) for f in fixtures]
 
     if not per_user_outstanding:
         print("no outstanding picks to remind on — done")
@@ -286,8 +315,11 @@ def main():
             # Don't record reminder keys for this user — let them be retried
             continue
 
-        # Record reminder keys ONLY for this user's items, after successful send
-        if not effective_dry_run:
+        # Record reminder keys ONLY for this user's items, after successful send.
+        # ALWAYS_NOTIFY admins are excluded — their synthetic preview email
+        # covers every in-window fixture, and writing dedupe rows for the
+        # whole slate would block any genuine future reminders to them.
+        if not effective_dry_run and email not in ALWAYS_NOTIFY_EMAILS:
             for m, f in items:
                 key = f"{META_PREFIX}:{m['user_id']}:{f['id']}"
                 cur.execute("""
