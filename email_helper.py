@@ -61,6 +61,13 @@ def send_email(to_addrs, subject, body, body_html=None, dry_run=None):
         print(f"[DRY-RUN]  subject: {subject}")
         print("[DRY-RUN]  body:")
         print(body)
+        if body_html:
+            import tempfile, re
+            safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", to_addrs[0])[:32]
+            path = os.path.join(tempfile.gettempdir(), f"email_{safe}.html")
+            with open(path, "w") as f:
+                f.write(body_html)
+            print(f"[DRY-RUN]  html preview: open {path}")
         print("─" * 60)
         return list(to_addrs)
 

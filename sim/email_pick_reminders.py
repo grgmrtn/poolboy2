@@ -48,6 +48,109 @@ def fmt_kickoff(ko):
         return str(ko)
 
 
+# ── HTML email theme ────────────────────────────────────────────────────
+# Mirrors the pool page's monospace + lime accent, on a light background
+# (so email clients in both light and dark mode render legibly).
+EMAIL_BG       = "#f4f4f7"
+EMAIL_CARD     = "#ffffff"
+EMAIL_BORDER   = "#e3e3ec"
+EMAIL_TEXT     = "#2a2a35"
+EMAIL_MUTED    = "#6c6c80"
+EMAIL_DIM      = "#9090a4"
+EMAIL_ACCENT   = "#7ea200"   # darker lime — readable on white (WCAG AA)
+EMAIL_ACCENT_BG = "#d3ff67"  # bright pool-lime for button fill
+EMAIL_MONO     = "'JetBrains Mono', Menlo, Consolas, 'Courier New', monospace"
+
+
+def _esc(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def build_html_body(display, items, pool_url, max_hours):
+    n = len(items)
+    rows_html = []
+    for m, f in items:
+        rows_html.append(
+            f'<tr>'
+            f'<td style="padding:8px 12px;border-top:1px solid {EMAIL_BORDER};'
+            f'color:{EMAIL_MUTED};font-size:12px;white-space:nowrap;">'
+            f'{_esc(fmt_kickoff(f["kick_off"]))}</td>'
+            f'<td style="padding:8px 12px;border-top:1px solid {EMAIL_BORDER};'
+            f'color:{EMAIL_TEXT};font-weight:600;">'
+            f'{_esc(f["home_team"])} <span style="color:{EMAIL_DIM};font-weight:400">vs</span> {_esc(f["away_team"])}'
+            f'</td>'
+            f'<td style="padding:8px 12px;border-top:1px solid {EMAIL_BORDER};'
+            f'color:{EMAIL_DIM};font-size:11px;text-transform:uppercase;letter-spacing:0.06em;'
+            f'white-space:nowrap;text-align:right;">'
+            f'{_esc(f["stage"])}'
+            f'</td>'
+            f'</tr>'
+        )
+    rows_str = "\n".join(rows_html)
+    plural = "s" if n != 1 else ""
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>WC26 — picks outstanding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:{EMAIL_BG};font-family:{EMAIL_MONO};color:{EMAIL_TEXT};">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:{EMAIL_BG};padding:32px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background:{EMAIL_CARD};border:1px solid {EMAIL_BORDER};border-radius:12px;overflow:hidden;font-family:{EMAIL_MONO};">
+
+        <!-- Header -->
+        <tr><td style="padding:20px 24px 0;">
+          <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:{EMAIL_ACCENT};font-weight:700;">WC26 Pool</div>
+          <h1 style="margin:6px 0 0;font-size:18px;font-weight:700;color:{EMAIL_TEXT};">
+            {n} pick{plural} outstanding
+          </h1>
+        </td></tr>
+
+        <!-- Greeting -->
+        <tr><td style="padding:16px 24px 4px;font-size:14px;color:{EMAIL_TEXT};">
+          Hey {_esc(display)},
+        </td></tr>
+
+        <!-- Lede -->
+        <tr><td style="padding:0 24px 16px;font-size:13px;color:{EMAIL_MUTED};line-height:1.55;">
+          You have <strong style="color:{EMAIL_TEXT}">{n} outstanding pick{plural}</strong>
+          on fixture{plural} kicking off in the next {max_hours:g} hours.
+          Picks lock <strong style="color:{EMAIL_TEXT}">15 minutes before kickoff</strong>.
+        </td></tr>
+
+        <!-- Fixtures table -->
+        <tr><td style="padding:0 24px 8px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border:1px solid {EMAIL_BORDER};border-radius:8px;overflow:hidden;font-size:13px;">
+            {rows_str}
+          </table>
+        </td></tr>
+
+        <!-- CTA -->
+        <tr><td style="padding:20px 24px 24px;" align="center">
+          <a href="{_esc(pool_url)}" style="display:inline-block;padding:12px 28px;background:{EMAIL_ACCENT_BG};color:{EMAIL_TEXT};font-family:{EMAIL_MONO};font-weight:700;font-size:14px;text-decoration:none;border-radius:8px;letter-spacing:0.02em;">
+            Make your picks →
+          </a>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:8px 24px 20px;border-top:1px solid {EMAIL_BORDER};font-size:11px;color:{EMAIL_DIM};text-align:center;letter-spacing:0.04em;">
+          — WC26 Pool
+        </td></tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>"""
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Send reminder emails to paid pool members with outstanding picks. "
@@ -171,10 +274,11 @@ def main():
         lines.append("— WC26 Pool")
 
         body = "\n".join(lines)
+        body_html = build_html_body(display, items, pool_url, args.max_hours)
         subject = (f"WC26: {n} pick{'s' if n != 1 else ''} "
                    f"outstanding before kickoff")
         try:
-            send_email(email, subject, body, dry_run=effective_dry_run)
+            send_email(email, subject, body, body_html=body_html, dry_run=effective_dry_run)
             sent_any = True
             print(f"  ✓ {email}  ({n} fixture{'s' if n != 1 else ''})")
         except Exception as e:
