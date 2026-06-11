@@ -783,6 +783,9 @@
       {{ SHORT.get(stage, stage.replace('Group ', '')) }}
     </a>
   {% endfor %}
+  {% if group_standings %}
+    <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
+  {% endif %}
   <button class="stage-toggle" id="odds-format-toggle"
           onclick="toggleOddsFormat(this)"
           title="Switch between decimal and American odds">
@@ -1238,7 +1241,7 @@
 
       <!-- ── Group standings ─────────────────────────────────────── -->
       {% if group_standings %}
-      <div class="standings-wrap">
+      <div class="standings-wrap" id="group-standings">
         <div class="standings-toggle" id="standings-toggle" onclick="toggleStandings()">
           <span class="arrow" id="standings-arrow">▶</span>
           Group Standings
@@ -2290,6 +2293,20 @@
     body.style.display  = visible ? 'none' : 'block';
     toggle.classList.toggle('open', !visible);
   }
+  function expandStandings() {
+    const body   = document.getElementById('standings-body');
+    const toggle = document.getElementById('standings-toggle');
+    if (body && body.style.display === 'none') {
+      body.style.display = 'block';
+      if (toggle) toggle.classList.add('open');
+    }
+  }
+  // When the user clicks the "TBL" stage tab, scroll-to the standings and
+  // expand them. Otherwise scrolling lands on a collapsed section.
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('.stage-tab[data-stage="standings"]');
+    if (tab) expandStandings();
+  });
 
   // ── Utility ────────────────────────────────────────────────────────────
   function escHtml(s) {
