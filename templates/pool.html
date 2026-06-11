@@ -347,9 +347,10 @@
   }
   .reveal-grid.is-ko-grid .reveal-draw { visibility: hidden; }
   .reveal-col {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: flex-start;
-    gap: 0.18rem;
+    display: flex; flex-wrap: wrap;
+    align-items: flex-start; justify-content: center;
+    align-content: flex-start;
+    gap: 0.22rem 0.3rem;
     min-width: 0; text-align: center;
   }
   .reveal-count {
@@ -361,13 +362,15 @@
                     font-variant-numeric: tabular-nums; }
   .reveal-count-label { color: var(--text-muted); }
   .reveal-name {
-    font-size: 0.78rem; font-weight: 700;
+    display: inline-flex; align-items: baseline; gap: 0.15rem;
+    font-size: 0.74rem; font-weight: 700;
     color: var(--text);
     max-width: 100%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     padding: 0.05rem 0.4rem;
     border-radius: 4px;
     background: rgba(255,255,255,0.03);
+    flex: 0 0 auto;
   }
   .reveal-col.reveal-home .reveal-name { color: var(--home-color, var(--blue));
                                           background: var(--home-bg, rgba(87,179,255,0.10)); }
@@ -385,6 +388,7 @@
   .reveal-name-pay.pay-neg { color: var(--red); }
   /* "+ N players" badge shown after lock when there are more picks than top-N names */
   .reveal-rest {
+    flex-basis: 100%;
     margin-top: 0.2rem;
     font-size: 0.7rem; font-weight: 500;
     color: var(--text-muted); letter-spacing: 0.03em;
