@@ -448,6 +448,29 @@ def pool_page(pool_id):
     # For each LOCKED-or-COMPLETED fixture (everyone gets the spread free),
     # OR each fixture the user has bought field-spy on, precompute the totals
     # so the template can render the spread inline without a JS fetch.
+    # Batched: one query returns per-fixture totals for the whole pool, then
+    # we filter to the revealed set. Fixtures with zero picks fall back to a
+    # zero-default so the count row still renders 0/0/0.
+    all_totals = db.get_fixture_pick_totals_for_pool(pool_id)
+    # Derive total_members from the batch result if it has rows; otherwise the
+    # pool has no picks yet, so look it up directly.
+    if all_totals:
+        total_members = next(iter(all_totals.values()))["total_members"]
+    else:
+        conn = db.get_db()
+        row = conn.execute("SELECT COUNT(*) AS n FROM pool_members WHERE pool_id=?", (pool_id,)).fetchone()
+        conn.close()
+        total_members = row["n"] or 0
+
+    def _empty_totals():
+        return {
+            "H": {"count": 0, "wagered": 0.0},
+            "D": {"count": 0, "wagered": None},
+            "A": {"count": 0, "wagered": 0.0},
+            "no_pick": total_members,
+            "total_members": total_members,
+        }
+
     field_totals = {}
     for fix in fixture_lookup.values():
         fid = fix["id"]
@@ -457,9 +480,7 @@ def pool_page(pool_id):
             or _is_locked(fix.get("kick_off"))
         )
         if is_revealed:
-            field_totals[fid] = db.get_fixture_pick_totals(
-                pool_id, fid, knockout=db.is_knockout_stage(fix.get("stage") or "")
-            )
+            field_totals[fid] = all_totals.get(fid) or _empty_totals()
 
     my_rank, pool_size = db.get_member_rank(user["id"], pool_id)
     pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
@@ -467,13 +488,15 @@ def pool_page(pool_id):
 
     # Per-fixture field-spy cost: KO fixtures scale with the pot
     # (max(base, min(pct*pot, cap))); group stage stays flat at base.
+    # Batched: one query returns the pot for every fixture this pool has bets on.
+    pots = db.get_fixture_pots_for_pool(pool_id)
     field_spy_cost_by_fixture = {}
     _base = float(scoring_config.get("aggregate_spy_cost", 2.0))
     _pct  = float(scoring_config.get("ko_spy_pct", 0.10))
     _cap  = float(scoring_config.get("ko_spy_cap", 20.0))
     for fix in fixture_lookup.values():
         if db.is_knockout_stage(fix.get("stage") or ""):
-            pot = db.get_fixture_pot(pool_id, fix["id"])
+            pot = pots.get(fix["id"], 0.0)
             field_spy_cost_by_fixture[fix["id"]] = round(max(_base, min(_pct * pot, _cap)), 2)
         else:
             field_spy_cost_by_fixture[fix["id"]] = round(_base, 2)

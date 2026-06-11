@@ -910,6 +910,70 @@ def get_fixture_pot(pool_id, fixture_id):
     return float(row["pot"] or 0)
 
 
+def get_fixture_pots_for_pool(pool_id):
+    """
+    Batched variant of get_fixture_pot: returns {fixture_id: pot_float} for every
+    fixture this pool has any picks on. Used by pool_page to avoid an N+1 loop
+    when computing dynamic field-spy pricing for ~100 fixtures.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT fixture_id, COALESCE(SUM(bet_amount), 0) AS pot "
+        "FROM picks WHERE pool_id=? GROUP BY fixture_id",
+        (pool_id,)
+    ).fetchall()
+    conn.close()
+    return {r["fixture_id"]: float(r["pot"] or 0) for r in rows}
+
+
+def get_fixture_pick_totals_for_pool(pool_id):
+    """
+    Batched variant of get_fixture_pick_totals: returns {fixture_id: totals_dict}
+    for every fixture with at least one pick in this pool. Each totals_dict has
+    the same shape as get_fixture_pick_totals (H/D/A counts + wagered, no_pick,
+    total_members). Caller decides per-fixture whether knockout wagered sums
+    matter.
+
+    Eliminates the pool_page N+1 that opened one Postgres connection per
+    completed/locked fixture.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT fixture_id, predicted_result, "
+        "       COUNT(*) AS n, COALESCE(SUM(bet_amount), 0) AS sum_bet "
+        "FROM picks WHERE pool_id=? "
+        "GROUP BY fixture_id, predicted_result",
+        (pool_id,)
+    ).fetchall()
+    members_row = conn.execute(
+        "SELECT COUNT(*) AS n FROM pool_members WHERE pool_id=?", (pool_id,)
+    ).fetchone()
+    conn.close()
+    total_members = members_row["n"] or 0
+
+    by_fid = {}
+    for r in rows:
+        fid  = r["fixture_id"]
+        side = r["predicted_result"]
+        if fid not in by_fid:
+            by_fid[fid] = {
+                "H": {"count": 0, "wagered": 0.0},
+                "D": {"count": 0, "wagered": None},
+                "A": {"count": 0, "wagered": 0.0},
+                "picked": 0,
+                "total_members": total_members,
+            }
+        if side in by_fid[fid]:
+            by_fid[fid][side]["count"] = r["n"]
+            if side in ("H", "A"):
+                by_fid[fid][side]["wagered"] = float(r["sum_bet"] or 0)
+            by_fid[fid]["picked"] += r["n"]
+    # Materialise no_pick after aggregation
+    for fid, t in by_fid.items():
+        t["no_pick"] = max(0, total_members - t.pop("picked"))
+    return by_fid
+
+
 def get_pick_counts_for_pool(pool_id):
     """
     Return {fixture_id: int} — how many picks have been submitted on each fixture
