@@ -361,19 +361,21 @@ def pool_page(pool_id):
         _attach_display_times(stage_fixtures)
 
     # Move every completed fixture into a synthesised "Completed" stage so
-    # users can hide/expand the finished games as one group. Preserves the
-    # within-stage ordering by sorting completed fixtures by kick_off DESC
-    # (most recent finish first) inside the new bucket.
+    # users can hide/expand the finished games as one group. "Completed" goes
+    # first (auto-collapsed) so the upcoming stages stay top-of-page. Within
+    # the bucket, sort by kick_off DESC (most recent finish first).
     grouped_fixtures = {}
     completed_fixtures = []
+    upcoming_by_stage = {}
     for stage_name, fixtures in grouped_fixtures_raw.items():
         upcoming = [f for f in fixtures if not f.get("result")]
         completed_fixtures.extend(f for f in fixtures if f.get("result"))
         if upcoming:
-            grouped_fixtures[stage_name] = upcoming
+            upcoming_by_stage[stage_name] = upcoming
     if completed_fixtures:
         completed_fixtures.sort(key=lambda f: f.get("kick_off") or "", reverse=True)
         grouped_fixtures["Completed"] = completed_fixtures
+    grouped_fixtures.update(upcoming_by_stage)
 
     existing_picks   = db.get_picks_full_for_user_in_pool(user["id"], pool_id)
     membership       = db.get_pool_membership(user["id"], pool_id)
