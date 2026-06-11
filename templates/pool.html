@@ -604,6 +604,26 @@
 
   /* Edit display dialog helpers */
   .edit-display-form .form-group { margin-bottom: 1rem; }
+  .pw-details {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .pw-details > summary {
+    cursor: pointer; list-style: none;
+    font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 600;
+    padding: 0.25rem 0;
+  }
+  .pw-details > summary::-webkit-details-marker { display: none; }
+  .pw-details > summary::before {
+    content: '▶'; display: inline-block; margin-right: 0.5rem;
+    font-size: 0.65rem; color: var(--text-dim);
+    transition: transform 0.15s;
+  }
+  .pw-details[open] > summary::before { transform: rotate(90deg); }
+  .pw-details > summary:hover { color: var(--text); }
+  .pw-form { margin-top: 0.85rem; }
   .edit-display-form .form-hint {
     color: var(--text-dim); font-size: 0.72rem; margin-top: 0.3rem;
     line-height: 1.4;
@@ -1683,6 +1703,31 @@
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
+
+    <!-- ── Change password (collapsed by default) ───────────────────────── -->
+    <details class="pw-details">
+      <summary>Change password</summary>
+      <form method="POST" action="{{ url_for('change_password') }}" class="edit-display-form pw-form">
+        <div class="form-group">
+          <label class="form-label" for="pw-current">Current password</label>
+          <input class="form-input" type="password" id="pw-current"
+                 name="current_password" required autocomplete="current-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pw-new">New password <span class="form-label-aside">(min 8 chars)</span></label>
+          <input class="form-input" type="password" id="pw-new"
+                 name="new_password" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pw-confirm">Confirm new password</label>
+          <input class="form-input" type="password" id="pw-confirm"
+                 name="confirm_password" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-primary">Update password</button>
+        </div>
+      </form>
+    </details>
   </div>
 </div>
 

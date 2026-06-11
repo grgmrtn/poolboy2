@@ -388,6 +388,17 @@ def update_user_profile(user_id, display_name, team_name):
     conn.close()
 
 
+def update_user_password(user_id, new_password_hash):
+    """Rotate a user's password hash. Caller is responsible for hashing."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        (new_password_hash, user_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 def create_user(user_id, display_name, email, password_hash, is_admin=0):
     """Insert a new user into the database."""
     conn = get_db()

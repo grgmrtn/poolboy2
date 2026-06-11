@@ -304,6 +304,33 @@ def edit_profile():
     return redirect(request.referrer or url_for("home"))
 
 
+@app.route("/me/password", methods=["POST"])
+@login_required
+def change_password():
+    """
+    Self-service password change. Requires the current password to prevent
+    a hijacked session from silently rotating credentials.
+    """
+    user = current_user()
+    current_pw = request.form.get("current_password", "") or ""
+    new_pw     = request.form.get("new_password", "")     or ""
+    confirm_pw = request.form.get("confirm_password", "") or ""
+
+    if not check_password_hash(user["password_hash"], current_pw):
+        flash("Current password is incorrect.", "error")
+        return redirect(request.referrer or url_for("home"))
+    if len(new_pw) < 8:
+        flash("New password must be at least 8 characters.", "error")
+        return redirect(request.referrer or url_for("home"))
+    if new_pw != confirm_pw:
+        flash("New passwords do not match.", "error")
+        return redirect(request.referrer or url_for("home"))
+
+    db.update_user_password(user["id"], generate_password_hash(new_pw))
+    flash("Password updated.", "success")
+    return redirect(request.referrer or url_for("home"))
+
+
 @app.route("/admin/user/<user_id>/profile", methods=["POST"])
 @admin_required
 def admin_edit_profile(user_id):
