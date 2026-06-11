@@ -79,6 +79,62 @@
     text-decoration: none;
   }
   .pool-intro-link:hover { text-decoration: underline; }
+  .pool-intro { position: relative; }
+  .pool-intro-x {
+    position: absolute; top: 0.35rem; right: 0.5rem;
+    background: transparent; border: 0; color: var(--text-dim);
+    font-size: 1.1rem; line-height: 1; cursor: pointer;
+    padding: 0.25rem 0.45rem; border-radius: 4px;
+  }
+  .pool-intro-x:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+  /* Compact replacement pill — shown after the user dismisses the banner */
+  .how-it-works-pill {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    margin-bottom: 1.25rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
+    color: var(--text-muted); font-size: 0.74rem; font-weight: 500;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .how-it-works-pill:hover { color: var(--text); border-color: var(--border-hi); }
+  .how-it-works-pill .pill-q {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); color: #0a0a0f;
+    font-size: 0.65rem; font-weight: 700;
+  }
+
+  /* iOS Safari — Add to Home Screen guide.
+     Shown only on iOS Safari (not standalone, not Chrome-iOS/Firefox-iOS).
+     JS toggles the .is-visible class after the UA check. */
+  .a2hs-banner {
+    display: none;
+    background: rgba(120,180,255,0.06);
+    border: 1px solid rgba(120,180,255,0.22);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem 2.4rem 0.85rem 1.1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.82rem; line-height: 1.5;
+    color: var(--text);
+    position: relative;
+  }
+  .a2hs-banner.is-visible { display: block; }
+  .a2hs-banner strong { color: #9cc4ff; font-weight: 700; }
+  .a2hs-banner .a2hs-x {
+    position: absolute; top: 0.35rem; right: 0.5rem;
+    background: transparent; border: 0; color: var(--text-dim);
+    font-size: 1.1rem; line-height: 1; cursor: pointer;
+    padding: 0.25rem 0.45rem; border-radius: 4px;
+  }
+  .a2hs-banner .a2hs-x:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .a2hs-share {
+    display: inline-block; vertical-align: -3px;
+    width: 14px; height: 14px;
+  }
 
   /* ── Page layout ─────────────────────────────────────────────────── */
   .pool-layout {
@@ -979,8 +1035,22 @@
     </p>
   </div>
 
-  <!-- ── Quick-explainer banner (with embedded "Get More Info" link) ─── -->
-  <div class="pool-intro">
+  <!-- ── iOS Safari "Add to Home Screen" guide (dismissible, persistent) ── -->
+  <div id="a2hs-banner" class="a2hs-banner">
+    <button type="button" class="a2hs-x" onclick="dismissA2HS()" aria-label="Dismiss">×</button>
+    <strong>Add this pool to your home screen</strong> for an app-like
+    experience. Tap the Share button
+    <svg class="a2hs-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+      <polyline points="16 6 12 2 8 6"/>
+      <line x1="12" y1="2" x2="12" y2="15"/>
+    </svg>
+    in Safari, then <strong>Add to Home Screen</strong>.
+  </div>
+
+  <!-- ── Quick-explainer banner (with embedded "Get more info" + dismiss X) ─── -->
+  <div id="pool-intro-banner" class="pool-intro">
+    <button type="button" class="pool-intro-x" onclick="dismissPoolIntro()" aria-label="Dismiss">×</button>
     Build your cash pile during the group stage:
     <strong>${{ "%g"|format(scoring_config.group_win_payout) }}</strong> for a win,
     <strong>${{ "%g"|format(scoring_config.group_draw_payout) }}</strong> for a draw.
@@ -991,6 +1061,12 @@
       Get more info →
     </a>
   </div>
+
+  <!-- Compact replacement — shown when the banner above has been dismissed -->
+  <button type="button" id="how-it-works-pill" class="how-it-works-pill"
+          style="display:none" onclick="openWalkthrough()">
+    <span class="pill-q">?</span> How it works
+  </button>
 
   {% if pool.entry_fee and not has_paid %}
   <div style="
@@ -1721,6 +1797,49 @@
   // (or joining a different pool) can trigger a re-show by bumping the
   // schema version below.
   const WALK_KEY = `wc26_walk_v2_${POOL_ID}`;
+  const INTRO_KEY = `wc26_pool_intro_dismissed_${POOL_ID}`;
+  const A2HS_KEY  = `wc26_a2hs_dismissed`;
+
+  // ── Pool-intro banner: dismiss → swap for compact "How it works" pill ──
+  function dismissPoolIntro() {
+    const banner = document.getElementById('pool-intro-banner');
+    const pill   = document.getElementById('how-it-works-pill');
+    if (banner) banner.style.display = 'none';
+    if (pill)   pill.style.display   = 'inline-flex';
+    try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+  }
+  function restorePoolIntroFromStorage() {
+    try {
+      if (localStorage.getItem(INTRO_KEY) === '1') {
+        const banner = document.getElementById('pool-intro-banner');
+        const pill   = document.getElementById('how-it-works-pill');
+        if (banner) banner.style.display = 'none';
+        if (pill)   pill.style.display   = 'inline-flex';
+      }
+    } catch (e) {}
+  }
+
+  // ── iOS Safari "Add to Home Screen" guide ─────────────────────────────
+  // Show only on iOS Safari (not Chrome-iOS, not Firefox-iOS, not standalone).
+  function maybeShowA2HS() {
+    try {
+      if (localStorage.getItem(A2HS_KEY) === '1') return;
+    } catch (e) {}
+    const ua = navigator.userAgent || '';
+    const isIOS       = /iPhone|iPad|iPod/.test(ua);
+    const isSafari    = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    const isStandalone = window.navigator.standalone === true
+                      || window.matchMedia('(display-mode: standalone)').matches;
+    if (isIOS && isSafari && !isStandalone) {
+      const b = document.getElementById('a2hs-banner');
+      if (b) b.classList.add('is-visible');
+    }
+  }
+  function dismissA2HS() {
+    const b = document.getElementById('a2hs-banner');
+    if (b) b.classList.remove('is-visible');
+    try { localStorage.setItem(A2HS_KEY, '1'); } catch (e) {}
+  }
 
   function openEditDisplay() {
     const m = document.getElementById('edit-display-modal');
@@ -1857,6 +1976,8 @@
 
     updateAllSpyCosts();
     maybeAutoShowWalkthrough();
+    restorePoolIntroFromStorage();
+    maybeShowA2HS();
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────
