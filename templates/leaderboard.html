@@ -40,6 +40,20 @@
     flex: 1; color: var(--text); font-weight: 600;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  /* Stacked team-name (top, white) + real-name (below, grey) */
+  .lb-table-row .name-stack {
+    flex: 1; display: flex; flex-direction: column;
+    gap: 0.1rem; min-width: 0;
+  }
+  .lb-table-row .team-name {
+    color: var(--text); font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lb-table-row .real-name {
+    color: var(--text-muted); font-size: 0.74rem; font-weight: 500;
+    opacity: 0.85;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .lb-table-row .balance {
     color: var(--accent); font-weight: 700;
     font-size: 1.05rem; min-width: 4.5rem; text-align: right;
@@ -73,7 +87,14 @@
     {% for row in leaderboard %}
       <div class="lb-table-row rank-{{ loop.index }}{% if row.email == current_user.email %} is-me{% endif %}">
         <span class="rank">{{ loop.index }}</span>
-        <span class="name">{{ row.display_name }}</span>
+        <div class="name-stack">
+          {% if row.team_name %}
+            <span class="team-name">{{ row.team_name }}</span>
+            <span class="real-name">{{ row.display_name }}</span>
+          {% else %}
+            <span class="team-name">{{ row.display_name }}</span>
+          {% endif %}
+        </div>
         <span class="balance">${{ "%.0f"|format(row.balance) }}</span>
       </div>
     {% endfor %}

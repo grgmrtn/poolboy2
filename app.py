@@ -255,6 +255,51 @@ def register():
     return render_template("register.html")
 
 
+@app.route("/me/profile", methods=["POST"])
+@login_required
+def edit_profile():
+    """
+    Self-service edit of display_name + team_name.
+    display_name required, max 30 chars; team_name optional, max 40.
+    """
+    user = current_user()
+    display_name = (request.form.get("display_name", "") or "").strip()
+    team_name    = (request.form.get("team_name", "") or "").strip()
+    if not display_name:
+        flash("First name is required.", "error")
+        return redirect(request.referrer or url_for("home"))
+    if len(display_name) > 30:
+        flash("First name is too long (max 30 chars).", "error")
+        return redirect(request.referrer or url_for("home"))
+    if len(team_name) > 40:
+        flash("Team name is too long (max 40 chars).", "error")
+        return redirect(request.referrer or url_for("home"))
+    db.update_user_profile(user["id"], display_name, team_name or None)
+    flash("Display updated.", "success")
+    return redirect(request.referrer or url_for("home"))
+
+
+@app.route("/admin/user/<user_id>/profile", methods=["POST"])
+@admin_required
+def admin_edit_profile(user_id):
+    """Admin override of any user's display_name + team_name."""
+    display_name = (request.form.get("display_name", "") or "").strip()
+    team_name    = (request.form.get("team_name", "") or "").strip()
+    if not display_name:
+        flash("First name is required.", "error")
+        return redirect(url_for("admin_page"))
+    if len(display_name) > 30 or len(team_name) > 40:
+        flash("Name is too long.", "error")
+        return redirect(url_for("admin_page"))
+    target = db.get_user_by_id(user_id)
+    if not target:
+        flash("User not found.", "error")
+        return redirect(url_for("admin_page"))
+    db.update_user_profile(user_id, display_name, team_name or None)
+    flash(f"Updated profile for {target['email']}.", "success")
+    return redirect(url_for("admin_page"))
+
+
 @app.route("/home")
 @login_required
 def home():

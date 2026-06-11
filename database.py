@@ -264,6 +264,7 @@ def init_db():
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS aggregate_spy_cost REAL DEFAULT 2",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_pct REAL DEFAULT 0.10",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_cap REAL DEFAULT 20",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS team_name TEXT",
         ]:
             c.execute(sql)
     else:
@@ -287,6 +288,7 @@ def init_db():
             ("scoring_config", "aggregate_spy_cost REAL DEFAULT 2"),
             ("scoring_config", "ko_spy_pct REAL DEFAULT 0.10"),
             ("scoring_config", "ko_spy_cap REAL DEFAULT 20"),
+            ("users",          "team_name TEXT"),
         ]
         for table, col_def in migrations:
             try:
@@ -366,6 +368,24 @@ def record_login(user_id):
         conn.close()
     except Exception:
         pass
+
+
+def update_user_profile(user_id, display_name, team_name):
+    """
+    Update a user's real first name + optional team name. team_name=None or
+    an empty/whitespace-only string is stored as NULL so the leaderboard
+    falls back to display_name.
+    """
+    display_name = (display_name or "").strip()
+    if team_name is not None:
+        team_name = team_name.strip() or None
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET display_name=?, team_name=? WHERE id=?",
+        (display_name, team_name, user_id)
+    )
+    conn.commit()
+    conn.close()
 
 
 def create_user(user_id, display_name, email, password_hash, is_admin=0):
@@ -514,13 +534,11 @@ def create_pool(pool_id, name, description, is_public=1,
 def get_pool_leaderboard(pool_id):
     """
     Return all members of a pool ranked by current balance, highest first.
-    Each row includes display_name, email, and balance.
-    Falls back to 100.0 if balance column is NULL (pre-migration rows).
-    Tiebreaker is joined_at ASC so the rendered order matches get_member_rank.
+    Each row: display_name, team_name, email, balance, joined_at.
     """
     conn = get_db()
     rows = conn.execute("""
-        SELECT u.display_name, u.email,
+        SELECT u.display_name, u.team_name, u.email,
                COALESCE(pm.balance, 100.0) AS balance,
                pm.joined_at
         FROM pool_members pm

@@ -414,6 +414,17 @@
   }
   .modal-x-close:hover { color: var(--text); background: var(--surface2); }
 
+  /* Edit display dialog helpers */
+  .edit-display-form .form-group { margin-bottom: 1rem; }
+  .edit-display-form .form-hint {
+    color: var(--text-dim); font-size: 0.72rem; margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+  .edit-display-form .form-label-aside {
+    color: var(--text-dim); font-weight: 500; font-size: 0.66rem;
+    margin-left: 0.3rem;
+  }
+
   /* ── Walkthrough modal (larger, sectioned) ─────────────────────────── */
   .walk-box {
     max-width: 480px;
@@ -801,10 +812,12 @@
 <div class="page">
 
   <div style="margin-bottom:1rem">
-    <div style="display:flex;align-items:baseline;gap:1rem">
+    <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
+      <a href="javascript:void(0)" onclick="openEditDisplay()"
+         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">edit name →</a>
       <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
-         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">stats →</a>
+         style="color:var(--text-dim);font-size:0.78rem">stats →</a>
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
@@ -1349,11 +1362,46 @@
      (#spy-modal-unified above) now handles both field + targeted spies. -->
 
 <!-- ── Walkthrough modal: explains group picks, KO bets, spying ────────── -->
+<!-- ── Edit display dialog ──────────────────────────────────────────── -->
+<div id="edit-display-modal" class="modal-backdrop" data-modal-close="edit">
+  <div class="modal-box">
+    <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="edit">×</button>
+    <div class="modal-title">Edit display</div>
+    <form method="POST" action="{{ url_for('edit_profile') }}" class="edit-display-form">
+      <div class="form-group">
+        <label class="form-label" for="edit-display-name">Your real first name</label>
+        <input class="form-input" type="text" id="edit-display-name" name="display_name"
+               maxlength="30" required
+               value="{{ current_user.display_name }}">
+        <div class="form-hint">Shown on spy reveals and emails. Keep this honest — it's how the admin reconciles e-transfers.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="edit-team-name">Team Name <span class="form-label-aside">(optional)</span></label>
+        <input class="form-input" type="text" id="edit-team-name" name="team_name"
+               maxlength="40"
+               value="{{ current_user.team_name or '' }}">
+        <div class="form-hint">Shows on the leaderboard. Leave blank to use your real name.</div>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="walk-modal" class="modal-backdrop" data-modal-close="walk">
   <div class="modal-box walk-box">
     <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="walk">×</button>
     <div class="modal-title">How {{ pool.name }} works</div>
     <div class="walk-body">
+
+      <div class="walk-section" style="border-top:none;padding-top:0">
+        <div class="walk-text" style="color:var(--text-muted);font-size:0.85rem">
+          Tip: click <strong style="color:var(--accent)">edit name →</strong> at the top of the pool
+          to set a team alias. Your real first name stays for spy reveals + e-transfer
+          reconciliation; your team name shows up on the leaderboard.
+        </div>
+      </div>
 
       <div class="walk-section">
         <div class="walk-head"><span class="walk-num">1</span> Group stage — free picks</div>
@@ -1457,6 +1505,14 @@
   // schema version below.
   const WALK_KEY = `wc26_walk_v2_${POOL_ID}`;
 
+  function openEditDisplay() {
+    const m = document.getElementById('edit-display-modal');
+    if (m) m.classList.add('open');
+  }
+  function closeEditDisplay() {
+    const m = document.getElementById('edit-display-modal');
+    if (m) m.classList.remove('open');
+  }
   function openWalkthrough() {
     const m = document.getElementById('walk-modal');
     if (m) m.classList.add('open');
@@ -1842,6 +1898,7 @@
       if (closer.classList.contains('modal-backdrop') && e.target !== closer) return;
       if (which === 'spy') closeSpyModal();
       else if (which === 'walk') closeWalkthrough();
+      else if (which === 'edit') closeEditDisplay();
       return;
     }
     // Spy trigger

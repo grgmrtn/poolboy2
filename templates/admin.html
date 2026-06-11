@@ -432,15 +432,41 @@
   <!-- ── Users ──────────────────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>Users</h2>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem">
+      Edit any player's real first name + team name. Real name shows in spy reveals;
+      team name shows on the leaderboard (falls back to real name if blank).
+    </p>
     <div class="card" style="padding:0;overflow:hidden">
       <table class="users-table">
         <thead>
-          <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
+          <tr>
+            <th>Name &amp; Team</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
           {% for u in users %}
           <tr>
-            <td>{{ u.display_name }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('admin_edit_profile', user_id=u.id) }}"
+                    style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+                <div style="display:flex;flex-direction:column;gap:0.25rem;min-width:140px">
+                  <input class="form-input" type="text" name="team_name"
+                         placeholder="Team name (optional)"
+                         value="{{ u.team_name or '' }}"
+                         maxlength="40"
+                         style="font-size:0.82rem;padding:0.35rem 0.5rem">
+                  <input class="form-input" type="text" name="display_name"
+                         placeholder="Real first name"
+                         value="{{ u.display_name }}"
+                         maxlength="30" required
+                         style="font-size:0.78rem;padding:0.35rem 0.5rem;color:var(--text-muted)">
+                </div>
+                <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+              </form>
+            </td>
             <td style="color:var(--text-muted)">{{ u.email }}</td>
             <td>
               {% if u.is_admin %}
