@@ -1,0 +1,43 @@
+name: Auto-score fixtures
+
+# Pulls FINISHED matches from football-data.org every 30 minutes and writes
+# their scores back to fixtures + scores every affected pool's picks.
+# Idempotent: re-runs skip fixtures that already have a result.
+#
+# Required repo secrets:
+#   DATABASE_URL              Railway Postgres connection string
+#   FOOTBALL_DATA_API_KEY     football-data.org API token
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply scores (default = dry-run preview only)"
+        type: boolean
+        default: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install deps
+        run: pip install psycopg2-binary requests werkzeug
+
+      - name: Run auto-score
+        env:
+          DATABASE_URL:           ${{ secrets.DATABASE_URL }}
+          FOOTBALL_DATA_API_KEY:  ${{ secrets.FOOTBALL_DATA_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.apply }}" != "true" ]; then
+            python3 sim/auto_score_from_api.py
+          else
+            python3 sim/auto_score_from_api.py --apply
+          fi
