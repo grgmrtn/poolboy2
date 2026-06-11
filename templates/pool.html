@@ -1049,7 +1049,7 @@
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
       <a href="javascript:void(0)" onclick="openEditDisplay()"
-         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">edit name →</a>
+         style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">my account →</a>
       <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
          style="color:var(--text-dim);font-size:0.78rem">stats →</a>
     </div>
@@ -1683,7 +1683,7 @@
 <div id="edit-display-modal" class="modal-backdrop" data-modal-close="edit">
   <div class="modal-box">
     <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="edit">×</button>
-    <div class="modal-title">Edit display</div>
+    <div class="modal-title">My account</div>
     <form method="POST" action="{{ url_for('edit_profile') }}" class="edit-display-form">
       <div class="form-group">
         <label class="form-label" for="edit-display-name">Your real first name</label>
@@ -1739,7 +1739,7 @@
 
       <div class="walk-section" style="border-top:none;padding-top:0">
         <div class="walk-text" style="color:var(--text-muted);font-size:0.85rem">
-          Tip: click <strong style="color:var(--accent)">edit name →</strong> at the top of the pool
+          Tip: click <strong style="color:var(--accent)">my account →</strong> at the top of the pool
           to set a team alias. Your real first name stays for spy reveals + e-transfer
           reconciliation; your team name shows up on the leaderboard.
         </div>
