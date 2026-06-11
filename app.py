@@ -232,6 +232,31 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/m/<token>")
+def magic_login(token):
+    """One-click login from an email deep link. Verifies the signed token,
+    sets the session, and redirects to ?next= (defaults to home)."""
+    import magic
+    user_id, err = magic.verify_magic_token(token)
+    if err == "expired":
+        flash("That email link has expired — please log in.", "error")
+        return redirect(url_for("login"))
+    if err or not user_id:
+        flash("Invalid login link.", "error")
+        return redirect(url_for("login"))
+    user = db.get_user_by_id(user_id)
+    if not user:
+        return redirect(url_for("login"))
+    session.permanent = True
+    session["user_id"] = user_id
+    db.record_login(user_id)
+    nxt = request.args.get("next") or url_for("home")
+    # Open-redirect guard: only allow same-site paths
+    if not nxt.startswith("/"):
+        nxt = url_for("home")
+    return redirect(nxt)
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if "user_id" in session:

@@ -33,6 +33,16 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from email_helper import send_email
 
+# Optional magic-link login. Requires SECRET_KEY env var matching the Flask
+# app's. If not set we fall back to bare pool URLs (recipients have to log in
+# manually) with a loud warning.
+try:
+    import magic as magic_link
+    _MAGIC_AVAILABLE = bool(os.environ.get("SECRET_KEY"))
+except ImportError:
+    magic_link = None
+    _MAGIC_AVAILABLE = False
+
 ET = ZoneInfo("America/New_York")
 META_PREFIX = "reminder_sent"  # key format: reminder_sent:<user_id>:<fixture_id>
 
@@ -274,15 +284,29 @@ def main():
     print(f"reminders to send: {len(per_user_outstanding)} user(s), "
           f"{len(new_keys_to_record)} (user, fixture) pair(s)")
 
+    if not _MAGIC_AVAILABLE:
+        print("\n⚠ SECRET_KEY not set — emails will use bare URLs (recipients "
+              "must log in manually). Set SECRET_KEY to match your Flask app's "
+              "to enable one-click magic-login links.\n")
+
     # ── Compose + send one email per user ──────────────────────────────────
     sent_any = False
     for email, items in sorted(per_user_outstanding.items()):
         # All items share email; user_display + pool may vary if user is in multiple pools
-        display = items[0][0]["display_name"]
+        member  = items[0][0]
+        display = member["display_name"]
+        user_id = member["user_id"]
         n = len(items)
-        # Pool deeplink — use the first pool the user is in (most common case: 1 pool)
-        first_pool = items[0][0]["pool_id"]
-        pool_url = f"{site_url}/pool/{first_pool}"
+        # Pool deeplink — use the first pool the user is in (most common case: 1 pool).
+        # When SECRET_KEY is configured, wrap the URL in a one-click magic-login
+        # token signed for this specific user so they bypass the password screen.
+        first_pool = member["pool_id"]
+        next_path  = f"/pool/{first_pool}"
+        if _MAGIC_AVAILABLE:
+            token    = magic_link.make_magic_token(user_id)
+            pool_url = f"{site_url}/m/{token}?next={next_path}"
+        else:
+            pool_url = f"{site_url}{next_path}"
 
         lines = [
             f"Hey {display},",
