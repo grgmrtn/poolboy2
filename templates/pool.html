@@ -1161,7 +1161,8 @@
                       <button type="button" class="spy-trigger"
                               data-pool="{{ pool.id }}"
                               data-fixture="{{ f.id }}"
-                              data-field-cost="{{ scoring_config.aggregate_spy_cost }}"
+                              data-field-cost="{{ field_spy_cost_by_fixture.get(f.id, scoring_config.aggregate_spy_cost) }}"
+                              data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
                               data-field-bought="{{ 'true' if (f.id in aggregate_spy_set) else 'false' }}">
                         <span>👁</span> Spy
                       </button>
@@ -1318,8 +1319,8 @@
              or subsequent openSpyModal calls null-ref on it. #}
           <span id="spy-field-explain-buy">
             See how many players picked each side — counts only, no names.
-            Costs <strong id="spy-field-cost">$2</strong> the first time;
-            after that, re-check the live spread any time until kick-off, free.
+            Costs <strong id="spy-field-cost">$2</strong><span id="spy-field-cost-note" style="display:none"> <span style="color:var(--text-dim);font-size:0.78rem">(scales with the pot on KO matches — 10% of total wagered, capped at $20)</span></span>
+            the first time; after that, re-check the live spread any time until kick-off, free.
           </span>
           <span id="spy-field-explain-bought" style="display:none">
             You've already revealed the field for this match — re-check it any time, free.
@@ -1850,15 +1851,16 @@
       const poolId  = trigger.dataset.pool;
       const fixId   = trigger.dataset.fixture;
       const cost    = parseFloat(trigger.dataset.fieldCost);
+      const isKo    = trigger.dataset.isKo === 'true';
       const bought  = trigger.dataset.fieldBought === 'true';
-      console.log('[spy] click', { poolId, fixId, cost, bought });
-      openSpyModal(poolId, fixId, cost, bought).catch(err => {
+      console.log('[spy] click', { poolId, fixId, cost, isKo, bought });
+      openSpyModal(poolId, fixId, cost, bought, isKo).catch(err => {
         console.error('[spy] openSpyModal threw:', err);
       });
     }
   });
 
-  async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed) {
+  async function openSpyModal(poolId, fixtureId, fieldCost, alreadyFieldRevealed, isKo) {
     console.log('[spy] openSpyModal start', { fixtureId, alreadyFieldRevealed });
     // Force-close every modal-backdrop on the page before opening this one.
     document.querySelectorAll('.modal-backdrop').forEach(m => {
@@ -1883,6 +1885,9 @@
     const buyBtn    = document.getElementById('spy-field-buy');
     const spreadEl  = document.getElementById('spy-field-spread');
     if (costEl) costEl.textContent = '$' + fieldCost;
+    // Show the "scales with pot" hint only for KO fixtures
+    const costNote = document.getElementById('spy-field-cost-note');
+    if (costNote) costNote.style.display = isKo ? '' : 'none';
     spreadEl.style.display = 'none';
     spreadEl.innerHTML = '';
     if (_spyFieldBought) {

@@ -32,6 +32,11 @@ import fixtures as fx
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-in-production")
 
+# Keep users signed in across visits for 90 days (vs the default browser-session
+# cookie that vanishes on quit). Set on the session via session.permanent=True
+# at login. Matches what most consumer apps do — no SSO needed.
+app.permanent_session_lifetime = timedelta(days=90)
+
 # Minutes before kick-off when picks lock
 LOCK_MINUTES = 15
 
@@ -211,6 +216,7 @@ def login():
         password = request.form.get("password", "")
         user = db.get_user_by_email(email)
         if user and check_password_hash(user["password_hash"], password):
+            session.permanent = True
             session["user_id"] = user["id"]
             db.record_login(user["id"])  # for daily admin digest
             next_page = request.args.get("next", url_for("home"))
@@ -242,6 +248,7 @@ def register():
             return render_template("register.html")
         user_id = str(uuid.uuid4())
         db.create_user(user_id, display_name, email, generate_password_hash(password))
+        session.permanent = True
         session["user_id"] = user_id
         flash(f"Welcome, {display_name}!", "success")
         return redirect(url_for("home"))
@@ -411,6 +418,19 @@ def pool_page(pool_id):
     pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
     top_player_emails = db.get_top_n_player_emails(pool_id, n=5, tie_cap=2)
 
+    # Per-fixture field-spy cost: KO fixtures scale with the pot
+    # (max(base, min(pct*pot, cap))); group stage stays flat at base.
+    field_spy_cost_by_fixture = {}
+    _base = float(scoring_config.get("aggregate_spy_cost", 2.0))
+    _pct  = float(scoring_config.get("ko_spy_pct", 0.10))
+    _cap  = float(scoring_config.get("ko_spy_cap", 20.0))
+    for fix in fixture_lookup.values():
+        if db.is_knockout_stage(fix.get("stage") or ""):
+            pot = db.get_fixture_pot(pool_id, fix["id"])
+            field_spy_cost_by_fixture[fix["id"]] = round(max(_base, min(_pct * pot, _cap)), 2)
+        else:
+            field_spy_cost_by_fixture[fix["id"]] = round(_base, 2)
+
     # Stages where every fixture has a result render collapsed by default —
     # keeps the page short once a matchday or round is finished. Excludes
     # the synthesised "Completed" stage (already collapsed via its own logic).
@@ -452,6 +472,7 @@ def pool_page(pool_id):
         top_player_emails=top_player_emails,
         payouts_by_fixture=payouts_by_fixture,
         fully_complete_stages=fully_complete_stages,
+        field_spy_cost_by_fixture=field_spy_cost_by_fixture,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
@@ -660,14 +681,36 @@ def field_spy(pool_id, fixture_id):
     locked_or_done = _is_locked(fixture["kick_off"]) or fixture["result"]
     already_bought = db.has_bought_aggregate_spy(user["id"], pool_id, fixture_id)
     config = db.get_active_scoring_config()
-    cost = round(config.get("aggregate_spy_cost", 2.0), 2)
+    base_cost = float(config.get("aggregate_spy_cost", 2.0))
+
+    # Dynamic field-spy pricing on knockouts:
+    #   max( base_cost, min( ko_spy_pct * pot, ko_spy_cap ) )
+    # Group stage stays at the flat base cost — pots are small, banter > revenue.
+    pricing_explain = None
+    if knockout:
+        pot = db.get_fixture_pot(pool_id, fixture_id)
+        pct = float(config.get("ko_spy_pct", 0.10))
+        cap = float(config.get("ko_spy_cap", 20.0))
+        dynamic = min(pct * pot, cap)
+        cost = round(max(base_cost, dynamic), 2)
+        pricing_explain = {
+            "model": "ko_dynamic",
+            "pot": round(pot, 2),
+            "pct": pct,
+            "cap": cap,
+            "base": base_cost,
+        }
+    else:
+        cost = round(base_cost, 2)
+        pricing_explain = {"model": "flat", "base": base_cost}
 
     if already_bought or locked_or_done:
         # Free path — return spread, don't charge
         totals = db.get_fixture_pick_totals(pool_id, fixture_id, knockout=knockout)
         return jsonify({"ok": True, "free": True,
                         "new_balance": db.get_member_balance(user["id"], pool_id),
-                        "totals": totals, "is_knockout": knockout})
+                        "totals": totals, "is_knockout": knockout,
+                        "pricing": pricing_explain})
 
     balance = db.get_member_balance(user["id"], pool_id)
     if balance < cost:
@@ -682,6 +725,7 @@ def field_spy(pool_id, fixture_id):
         "ok": True, "free": (not charged), "cost": cost,
         "new_balance": db.get_member_balance(user["id"], pool_id),
         "totals": totals, "is_knockout": knockout,
+        "pricing": pricing_explain,
     })
 
 

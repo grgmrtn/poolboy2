@@ -1,0 +1,64 @@
+name: Pick reminders
+
+# Runs every other day at 17:00 UTC (1pm Eastern). Looks at fixtures kicking
+# off in the next 72 hours and emails any paid pool member who hasn't picked
+# yet. The (user, fixture) dedupe via the meta table prevents double-spam.
+#
+# Manual run: Actions tab -> "Pick reminders" -> "Run workflow"
+# Required repo secrets:
+#   DATABASE_URL    Railway Postgres connection string (public/proxy variant)
+#   SITE_URL        https://poolboy2-app-production.up.railway.app
+#   SMTP_HOST       smtp.gmail.com
+#   SMTP_PORT       587
+#   SMTP_USER       sending Gmail address
+#   SMTP_PASS       Gmail app password
+#   FROM_EMAIL      same as SMTP_USER
+
+on:
+  schedule:
+    - cron: "0 17 */2 * *"   # every 2 days at 17:00 UTC
+  workflow_dispatch:          # allows on-demand runs from the Actions tab
+    inputs:
+      dry_run:
+        description: "Dry run (preview only, no emails sent)"
+        type: boolean
+        default: false
+      min_hours:
+        description: "Lower bound (hours until kickoff)"
+        type: string
+        default: "0"
+      max_hours:
+        description: "Upper bound (hours until kickoff)"
+        type: string
+        default: "72"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install deps
+        run: pip install psycopg2-binary certifi requests werkzeug
+
+      - name: Run reminder script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SITE_URL:     ${{ secrets.SITE_URL }}
+          SMTP_HOST:    ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:    ${{ secrets.SMTP_PORT }}
+          SMTP_USER:    ${{ secrets.SMTP_USER }}
+          SMTP_PASS:    ${{ secrets.SMTP_PASS }}
+          FROM_EMAIL:   ${{ secrets.FROM_EMAIL }}
+        run: |
+          MIN="${{ github.event.inputs.min_hours || '0' }}"
+          MAX="${{ github.event.inputs.max_hours || '72' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            python3 sim/email_pick_reminders.py --min-hours "$MIN" --max-hours "$MAX"
+          else
+            python3 sim/email_pick_reminders.py --min-hours "$MIN" --max-hours "$MAX" --send
+          fi

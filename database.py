@@ -262,6 +262,8 @@ def init_db():
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_odds REAL",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_odds REAL",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS aggregate_spy_cost REAL DEFAULT 2",
+            "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_pct REAL DEFAULT 0.10",
+            "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_cap REAL DEFAULT 20",
         ]:
             c.execute(sql)
     else:
@@ -283,6 +285,8 @@ def init_db():
             ("fixtures",       "home_odds REAL"),
             ("fixtures",       "away_odds REAL"),
             ("scoring_config", "aggregate_spy_cost REAL DEFAULT 2"),
+            ("scoring_config", "ko_spy_pct REAL DEFAULT 0.10"),
+            ("scoring_config", "ko_spy_cap REAL DEFAULT 20"),
         ]
         for table, col_def in migrations:
             try:
@@ -673,6 +677,8 @@ _CONFIG_DEFAULTS = {
     "spy_increment":                   1.0,
     "knockout_flat_payout_multiplier": 2.0,
     "aggregate_spy_cost":              2.0,
+    "ko_spy_pct":                      0.10,
+    "ko_spy_cap":                      20.0,
 }
 
 
@@ -870,6 +876,20 @@ def record_aggregate_spy(spy_id, tx_id, user_id, pool_id, fixture_id, cost):
     conn.commit()
     conn.close()
     return True
+
+
+def get_fixture_pot(pool_id, fixture_id):
+    """
+    Sum of bet_amount across all picks on this fixture in this pool. Used to
+    compute dynamic field-spy pricing on knockout fixtures.
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COALESCE(SUM(bet_amount), 0) AS pot FROM picks WHERE pool_id=? AND fixture_id=?",
+        (pool_id, fixture_id)
+    ).fetchone()
+    conn.close()
+    return float(row["pot"] or 0)
 
 
 def get_pick_counts_for_pool(pool_id):
