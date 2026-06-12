@@ -266,6 +266,37 @@
   .ct-pay-neg { color: var(--text-muted); }
   .ct-fld { color: var(--text-dim); }
 
+  /* Picker blob — hover-tooltip on team cells listing first names of
+     everyone who picked that side. Lives inside the team cell so its
+     hover state stays tied to whatever the cursor is over. */
+  .ct-team.has-tip, .ct-m-side.has-tip { cursor: help; }
+  .ct-pickers-tip {
+    display: none;
+    position: absolute;
+    top: 100%; left: 50%; transform: translateX(-50%);
+    margin-top: 6px; z-index: 30;
+    width: max-content; max-width: 280px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 6px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.7rem; font-weight: 500;
+    color: var(--text); line-height: 1.5;
+    white-space: normal;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    pointer-events: none;
+    font-family: var(--mono);
+  }
+  .ct-pickers-tip strong {
+    display: block;
+    font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+  .ct-team.has-tip:hover { overflow: visible; }
+  .ct-team.has-tip:hover > .ct-pickers-tip,
+  .ct-m-side.has-tip:hover > .ct-pickers-tip { display: block; }
+
   @media (max-width: 640px) {
     .completed-table { font-size: 0.74rem; }
     .ct-desk { display: none; }
@@ -1181,6 +1212,13 @@
                 {% endif %}
                 {% set bet_won = my_pick and my_pick == f.result %}
 
+                {# Picker lists per side — for the hover tooltip on team cells.
+                   Fixtures here are completed (in the "Completed" stage), so
+                   every pick in all_picks_by_fixture is already visible. #}
+                {% set _all = all_picks_by_fixture.get(f.id, []) %}
+                {% set ct_h_pickers = _all|selectattr('predicted_result','equalto','H')|list %}
+                {% set ct_a_pickers = _all|selectattr('predicted_result','equalto','A')|list %}
+
                 <div class="ct-row" role="row">
                   <span role="cell" class="ct-date ct-desk">{{ ct_dy }}/{{ ct_mo }}</span>
                   <span role="cell" class="ct-time ct-desk">{{ ct_time }}</span>
@@ -1189,22 +1227,46 @@
                     <span class="ct-when-time">{{ ct_time }}</span>
                   </span>
                   <span role="cell" class="ct-grp">{{ ct_group }}</span>
-                  <span role="cell" class="ct-team ct-team-home ct-desk {% if f.result == 'H' %}ct-team-win{% endif %}">
+                  <span role="cell" class="ct-team ct-team-home ct-desk {% if f.result == 'H' %}ct-team-win{% endif %}{% if ct_h_pickers %} has-tip{% endif %}">
                     {{ ct_home }}
                     <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+                    {% if ct_h_pickers %}
+                    <span class="ct-pickers-tip">
+                      <strong>{{ ct_home }} · {{ ct_h_pickers|length }} {{ 'pick' if ct_h_pickers|length == 1 else 'picks' }}</strong>
+                      {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    </span>
+                    {% endif %}
                   </span>
                   <span role="cell" class="ct-score ct-desk">{{ f.home_score }}–{{ f.away_score }}</span>
-                  <span role="cell" class="ct-team ct-desk {% if f.result == 'A' %}ct-team-win{% endif %}">
+                  <span role="cell" class="ct-team ct-desk {% if f.result == 'A' %}ct-team-win{% endif %}{% if ct_a_pickers %} has-tip{% endif %}">
                     <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                     {{ ct_away }}
+                    {% if ct_a_pickers %}
+                    <span class="ct-pickers-tip">
+                      <strong>{{ ct_away }} · {{ ct_a_pickers|length }} {{ 'pick' if ct_a_pickers|length == 1 else 'picks' }}</strong>
+                      {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    </span>
+                    {% endif %}
                   </span>
                   <span role="cell" class="ct-match ct-mob">
-                    <span class="ct-m-side {% if f.result == 'H' %}ct-m-win{% endif %}">
+                    <span class="ct-m-side {% if f.result == 'H' %}ct-m-win{% endif %}{% if ct_h_pickers %} has-tip{% endif %}">
                       <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}
+                      {% if ct_h_pickers %}
+                      <span class="ct-pickers-tip">
+                        <strong>{{ ct_home }} · {{ ct_h_pickers|length }}</strong>
+                        {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                      </span>
+                      {% endif %}
                     </span>
                     <span class="ct-m-score">{{ f.home_score }}–{{ f.away_score }}</span>
-                    <span class="ct-m-side {% if f.result == 'A' %}ct-m-win{% endif %}">
+                    <span class="ct-m-side {% if f.result == 'A' %}ct-m-win{% endif %}{% if ct_a_pickers %} has-tip{% endif %}">
                       <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}
+                      {% if ct_a_pickers %}
+                      <span class="ct-pickers-tip">
+                        <strong>{{ ct_away }} · {{ ct_a_pickers|length }}</strong>
+                        {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                      </span>
+                      {% endif %}
                     </span>
                   </span>
                   <span role="cell" class="ct-bet {% if my_pick %}{{ 'ct-bet-win' if bet_won else 'ct-bet-loss' }}{% endif %}">
