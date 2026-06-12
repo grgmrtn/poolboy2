@@ -848,6 +848,29 @@ def get_member_balance(user_id, pool_id):
     return row["balance"] if row else 0.0
 
 
+def get_user_pick_accuracy(user_id, pool_id):
+    """
+    Return {"correct": int, "total": int} for a user's picks on completed
+    fixtures. "Correct" means the predicted_result matches the fixture
+    result. Used by the pool page's top stats tile ("4/14 picks").
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT "
+        "  SUM(CASE WHEN p.predicted_result = f.result THEN 1 ELSE 0 END) AS correct, "
+        "  COUNT(*) AS total "
+        "FROM picks p JOIN fixtures f ON f.id = p.fixture_id "
+        "WHERE p.user_id=? AND p.pool_id=? "
+        "  AND f.result IS NOT NULL AND f.result <> ''",
+        (user_id, pool_id)
+    ).fetchone()
+    conn.close()
+    return {
+        "correct": int(row["correct"] or 0) if row else 0,
+        "total":   int(row["total"]   or 0) if row else 0,
+    }
+
+
 def _write_transaction(conn, tx_id, user_id, pool_id, fixture_id, tx_type, amount, description):
     """
     Write one transaction row using an already-open connection.

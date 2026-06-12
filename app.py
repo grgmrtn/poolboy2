@@ -619,6 +619,9 @@ def pool_page(pool_id):
     # no per-team odds rendered). Gate the button until KO stages appear.
     has_ko_stage = any(db.is_knockout_stage(s) for s in grouped_fixtures)
 
+    # Pick accuracy for the top stats tile ("4/14 picks").
+    pick_accuracy = db.get_user_pick_accuracy(user["id"], pool_id)
+
     # Live-now banner data — any fixture flagged IN_PLAY / PAUSED gets a
     # picks-by-side breakdown so the banner can render bets without
     # another DB hit. Re-used by the /live-now JSON endpoint below.
@@ -650,6 +653,7 @@ def pool_page(pool_id):
         pool_size=pool_size,
         has_ko_stage=has_ko_stage,
         live_now=live_now_data,
+        pick_accuracy=pick_accuracy,
     )
 
 

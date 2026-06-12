@@ -88,7 +88,49 @@
   }
   .pool-intro-x:hover { color: var(--text); background: rgba(255,255,255,0.05); }
 
-  /* Compact replacement pill — shown after the user dismisses the banner */
+  /* Top stats panel + chip row */
+  .pool-stats-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.85rem;
+  }
+  .ps-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.65rem 0.9rem 0.7rem;
+    min-width: 0;
+  }
+  .ps-label {
+    font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 700;
+    margin-bottom: 0.2rem;
+  }
+  .ps-value {
+    font-size: 1.3rem; font-weight: 800; color: var(--accent);
+    letter-spacing: -0.01em; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    display: flex; align-items: baseline; gap: 0.15rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ps-divider { color: var(--text-dim); font-weight: 500; margin: 0 0.05rem; }
+  .ps-pct {
+    font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+    margin-left: 0.4rem;
+  }
+  @media (max-width: 380px) {
+    .ps-value { font-size: 1.15rem; }
+    .ps-pct   { font-size: 0.65rem; }
+  }
+
+  .top-chip-row {
+    display: flex; flex-wrap: wrap; gap: 0.45rem;
+    margin-bottom: 1.25rem;
+  }
+  .top-chip-row > * { margin: 0 !important; }   /* override chip margins */
+
+  /* Compact replacement pill — sits next to What's New now */
   .how-it-works-pill {
     display: inline-flex; align-items: center; gap: 0.35rem;
     margin-bottom: 1.25rem;
@@ -537,15 +579,20 @@
     }
     .ln-tab + .ln-tab { border-left: 1px solid rgba(0,0,0,0.12); }
     .ln-tab.active { border-bottom-color: #0a0a0f; }
-    .ln-tab-dot {
-      color: #0a0a0f; font-size: 0.55rem; line-height: 1;
+    .ln-tab-live {
+      display: inline-block; padding: 0.12rem 0.32rem;
+      background: #0a0a0f; color: var(--accent);
+      font-size: 0.58rem; letter-spacing: 0.16em; font-weight: 800;
+      border-radius: 3px; line-height: 1;
       animation: live-pulse 1.4s ease-in-out infinite;
     }
     .ln-tab-teams { letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
     .ln-tab-min {
       font-size: 0.62rem; color: rgba(10,10,15,0.65);
       font-variant-numeric: tabular-nums;
+      min-width: 0;
     }
+    .ln-tab-min:empty { display: none; }
     .ln-expand-btn {
       flex-shrink: 0;
       background: rgba(0,0,0,0.08); border: 0; border-left: 1px solid rgba(0,0,0,0.18);
@@ -631,9 +678,9 @@
       padding-top: 0.85rem;
       border-top: 1px solid rgba(0,0,0,0.14);
     }
-    .ln-bets:has(.ln-bets-col:only-child),
-    .ln-bets:has(.ln-bets-col + .ln-bets-col:last-child) {
-      grid-template-columns: 1fr 1fr;
+    .ln-bet-empty {
+      color: rgba(10,10,15,0.35);
+      font-style: italic; font-weight: 500;
     }
     .ln-bets-col { min-width: 0; }
     .ln-bets-head {
@@ -1442,23 +1489,22 @@
      data-pool-id="{{ pool.id }}"
      data-my-email="{{ current_user.email }}">
 
-  {# Collapsed pill row + tabs (one chip per live fixture) #}
-  <div class="ln-bar">
+  {# Collapsed pill row + tabs (one chip per live fixture). The entire
+     bar is the toggle target — tabs stopPropagation so tab clicks just
+     switch tabs without collapsing. #}
+  <div class="ln-bar" onclick="toggleLiveNow()">
     <div class="ln-tabs" id="ln-tabs">
       {% for lf in live_now %}
+        {% set _ht = ABBR.get(lf.home_team) or (lf.home_team or '?')[:3].upper() %}
+        {% set _at = ABBR.get(lf.away_team) or (lf.away_team or '?')[:3].upper() %}
         <button type="button"
                 class="ln-tab{% if loop.first %} active{% endif %}"
                 data-fixture-id="{{ lf.id }}"
-                onclick="selectLnTab(this)">
-          <span class="ln-tab-dot">●</span>
-          <span class="ln-tab-teams">
-            {{ ABBR.get(lf.home_team) or (lf.home_team or '?')[:3].upper() }}
-            {{ lf.live_home if lf.live_home is not none else '0' }}–{{ lf.live_away if lf.live_away is not none else '0' }}
-            {{ ABBR.get(lf.away_team) or (lf.away_team or '?')[:3].upper() }}
-          </span>
-          {% if lf.minute_est is not none %}
-          <span class="ln-tab-min">{{ lf.minute_est }}'</span>
-          {% endif %}
+                data-home-abbr="{{ _ht }}" data-away-abbr="{{ _at }}"
+                onclick="event.stopPropagation(); selectLnTab(this)">
+          <span class="ln-tab-live">LIVE:</span>
+          <span class="ln-tab-teams">{{ _ht }} {{ lf.live_home if lf.live_home is not none else '0' }}–{{ lf.live_away if lf.live_away is not none else '0' }} {{ _at }}</span>
+          <span class="ln-tab-min">{% if lf.minute_est is not none %}{{ lf.minute_est }}'{% endif %}</span>
         </button>
       {% endfor %}
     </div>
@@ -1507,11 +1553,13 @@
           </div>
         </div>
 
-        {# Picks-by-side. Group fixtures don't show bet amount + no draw
-           column hidden for KO. Current user appears as bold "You". #}
+        {# Picks-by-side. All three columns (Home / Draw / Away) always
+           render — even in KO where the draw column will typically be
+           empty (existing KO bet UI doesn't expose D). KO fixtures show
+           the bet amount; group fixtures show just the name. Current
+           user appears as bold "You". #}
         <div class="ln-bets" data-fixture-id="{{ lf.id }}">
           {% for side, label in [('H', home_abbr), ('D', 'Draw'), ('A', away_abbr)] %}
-            {% if not (lf.is_ko and side == 'D') %}
             <div class="ln-bets-col ln-bets-{{ side|lower }}">
               <div class="ln-bets-head">
                 {% if side == 'H' %}<img src="https://flagcdn.com/{{ lf.home_flag }}.svg" alt="" loading="lazy">
@@ -1531,9 +1579,11 @@
                     {% endif %}
                   </li>
                 {% endfor %}
+                {% if not lf.picks_by_side[side] %}
+                  <li class="ln-bet ln-bet-empty">—</li>
+                {% endif %}
               </ul>
             </div>
-            {% endif %}
           {% endfor %}
         </div>
 
@@ -1556,6 +1606,23 @@
     <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
       All times EST; picks lock 15 minutes before kickoff
     </p>
+  </div>
+
+  <!-- ── Top stats tile: balance + pick accuracy ─────────────────────── -->
+  <div class="pool-stats-bar">
+    <div class="ps-tile">
+      <div class="ps-label">Balance</div>
+      <div class="ps-value">${{ "%.0f"|format(my_balance) }}</div>
+    </div>
+    <div class="ps-tile">
+      <div class="ps-label">Correct picks</div>
+      <div class="ps-value">
+        {{ pick_accuracy.correct }}<span class="ps-divider">/</span>{{ pick_accuracy.total }}
+        {% if pick_accuracy.total %}
+          <span class="ps-pct">{{ (pick_accuracy.correct * 100 / pick_accuracy.total) | round(0, 'common') | int }}%</span>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
   <!-- ── iOS Safari "Add to Home Screen" guide (dismissible, persistent) ── -->
@@ -1585,21 +1652,20 @@
     </a>
   </div>
 
-  <!-- Compact replacement — shown when the banner above has been dismissed -->
-  <button type="button" id="how-it-works-pill" class="how-it-works-pill"
-          style="display:none" onclick="openWalkthrough()">
-    <span class="pill-q">?</span> How it works
-  </button>
-
-  <!-- ── What's new chip ─────────────────────────────────────────────── -->
-  {% if releases %}
-  <button type="button" id="whats-new-chip" class="whats-new-chip" onclick="openWhatsNew()">
-    <span class="wn-icon">📣</span>
-    <span class="wn-label">What's new</span>
-    <span class="wn-headline">{{ releases[0].title }}</span>
-    <span class="wn-dot" id="whats-new-dot" style="display:none"></span>
-  </button>
-  {% endif %}
+  <!-- ── Always-present chip row: How it Works + What's New ──────────── -->
+  <div class="top-chip-row">
+    <button type="button" id="how-it-works-pill" class="how-it-works-pill"
+            onclick="openWalkthrough()">
+      <span class="pill-q">?</span> How it works
+    </button>
+    {% if releases %}
+    <button type="button" id="whats-new-chip" class="whats-new-chip" onclick="openWhatsNew()">
+      <span class="wn-icon">📣</span>
+      <span class="wn-label">What's new</span>
+      <span class="wn-dot" id="whats-new-dot" style="display:none"></span>
+    </button>
+    {% endif %}
+  </div>
 
   {% if pool.entry_fee and not has_paid %}
   <div style="
@@ -2463,18 +2529,14 @@
   // ── Pool-intro banner: dismiss → swap for compact "How it works" pill ──
   function dismissPoolIntro() {
     const banner = document.getElementById('pool-intro-banner');
-    const pill   = document.getElementById('how-it-works-pill');
     if (banner) banner.style.display = 'none';
-    if (pill)   pill.style.display   = 'inline-flex';
     try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
   }
   function restorePoolIntroFromStorage() {
     try {
       if (localStorage.getItem(INTRO_KEY) === '1') {
         const banner = document.getElementById('pool-intro-banner');
-        const pill   = document.getElementById('how-it-works-pill');
         if (banner) banner.style.display = 'none';
-        if (pill)   pill.style.display   = 'inline-flex';
       }
     } catch (e) {}
   }
@@ -2558,12 +2620,9 @@
             if (teams) {
               const home = lf.live_home != null ? lf.live_home : 0;
               const away = lf.live_away != null ? lf.live_away : 0;
-              // Replace just the scores; keep the abbreviations as-is.
-              const parts = teams.textContent.trim().split(/\s+/);
-              if (parts.length >= 4) {
-                parts[1] = `${home}–${away}`;
-                teams.textContent = ' ' + parts[0] + ' ' + parts[1] + ' ' + parts[3] + ' ';
-              }
+              // Rebuild "<HOME> <h>–<a> <AWAY>" from data-* attrs so this
+              // never depends on regex-parsing the live text.
+              teams.textContent = `${tab.dataset.homeAbbr} ${home}–${away} ${tab.dataset.awayAbbr}`;
             }
           }
           const panel = b.querySelector(`.ln-panel[data-fixture-id="${lf.id}"]`);
