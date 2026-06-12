@@ -19,8 +19,9 @@
     font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
     color: var(--text-dim); margin-bottom: 1rem;
   }
-  .chart-wrap { position: relative; height: 420px; }
-  @media (max-width: 600px) { .chart-wrap { height: 260px; } }
+  /* Extra right padding so end-of-line player labels have room to render */
+  .chart-wrap { position: relative; height: 460px; }
+  @media (max-width: 600px) { .chart-wrap { height: 320px; } }
 
   /* Legend table */
   .legend-grid {
@@ -76,17 +77,15 @@
     <h1>Balance over time</h1>
   </div>
 
-  {% if not timeline.fixtures or timeline.fixtures|length <= 1 %}
+  {% if not timeline.players %}
     <div class="empty-state">
-      No scored fixtures yet — check back once matches have been played.
+      No transactions yet — check back once matches have been played.
     </div>
   {% else %}
 
-    {% set n_fixtures = timeline.fixtures|length - 1 %}
     {% set n_players  = timeline.players|length %}
 
     <div class="meta-row">
-      <div class="meta-chip"><strong>{{ n_fixtures }}</strong> scored matches</div>
       <div class="meta-chip">
         <strong>{{ n_players }}</strong>
         {% if timeline.total_players > n_players %}
@@ -94,12 +93,10 @@
         {% endif %}
         players shown
       </div>
-      {% if timeline.players %}
-        <div class="meta-chip">
-          Leader: <strong>{{ timeline.players[0].display_name }}</strong>
-          — ${{ "%.0f"|format(timeline.players[0].final_score) }}
-        </div>
-      {% endif %}
+      <div class="meta-chip">
+        Leader: <strong>{{ timeline.players[0].display_name }}</strong>
+        — ${{ "%.0f"|format(timeline.players[0].final_score) }}
+      </div>
     </div>
 
     <div class="chart-card">
@@ -116,11 +113,17 @@
 
 <script>
 (function () {
-  const MY_UID  = {{ my_user_id | tojson }};
-  const fixtures = {{ timeline.fixtures | tojson }};
+  const MY_UID   = {{ my_user_id        | tojson }};
   const players  = {{ timeline.players  | tojson }};
+  const T_START  = {{ timeline.t_start  | tojson }};
+  const T_END    = {{ timeline.t_end    | tojson }};
 
-  if (!fixtures.length || fixtures.length <= 1) return;
+  if (!players.length) return;
+
+  // ── Global typeface — match the rest of the site (JetBrains Mono) ─────
+  Chart.defaults.font.family = "'JetBrains Mono', Menlo, Consolas, monospace";
+  Chart.defaults.font.size   = 11;
+  Chart.defaults.color       = "#a0a0c0";
 
   // ── Colour palette ─────────────────────────────────────────────────────
   const PALETTE = [
@@ -130,93 +133,158 @@
     "#ff57c8","#57ffff","#ff8c57","#7c57ff","#57ff7c",
   ];
 
-  // x-axis labels: "Start", then "14 Jun\nGER v SCO" etc.
-  const labels = fixtures.map((f, i) => {
-    if (i === 0) return "Start";
-    return `${f.date_label}\n${f.label}`;
-  });
+  // Tiny per-dataset y-jitter so overlapping lines stay individually
+  // hoverable. ±0.4 of a dollar at most — invisible in normal display.
+  function jitterFor(i) {
+    const stagger = ((i % 5) - 2) * 0.18;     // -0.36 .. +0.36
+    return stagger;
+  }
 
-  // Build datasets
+  // Build datasets. Chart.js point objects use {x: timestamp, y: balance}.
   const datasets = players.map((p, i) => {
-    const isMe = p.user_id === MY_UID;
+    const isMe  = p.user_id === MY_UID;
     const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
+    const jit   = jitterFor(i);
     return {
-      label:       p.display_name,
-      data:        p.cumulative,
-      borderColor: color,
+      label:           p.display_name,
+      data:            p.events.map(e => ({
+        x: e.t, y: e.y + jit,
+        _trueY: e.y, _kind: e.kind, _label: e.label,
+      })),
+      borderColor:     color,
       backgroundColor: color + "18",
-      borderWidth: isMe ? 2.5 : 1.5,
-      pointRadius: isMe ? 3 : 1.5,
-      pointHoverRadius: isMe ? 6 : 4,
-      tension: 0.25,
-      fill: false,
-      _uid: p.user_id,
-      _final: p.final_score,
+      borderWidth:     isMe ? 2.5 : 1.3,
+      pointRadius:     (ctx) => {
+        // Highlight only payout/spy/bet/adjustment nodes — 'start' is a
+        // synthetic anchor, render it small.
+        const k = ctx.raw && ctx.raw._kind;
+        if (k === "start") return 0;
+        return isMe ? 3.2 : 1.8;
+      },
+      pointHoverRadius: isMe ? 6.5 : 4.5,
+      tension:          0.15,
+      fill:             false,
+      _uid:             p.user_id,
+      _final:           p.final_score,
     };
   });
+
+  // ── Plugin: draw each player's display_name to the right of their last
+  //          visible point. Sorted top-down by Y so collisions stagger.
+  const endLabelPlugin = {
+    id: "endLabel",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const x = scales.x, y = scales.y;
+      const meta = chart.data.datasets.map((ds, i) => ({ds, i, meta: chart.getDatasetMeta(i)}));
+      const points = [];
+      meta.forEach(({ds, i, meta: m}) => {
+        if (!m || m.hidden) return;
+        const lastP = m.data[m.data.length - 1];
+        if (!lastP || lastP.x > chartArea.right + 2) return;
+        points.push({
+          x: lastP.x, y: lastP.y,
+          color: ds.borderColor, label: ds.label,
+          isMe: ds._uid === MY_UID,
+        });
+      });
+      points.sort((a, b) => a.y - b.y);
+      // Stagger so labels don't overlap vertically
+      const minGap = 13;
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].y - points[i - 1].y < minGap) {
+          points[i].y = points[i - 1].y + minGap;
+        }
+      }
+      ctx.save();
+      ctx.font = "600 10px 'JetBrains Mono', Menlo, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      points.forEach(p => {
+        ctx.fillStyle = p.color;
+        if (p.isMe) ctx.font = "700 11px 'JetBrains Mono', Menlo, monospace";
+        else        ctx.font = "500 10px 'JetBrains Mono', Menlo, monospace";
+        ctx.fillText(p.label, p.x + 6, p.y);
+      });
+      ctx.restore();
+    },
+  };
 
   // ── Chart ──────────────────────────────────────────────────────────────
   const ctx = document.getElementById("statsChart").getContext("2d");
   const chart = new Chart(ctx, {
     type: "line",
-    data: { labels, datasets },
+    data: { datasets },
+    plugins: [endLabelPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
+      parsing: false,
+      animation: false,
+      // Per-line hover: hovering a line shows ONLY that player's data.
+      interaction: { mode: "nearest", intersect: true, axis: "xy" },
+      hover:       { mode: "nearest", intersect: true },
+      layout: { padding: { right: 90 } },   // room for end-of-line labels
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "rgba(10,10,15,0.92)",
-          borderColor: "#2a2a35",
-          borderWidth: 1,
-          titleColor: "#e0e0e8",
-          bodyColor: "#9090a0",
-          padding: 10,
+          backgroundColor: "rgba(10,10,15,0.94)",
+          borderColor:     "#2a2a35",
+          borderWidth:     1,
+          titleColor:      "#e0e0e8",
+          bodyColor:       "#c0c0d0",
+          padding:         10,
+          titleFont:       { family: "'JetBrains Mono', monospace", weight: "700", size: 11 },
+          bodyFont:        { family: "'JetBrains Mono', monospace", size: 11 },
           callbacks: {
             title(items) {
-              const i = items[0].dataIndex;
-              if (i === 0) return "Start";
-              const f = fixtures[i];
-              return `${f.date_label} — ${f.label}${f.stage ? "  (" + f.stage + ")" : ""}`;
+              const it = items[0];
+              return it.dataset.label;
             },
             label(item) {
-              const prev = item.dataIndex > 0 ? item.dataset.data[item.dataIndex - 1] : item.parsed.y;
-              const delta = item.parsed.y - prev;
-              const sign = delta > 0 ? "+" : (delta < 0 ? "-" : "");
-              const deltaStr = delta === 0 ? " (—)" : ` (${sign}$${Math.abs(delta).toFixed(0)})`;
-              return ` ${item.dataset.label}: $${item.parsed.y.toFixed(0)}${deltaStr}`;
+              const raw = item.raw;
+              const trueY = raw._trueY != null ? raw._trueY : item.parsed.y;
+              const when = new Date(raw.x).toLocaleString(undefined, {
+                month: "short", day: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              });
+              return [
+                ` ${raw._label}`,
+                ` balance: $${trueY.toFixed(0)}`,
+                ` ${when}`,
+              ];
             },
           },
-          itemSort(a, b) { return b.parsed.y - a.parsed.y; },
         },
       },
       scales: {
         x: {
+          type: "linear",
+          min:  T_START,
+          max:  T_END + (T_END - T_START) * 0.02,   // small right pad
           ticks: {
             color: "#606070",
-            font: { size: 10 },
-            maxRotation: 45,
-            minRotation: 0,
-            maxTicksLimit: 18,
-            callback(val, i) {
-              if (i === 0) return "Start";
-              return fixtures[i]?.date_label ?? "";
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+            callback(val) {
+              const d = new Date(val);
+              return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
             },
           },
           grid: { color: "#1e1e28" },
         },
         y: {
           ticks: {
-            color: "#606070", font: { size: 11 },
+            color: "#606070",
             callback(v) { return "$" + Math.round(v); },
           },
           grid:  { color: "#1e1e28" },
           title: {
             display: true,
-            text: "Balance ($)",
+            text:  "Balance ($)",
             color: "#505060",
-            font: { size: 10 },
+            font:  { size: 10 },
           },
         },
       },
