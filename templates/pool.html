@@ -1149,11 +1149,13 @@
   {% if group_standings %}
     <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
   {% endif %}
+  {% if has_ko_stage %}
   <button class="stage-toggle" id="odds-format-toggle"
           onclick="toggleOddsFormat(this)"
           title="Switch between decimal and American odds">
     Odds: dec
   </button>
+  {% endif %}
   <button class="stage-toggle" id="hide-completed-toggle"
           onclick="toggleHideCompleted(this)"
           title="Hide picks for fixtures already played">
@@ -1752,8 +1754,14 @@
         <div id="standings-body" style="display:none">
           <div class="standings-grid">
             {% for group_name, teams in group_standings.items() %}
+            {% set group_letter = group_name.split(' ')[-1] %}
             <div class="standings-group">
-              <div class="standings-group-header">{{ group_name }}</div>
+              <a href="{{ url_for('group_page', pool_id=pool.id, letter=group_letter) }}"
+                 class="standings-group-header"
+                 style="display:block;text-decoration:none;color:inherit"
+                 title="Open {{ group_name }} picks page">
+                {{ group_name }} <span style="color:var(--text-dim);font-weight:400;font-size:0.7rem">→</span>
+              </a>
               <table class="standings-table">
                 <thead>
                   <tr>
@@ -2243,7 +2251,14 @@
   stageTabs.forEach(tab => {
     tab.addEventListener('click', e => {
       e.preventDefault();
-      const target = document.getElementById('stage-' + tab.dataset.stage);
+      // The TBL tab targets the group-standings section; everything else
+      // is a normal stage section. Without this special-case, clicking TBL
+      // looked up #stage-standings (which doesn't exist) and silently
+      // failed to scroll.
+      const targetId = tab.dataset.stage === 'standings'
+        ? 'group-standings'
+        : 'stage-' + tab.dataset.stage;
+      const target = document.getElementById(targetId);
       if (!target) return;
       const offset = 56 + 42;
       const top = target.getBoundingClientRect().top + window.scrollY - offset - 8;

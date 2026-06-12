@@ -1482,13 +1482,16 @@ def get_group_standings():
     Each team dict: {team, flag_code, played, won, drawn, lost,
                      goals_for, goals_against, goal_diff, points}
     """
+    # Pull EVERY group fixture so we can seed the standings with all 4
+    # teams in each group, even before any matches have been played.
+    # Result-bearing rows then layer on the played-game stats; unplayed
+    # rows just contribute team identity (and flag).
     conn = get_db()
     rows = conn.execute("""
         SELECT stage, home_team, away_team, home_flag_code, away_flag_code,
                home_score, away_score, result
         FROM fixtures
-        WHERE result IS NOT NULL AND result != ''
-              AND stage LIKE 'Group %'
+        WHERE stage LIKE 'Group %'
         ORDER BY stage, kick_off
     """).fetchall()
     conn.close()
@@ -1500,18 +1503,15 @@ def get_group_standings():
 
     # Build stats per group
     groups_stats = {}   # group → {team → stat_dict}
-    groups_fixtures = {}  # group → [fixture rows]
+    groups_fixtures = {}  # group → [completed fixture rows only — used for H2H]
     flag_map = {}
 
     for r in raw_rows:
         group = r["stage"]
         home, away = r["home_team"], r["away_team"]
-        hs, as_ = (r["home_score"] or 0), (r["away_score"] or 0)
 
         flag_map[home] = r["home_flag_code"] or "un"
         flag_map[away] = r["away_flag_code"] or "un"
-
-        groups_fixtures.setdefault(group, []).append(r)
 
         if group not in groups_stats:
             groups_stats[group] = {}
@@ -1526,6 +1526,12 @@ def get_group_standings():
         ensure(home)
         ensure(away)
 
+        # Only completed fixtures contribute to the played-game stats + H2H
+        if not r["result"]:
+            continue
+        groups_fixtures.setdefault(group, []).append(r)
+
+        hs, as_ = (r["home_score"] or 0), (r["away_score"] or 0)
         gs = groups_stats[group]
         gs[home]["played"] += 1
         gs[away]["played"] += 1

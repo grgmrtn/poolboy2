@@ -575,6 +575,10 @@ def pool_page(pool_id):
     for r in payout_rows:
         payouts_by_fixture.setdefault(r["fixture_id"], {})[r["email"]] = float(r["amount"] or 0)
 
+    # Odds-format toggle is only useful for KO fixtures (group stage has
+    # no per-team odds rendered). Gate the button until KO stages appear.
+    has_ko_stage = any(db.is_knockout_stage(s) for s in grouped_fixtures)
+
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
@@ -599,6 +603,65 @@ def pool_page(pool_id):
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
         pool_size=pool_size,
+        has_ko_stage=has_ko_stage,
+    )
+
+
+@app.route("/pool/<pool_id>/group/<letter>")
+@login_required
+def group_page(pool_id, letter):
+    """
+    Focused per-group view: all six fixtures in Group <letter> in kick_off
+    order, with the standings table at top + inline pick UI. Picks POST to
+    the same /pool/<id>/pick endpoint, so no separate save logic is needed.
+    """
+    g.nav_pool_id = pool_id
+    user = current_user()
+    pool = db.get_pool_by_id(pool_id)
+    if not pool:
+        flash("Pool not found.", "error"); return redirect(url_for("home"))
+    if not db.is_pool_member(user["id"], pool_id):
+        flash("You're not a member of that pool.", "error"); return redirect(url_for("home"))
+
+    letter = (letter or "").upper()
+    if len(letter) != 1 or not letter.isalpha():
+        flash("Unknown group.", "error"); return redirect(url_for("pool_page", pool_id=pool_id))
+    stage = f"Group {letter}"
+
+    # Fetch group fixtures directly — get_all_fixtures() rebuckets group
+    # fixtures into Matchday 1/2/3 and loses the Group letter identity.
+    conn = db.get_db()
+    fixture_rows = conn.execute(
+        "SELECT * FROM fixtures WHERE stage=? ORDER BY kick_off", (stage,)
+    ).fetchall()
+    conn.close()
+    fixtures = [dict(r) for r in fixture_rows]
+    if not fixtures:
+        flash(f"No fixtures found for {stage}.", "error")
+        return redirect(url_for("pool_page", pool_id=pool_id))
+
+    _attach_display_times(fixtures)
+
+    existing_picks = db.get_picks_full_for_user_in_pool(user["id"], pool_id)
+    membership     = db.get_pool_membership(user["id"], pool_id)
+    has_paid       = bool(membership and membership["has_paid"])
+    my_balance     = db.get_member_balance(user["id"], pool_id)
+    scoring_config = db.get_active_scoring_config()
+    group_standings = db.get_group_standings()
+    teams = group_standings.get(stage, [])
+
+    return render_template("group.html",
+        pool=pool,
+        stage=stage,
+        group_letter=letter,
+        fixtures=fixtures,
+        teams=teams,
+        existing_picks=existing_picks,
+        has_paid=has_paid,
+        my_balance=my_balance,
+        scoring_config=scoring_config,
+        now_iso=datetime.now(timezone.utc).isoformat(),
+        lock_minutes=LOCK_MINUTES,
     )
 
 

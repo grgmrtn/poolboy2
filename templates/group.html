@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }} — {{ stage }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .group-header { margin-bottom: 1.25rem; }
+  .group-header h1 {
+    font-size: 1.6rem; font-weight: 700; letter-spacing: 0.02em;
+    margin: 0.4rem 0 0.2rem;
+  }
+  .group-back { color: var(--text-dim); font-size: 0.78rem; text-decoration: none; }
+  .group-back:hover { color: var(--text); }
+  .group-sub { color: var(--text-muted); font-size: 0.82rem; }
+
+  /* Standings table — compact for single-group view */
+  .gtable-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.75rem;
+  }
+  .gtable { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  .gtable th {
+    text-align: center; color: var(--text-dim);
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border);
+  }
+  .gtable td {
+    text-align: center; padding: 0.45rem 0.5rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    font-variant-numeric: tabular-nums;
+  }
+  .gtable td:first-child { color: var(--text-muted); font-size: 0.78rem; }
+  .gtable td.team-name {
+    text-align: left; white-space: nowrap; font-weight: 600;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .gtable td.team-name img { width: 18px; height: 13px; border-radius: 2px; }
+  .gtable tr.qual-auto td { background: rgba(80,200,100,0.07); }
+  .gtable tr.qual-pot  td { background: rgba(255,190,87,0.06); }
+  .gtable tr.qual-none td { opacity: 0.65; }
+  .gtable td.pts { font-weight: 700; color: var(--accent); }
+
+  /* Fixture list — chronological */
+  .fx-list { display: flex; flex-direction: column; gap: 0.85rem; }
+  .fx-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem 1rem;
+  }
+  .fx-row.is-completed { opacity: 0.7; }
+  .fx-meta {
+    display: flex; align-items: center; gap: 0.65rem;
+    font-size: 0.7rem; color: var(--text-muted);
+    margin-bottom: 0.55rem;
+  }
+  .fx-meta .fx-date { color: var(--text); font-weight: 600; }
+  .fx-meta .fx-time { color: var(--text-muted); }
+  .fx-meta .fx-locked {
+    color: var(--text-dim); font-size: 0.62rem;
+    letter-spacing: 0.08em; text-transform: uppercase; margin-left: auto;
+  }
+  .fx-meta .fx-final { color: var(--accent); font-weight: 700; }
+
+  .fx-pick {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.6rem;
+    align-items: stretch;
+  }
+  .fx-side {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0.3rem; padding: 0.6rem 0.4rem;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer; transition: all 0.12s;
+    min-height: 64px; justify-content: center;
+  }
+  .fx-side img { width: 26px; height: 19px; border-radius: 2px; }
+  .fx-side .fx-team-name { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+  .fx-side .fx-bet-letter { font-size: 0.55rem; letter-spacing: 0.1em; color: var(--text-dim); }
+  .fx-side:hover { border-color: var(--border-hi); }
+  .fx-side.active {
+    background: rgba(200,255,87,0.10);
+    border-color: var(--accent);
+  }
+  .fx-side.active .fx-bet-letter { color: var(--accent); }
+  .fx-side.locked { cursor: not-allowed; opacity: 0.55; }
+  .fx-side.locked:hover { border-color: var(--border); }
+
+  .fx-mid {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-width: 56px;
+    padding: 0.4rem 0;
+  }
+  .fx-mid .fx-vs { color: var(--text-dim); font-size: 0.62rem; letter-spacing: 0.1em; }
+  .fx-mid .fx-score {
+    font-size: 1.5rem; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .fx-mid .fx-live-score {
+    font-size: 2rem; font-weight: 700; color: var(--accent);
+    line-height: 1.05;
+    text-shadow: 0 0 14px rgba(200,255,87,0.18);
+  }
+  .fx-mid .fx-live-tag {
+    margin-top: 2px;
+    font-size: 0.5rem; letter-spacing: 0.18em; font-weight: 700;
+    color: var(--accent);
+    animation: live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .fx-draw {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 0.5rem; padding: 0.35rem 0.6rem;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem; color: var(--text-muted); font-weight: 600;
+    letter-spacing: 0.03em; transition: all 0.12s;
+  }
+  .fx-draw:hover { border-color: var(--border-hi); color: var(--text); }
+  .fx-draw.active {
+    background: rgba(200,255,87,0.10); border-color: var(--accent);
+    color: var(--accent);
+  }
+  .fx-draw.locked { cursor: not-allowed; opacity: 0.55; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <div class="group-header">
+    <a href="{{ url_for('pool_page', pool_id=pool.id) }}" class="group-back">← {{ pool.name }}</a>
+    <h1>{{ stage }}</h1>
+    <div class="group-sub">{{ fixtures|length }} fixtures · pick each one before kickoff</div>
+  </div>
+
+  {% if teams %}
+  <div class="gtable-wrap">
+    <table class="gtable">
+      <thead>
+        <tr>
+          <th>#</th><th class="team-name" style="text-align:left">Team</th>
+          <th>P</th><th>W</th><th>D</th><th>L</th>
+          <th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in teams %}
+        {% set pos_cls = 'qual-auto' if loop.index <= 2 else ('qual-pot' if loop.index == 3 else 'qual-none') %}
+        <tr class="{{ pos_cls }}">
+          <td>{{ loop.index }}</td>
+          <td class="team-name">
+            <img class="flag" src="https://flagcdn.com/{{ t.flag_code }}.svg" alt="" loading="lazy" onerror="this.style.display='none'">
+            {{ t.team }}
+          </td>
+          <td>{{ t.played }}</td>
+          <td>{{ t.won }}</td>
+          <td>{{ t.drawn }}</td>
+          <td>{{ t.lost }}</td>
+          <td>{{ t.goals_for }}</td>
+          <td>{{ t.goals_against }}</td>
+          <td>{% if t.goal_diff > 0 %}+{% endif %}{{ t.goal_diff }}</td>
+          <td class="pts">{{ t.points }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="fx-list">
+    {% for f in fixtures %}
+      {% set ko = f.kick_off_display or f.kick_off or '' %}
+      {% set ko_iso = (f.kick_off or '')[:19] %}
+      {% set mo = (ko[5:7]|int) if ko else 0 %}
+      {% set dy = (ko[8:10]|int) if ko else 0 %}
+      {% set tm = ko[11:16] if ko else '—' %}
+      {% set MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+      {% set is_completed = f.result is not none and f.result != '' %}
+      {% set is_started   = f.kick_off and ko_iso < now_iso[:19] %}
+      {% set is_locked    = is_completed or is_started %}
+      {% set p            = existing_picks.get(f.id) %}
+      {% set my_pick      = p.predicted_result if p else none %}
+
+      <div class="fx-row {% if is_completed %}is-completed{% endif %}" data-fixture-id="{{ f.id }}">
+        <div class="fx-meta">
+          <span class="fx-date">{{ dy }} {{ MONTHS[mo] }}</span>
+          <span class="fx-time">{{ tm }}</span>
+          {% if is_completed %}
+            <span class="fx-locked">final</span>
+          {% elif is_started %}
+            <span class="fx-locked">locked</span>
+          {% else %}
+            <span class="fx-locked">{{ lock_minutes }} min before kickoff</span>
+          {% endif %}
+        </div>
+
+        <div class="fx-pick">
+          <div class="fx-side {% if my_pick == 'H' %}active{% endif %} {% if is_locked %}locked{% endif %}"
+               onclick="{% if not is_locked %}submitGroupPick('{{ f.id }}','H', this){% endif %}">
+            <img src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" loading="lazy">
+            <span class="fx-team-name">{{ f.home_team }}</span>
+            <span class="fx-bet-letter">HOME</span>
+          </div>
+
+          <div class="fx-mid">
+            {% if is_completed %}
+              <div class="fx-score">{{ f.home_score }}<span style="color:var(--text-dim);margin:0 4px">–</span>{{ f.away_score }}</div>
+            {% elif f.live_home_score is not none and f.live_away_score is not none %}
+              <div class="fx-live-score">{{ f.live_home_score }}<span style="color:var(--accent);opacity:0.55;margin:0 4px">–</span>{{ f.live_away_score }}</div>
+              <div class="fx-live-tag">● LIVE</div>
+            {% else %}
+              <span class="fx-vs">vs</span>
+            {% endif %}
+          </div>
+
+          <div class="fx-side {% if my_pick == 'A' %}active{% endif %} {% if is_locked %}locked{% endif %}"
+               onclick="{% if not is_locked %}submitGroupPick('{{ f.id }}','A', this){% endif %}">
+            <img src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" loading="lazy">
+            <span class="fx-team-name">{{ f.away_team }}</span>
+            <span class="fx-bet-letter">AWAY</span>
+          </div>
+
+          <div class="fx-draw {% if my_pick == 'D' %}active{% endif %} {% if is_locked %}locked{% endif %}"
+               onclick="{% if not is_locked %}submitGroupPick('{{ f.id }}','D', this){% endif %}">
+            Draw
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<script>
+async function submitGroupPick(fixtureId, prediction, clickedEl) {
+  const row = clickedEl.closest('.fx-row');
+  if (!row) return;
+  row.style.opacity = '0.5';
+  try {
+    const r = await fetch("{{ url_for('submit_pick', pool_id=pool.id) }}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fixture_id: fixtureId, prediction }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert(data.error || 'Could not save your pick.');
+      return;
+    }
+    // Optimistic UI: clear sibling actives, mark this one
+    row.querySelectorAll('.fx-side, .fx-draw').forEach(el => el.classList.remove('active'));
+    clickedEl.classList.add('active');
+  } catch (err) {
+    alert('Network error — try again.');
+  } finally {
+    row.style.opacity = '';
+  }
+}
+</script>
+{% endblock %}
