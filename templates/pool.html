@@ -193,7 +193,8 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    overflow: hidden;
+    /* No overflow:hidden — it would clip the picker tooltip when it pops
+       below a row. Rows have no background so corners still look fine. */
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
   }
@@ -239,6 +240,7 @@
   .ct-mob { display: none; }
   .ct-date, .ct-time, .ct-grp { color: var(--text-muted); }
   .ct-team {
+    position: relative;                /* anchor for .ct-pickers-tip */
     display: flex; align-items: center; gap: 0.35rem;
     color: var(--text); font-weight: 600;
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
@@ -261,46 +263,106 @@
   .ct-bet-win  { color: var(--text); }
   .ct-bet-loss { color: var(--text-muted); }
   .ct-bet-amt  { color: var(--text-dim); font-weight: 500; font-size: 0.72rem; }
-  .ct-payout { font-weight: 700; }
-  .ct-pay-pos { color: var(--accent); }       /* lime — non-negative payout */
-  .ct-pay-neg { color: var(--text-muted); }
+  /* Default payout colour is grey — only strictly positive payouts go lime.
+     Zero / negative / no-payout all sit in muted text so they don't shout. */
+  .ct-payout { font-weight: 700; color: var(--text-muted); }
+  .ct-pay-pos { color: var(--accent); }
   .ct-fld { color: var(--text-dim); }
 
-  /* Picker blob — hover-tooltip on team cells listing first names of
-     everyone who picked that side. Lives inside the team cell so its
-     hover state stays tied to whatever the cursor is over. */
-  .ct-team.has-tip, .ct-m-side.has-tip { cursor: help; }
+  /* Picker blob — hover-tooltip on home / score (draw) / away cells
+     listing first names of everyone who picked that side. Background is
+     tinted to match the match-pill side colour (home=blue, away=red,
+     draw=lime). Lives inside the cell so hover state stays tied to it. */
+  .ct-team.has-tip, .ct-m-side.has-tip, .ct-score.has-tip { cursor: help; }
+  .ct-score.has-tip { position: relative; }
   .ct-pickers-tip {
     display: none;
     position: absolute;
     top: 100%; left: 50%; transform: translateX(-50%);
     margin-top: 6px; z-index: 30;
     width: max-content; max-width: 280px;
-    background: var(--surface2);
-    border: 1px solid var(--border-hi);
     border-radius: 6px;
     padding: 0.55rem 0.7rem;
     font-size: 0.7rem; font-weight: 500;
-    color: var(--text); line-height: 1.5;
+    line-height: 1.55;
     white-space: normal;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
     pointer-events: none;
     font-family: var(--mono);
+    /* Solid dark background so names stay legible; the country / side
+       colour comes through on the border + header only. */
+    background: #15151e;
+    border: 1px solid var(--border-hi);
+    border-left-width: 3px;
+    color: var(--text);
   }
   .ct-pickers-tip strong {
     display: block;
     font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-dim); font-weight: 700;
+    font-weight: 700;
     margin-bottom: 0.3rem;
+    color: var(--text-dim);
   }
-  .ct-team.has-tip:hover { overflow: visible; }
-  .ct-team.has-tip:hover > .ct-pickers-tip,
-  .ct-m-side.has-tip:hover > .ct-pickers-tip { display: block; }
+  /* Side-tinted accents (border + header). Background stays solid dark.
+     The country-specific home/away colours are painted via JS at init —
+     these classes only catch the static draw case + provide a fallback. */
+  .ct-pickers-tip.tip-h {
+    border-color: var(--blue);
+    border-left-color: var(--blue);
+  }
+  .ct-pickers-tip.tip-h strong { color: var(--blue); }
+  .ct-pickers-tip.tip-a {
+    border-color: var(--red);
+    border-left-color: var(--red);
+  }
+  .ct-pickers-tip.tip-a strong { color: var(--red); }
+  .ct-pickers-tip.tip-d {
+    border-color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .ct-pickers-tip.tip-d strong { color: var(--accent); }
+
+  .ct-team.has-tip:hover, .ct-m-side.has-tip:hover { overflow: visible; }
+  .ct-team.has-tip:hover    > .ct-pickers-tip,
+  .ct-m-side.has-tip:hover  > .ct-pickers-tip,
+  .ct-score.has-tip:hover   > .ct-pickers-tip,
+  .ct-m-score.has-tip:hover > .ct-pickers-tip { display: block; }
 
   @media (max-width: 640px) {
     .completed-table { font-size: 0.74rem; }
     .ct-desk { display: none; }
     .ct-mob  { display: inline-flex; }
+
+    /* Triangle markers next to each side — tell the user the cell is
+       interactive and indicate which side a tooltip belongs to. Hidden on
+       desktop (default) where the tooltip pops from the cell itself. */
+    .ct-tri {
+      display: inline-block;
+      margin-left: 0.2rem;
+      font-size: 0.55rem; line-height: 1;
+      color: var(--text-dim);
+      transition: color 0.15s, transform 0.15s;
+    }
+    .ct-m-side.has-tip:hover .ct-tri,
+    .ct-m-score.has-tip:hover .ct-tri {
+      color: var(--accent); transform: translateY(1px);
+    }
+    /* When one side is being hovered, dim the rest of the match cell so
+       the active side is unambiguous. */
+    .ct-match:has(.has-tip:hover) > :not(:hover) { opacity: 0.4; }
+
+    /* Tooltip on mobile: anchor to the .ct-row (not the side cell) so
+       its on-screen position is the same regardless of which side fired
+       it. The cells go position:static; the row gains position:relative. */
+    .ct-row { position: relative; }
+    .ct-m-side.has-tip, .ct-m-score.has-tip { position: static; }
+    .ct-pickers-tip {
+      left: 0; right: 0; transform: none;
+      margin: 6px auto 0;
+      max-width: min(88vw, 340px);
+      font-size: 0.7rem;
+      padding: 0.5rem 0.65rem;
+    }
     .ct-grp  { display: none; }   /* Hidden on mobile — score saved for Match */
     .ct-row {
       padding: 0.55rem 0.6rem;
@@ -329,6 +391,7 @@
       min-width: 0; font-weight: 600;
     }
     .ct-m-side {
+      position: relative;              /* anchor for .ct-pickers-tip */
       display: inline-flex; align-items: center; gap: 0.25rem;
       color: var(--text-muted);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -336,7 +399,11 @@
     }
     .ct-m-win  { color: var(--text); }
     .ct-m-win::after { content: ' ✓'; color: var(--accent); }
-    .ct-m-score { color: var(--text); font-weight: 700; flex-shrink: 0; }
+    .ct-m-score {
+      position: relative;            /* anchor for the draw-pickers tip */
+      color: var(--text); font-weight: 700; flex-shrink: 0;
+    }
+    .ct-m-score.has-tip { cursor: help; }
     .ct-flag { width: 14px; height: 9px; }
     /* Headers on mobile align with the visible cells only */
     .ct-row.ct-head { font-size: 0.58rem; }
@@ -1218,8 +1285,11 @@
                 {% set _all = all_picks_by_fixture.get(f.id, []) %}
                 {% set ct_h_pickers = _all|selectattr('predicted_result','equalto','H')|list %}
                 {% set ct_a_pickers = _all|selectattr('predicted_result','equalto','A')|list %}
+                {% set ct_d_pickers = _all|selectattr('predicted_result','equalto','D')|list %}
 
-                <div class="ct-row" role="row">
+                <div class="ct-row" role="row"
+                     data-home-flag="{{ f.home_flag_code or 'un' }}"
+                     data-away-flag="{{ f.away_flag_code or 'un' }}">
                   <span role="cell" class="ct-date ct-desk">{{ ct_dy }}/{{ ct_mo }}</span>
                   <span role="cell" class="ct-time ct-desk">{{ ct_time }}</span>
                   <span role="cell" class="ct-when ct-mob">
@@ -1231,40 +1301,56 @@
                     {{ ct_home }}
                     <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                     {% if ct_h_pickers %}
-                    <span class="ct-pickers-tip">
+                    <span class="ct-pickers-tip tip-h">
                       <strong>{{ ct_home }} · {{ ct_h_pickers|length }} {{ 'pick' if ct_h_pickers|length == 1 else 'picks' }}</strong>
-                      {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                      {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </span>
                     {% endif %}
                   </span>
-                  <span role="cell" class="ct-score ct-desk">{{ f.home_score }}–{{ f.away_score }}</span>
+                  <span role="cell" class="ct-score ct-desk{% if ct_d_pickers %} has-tip{% endif %}">
+                    {{ f.home_score }}–{{ f.away_score }}
+                    {% if ct_d_pickers %}
+                    <span class="ct-pickers-tip tip-d">
+                      <strong>Draw · {{ ct_d_pickers|length }} {{ 'pick' if ct_d_pickers|length == 1 else 'picks' }}</strong>
+                      {% for o in ct_d_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                    </span>
+                    {% endif %}
+                  </span>
                   <span role="cell" class="ct-team ct-desk {% if f.result == 'A' %}ct-team-win{% endif %}{% if ct_a_pickers %} has-tip{% endif %}">
                     <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
                     {{ ct_away }}
                     {% if ct_a_pickers %}
-                    <span class="ct-pickers-tip">
+                    <span class="ct-pickers-tip tip-a">
                       <strong>{{ ct_away }} · {{ ct_a_pickers|length }} {{ 'pick' if ct_a_pickers|length == 1 else 'picks' }}</strong>
-                      {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                      {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </span>
                     {% endif %}
                   </span>
                   <span role="cell" class="ct-match ct-mob">
                     <span class="ct-m-side {% if f.result == 'H' %}ct-m-win{% endif %}{% if ct_h_pickers %} has-tip{% endif %}">
-                      <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}
+                      <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}{% if ct_h_pickers %}<span class="ct-tri" aria-hidden="true">▾</span>{% endif %}
                       {% if ct_h_pickers %}
-                      <span class="ct-pickers-tip">
+                      <span class="ct-pickers-tip tip-h">
                         <strong>{{ ct_home }} · {{ ct_h_pickers|length }}</strong>
-                        {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                       </span>
                       {% endif %}
                     </span>
-                    <span class="ct-m-score">{{ f.home_score }}–{{ f.away_score }}</span>
+                    <span class="ct-m-score{% if ct_d_pickers %} has-tip{% endif %}">
+                      {{ f.home_score }}–{{ f.away_score }}{% if ct_d_pickers %}<span class="ct-tri ct-tri-draw" aria-hidden="true">▾</span>{% endif %}
+                      {% if ct_d_pickers %}
+                      <span class="ct-pickers-tip tip-d">
+                        <strong>Draw · {{ ct_d_pickers|length }}</strong>
+                        {% for o in ct_d_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                      </span>
+                      {% endif %}
+                    </span>
                     <span class="ct-m-side {% if f.result == 'A' %}ct-m-win{% endif %}{% if ct_a_pickers %} has-tip{% endif %}">
-                      <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}
+                      <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}{% if ct_a_pickers %}<span class="ct-tri" aria-hidden="true">▾</span>{% endif %}
                       {% if ct_a_pickers %}
-                      <span class="ct-pickers-tip">
+                      <span class="ct-pickers-tip tip-a">
                         <strong>{{ ct_away }} · {{ ct_a_pickers|length }}</strong>
-                        {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                       </span>
                       {% endif %}
                     </span>
@@ -1272,8 +1358,8 @@
                   <span role="cell" class="ct-bet {% if my_pick %}{{ 'ct-bet-win' if bet_won else 'ct-bet-loss' }}{% endif %}">
                     {{ bet_label }}{% if my_bet %} <span class="ct-bet-amt">${{ "%.0f"|format(my_bet) }}</span>{% endif %}
                   </span>
-                  <span role="cell" class="ct-num ct-payout {% if my_pay is not none and my_pay >= 0 %}ct-pay-pos{% elif my_pay is not none %}ct-pay-neg{% endif %}">
-                    {% if my_pay is none %}—{% elif my_pay >= 0 %}+${{ "%.0f"|format(my_pay) }}{% else %}-${{ "%.0f"|format(-my_pay) }}{% endif %}
+                  <span role="cell" class="ct-num ct-payout {% if my_pay and my_pay > 0 %}ct-pay-pos{% endif %}">
+                    {% if my_pay is none %}—{% elif my_pay > 0 %}+${{ "%.0f"|format(my_pay) }}{% elif my_pay < 0 %}-${{ "%.0f"|format(-my_pay) }}{% else %}$0{% endif %}
                   </span>
                   <span role="cell" class="ct-num ct-fld">
                     {% if field_pct is none %}—{% else %}{{ field_pct }}%{% endif %}
@@ -2055,6 +2141,24 @@
       row.style.setProperty('--home-bg',    hexToRgba(hc, 0.15));
       row.style.setProperty('--away-color', ac);
       row.style.setProperty('--away-bg',    hexToRgba(ac, 0.15));
+    });
+
+    // Completed-table picker tooltips — paint each tip-h/tip-a with the
+    // country colour pulled from data-home-flag / data-away-flag on the
+    // .ct-row. Draw tooltips (tip-d) stay lime since draws have no country.
+    document.querySelectorAll('.ct-row[data-home-flag]').forEach(row => {
+      const hc = brightenForDarkBg(COUNTRY_COLORS[row.dataset.homeFlag] || '#57b3ff');
+      const ac = brightenForDarkBg(COUNTRY_COLORS[row.dataset.awayFlag] || '#ff5757');
+      const paint = (tip, c) => {
+        // Solid dark background — country colour shows on border + header
+        // only, so the names stay legible against #15151e.
+        tip.style.borderColor     = c;
+        tip.style.borderLeftColor = c;
+        const s = tip.querySelector('strong');
+        if (s) s.style.color = c;
+      };
+      row.querySelectorAll('.ct-pickers-tip.tip-h').forEach(t => paint(t, hc));
+      row.querySelectorAll('.ct-pickers-tip.tip-a').forEach(t => paint(t, ac));
     });
 
     // Apply checkbox visibility state
