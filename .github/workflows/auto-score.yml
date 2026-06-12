@@ -21,8 +21,8 @@ on:
     - cron: "*/3 0-4 * * *"     # 8pm–12am ET + cushion for ET/penalties
   workflow_dispatch:
     inputs:
-      apply:
-        description: "Apply scores (default = dry-run preview only)"
+      dry_run:
+        description: "Dry-run preview only (default = apply scores)"
         type: boolean
         default: false
 
@@ -44,7 +44,11 @@ jobs:
           DATABASE_URL:           ${{ secrets.DATABASE_URL }}
           FOOTBALL_DATA_API_KEY:  ${{ secrets.FOOTBALL_DATA_API_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.apply }}" != "true" ]; then
+          # Manual dispatch with dry_run=true → preview; everything else
+          # (scheduled runs OR manual dispatch with default dry_run=false)
+          # applies. The default flipped from dry-run-by-default after launch
+          # because the user wants manual mid-game runs to actually score.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             python3 sim/auto_score_from_api.py
           else
             python3 sim/auto_score_from_api.py --apply
