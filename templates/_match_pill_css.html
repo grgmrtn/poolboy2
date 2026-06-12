@@ -146,21 +146,51 @@
   }
   .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
 
-  /* Live in-play score: double-height, bright accent, animated pulse. */
+  /* Live in-play score: double-height, bright accent. Layout is
+     {home}  LIVE  {away} on one line so the score reads like a tiny
+     scoreboard, with the pulsing LIVE tag acting as the separator. */
   .pill-score-live {
     font-size: 2.6rem; line-height: 1.05;
     color: var(--accent);
     text-shadow: 0 0 18px rgba(200,255,87,0.18);
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    white-space: nowrap;
   }
-  .pill-score-live .score-sep { color: var(--accent); opacity: 0.55; }
   .pill-live-tag {
-    margin-top: 2px;
-    font-size: 0.52rem; letter-spacing: 0.18em; font-weight: 700;
+    display: inline-block; vertical-align: middle;
+    padding: 0.2rem 0.42rem;
+    border-radius: 4px;
+    background: rgba(200,255,87,0.14);
+    border: 1px solid rgba(200,255,87,0.35);
+    font-size: 0.58rem; letter-spacing: 0.18em; font-weight: 700;
     color: var(--accent);
+    line-height: 1;
     animation: live-pulse 1.4s ease-in-out infinite;
   }
   @keyframes live-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.35; }
+  }
+
+  /* ── Pill mobile breakpoints ──────────────────────────────────────
+     ≤640 still fits a comfortable layout; <500 squeezes the iPhone
+     SE/12-mini / portrait Android. */
+  @media (max-width: 640px) {
+    .match-pill-row.pick-row { height: 52px; }
+    .pill-side, .pick-home, .pick-away { padding: 0 0.55rem; gap: 0.35rem; }
+    .team-abbr { font-size: 0.92rem; }
+    .flag { width: 20px; height: 14px; }
+    .pill-score { font-size: 1.2rem; }
+    .pill-score-live { font-size: 1.6rem; gap: 0.35rem; }
+    .pill-live-tag { font-size: 0.5rem; padding: 0.15rem 0.3rem; letter-spacing: 0.14em; }
+  }
+  @media (max-width: 400px) {
+    .match-pill-row.pick-row { height: 48px; }
+    .pill-side, .pick-home, .pick-away { padding: 0 0.4rem; gap: 0.25rem; }
+    .team-abbr { font-size: 0.85rem; }
+    .flag { width: 18px; height: 13px; }
+    .pill-score { font-size: 1.05rem; }
+    .pill-score-live { font-size: 1.35rem; gap: 0.25rem; }
+    .pill-live-tag { font-size: 0.46rem; padding: 0.12rem 0.25rem; }
   }
 </style>

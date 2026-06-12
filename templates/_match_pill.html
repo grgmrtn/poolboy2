@@ -38,8 +38,9 @@
       {% if is_completed %}
         <div class="pill-score">{{ f.home_score }}<span class="score-sep">–</span>{{ f.away_score }}</div>
       {% elif f.live_home_score is not none and f.live_away_score is not none %}
-        <div class="pill-score pill-score-live">{{ f.live_home_score }}<span class="score-sep">–</span>{{ f.live_away_score }}</div>
-        <div class="pill-live-tag">● LIVE</div>
+        <div class="pill-score pill-score-live">
+          {{ f.live_home_score }}<span class="pill-live-tag">LIVE</span>{{ f.live_away_score }}
+        </div>
       {% else %}
         <div class="pill-result pending">Live</div>
       {% endif %}

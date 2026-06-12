@@ -739,19 +739,25 @@
   }
   .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
 
-  /* Live in-play score: double-height, bright accent, animated pulse on
-     the LIVE tag below. Replaces the static "Live" label when the auto-
-     score cron has stashed a current score for an IN_PLAY fixture. */
+  /* Live in-play score: {home} LIVE {away} on one line. The pulsing
+     LIVE tag acts as the separator between the two numbers, like a
+     tiny scoreboard readout. */
   .pill-score-live {
     font-size: 2.6rem; line-height: 1.05;
     color: var(--accent);
     text-shadow: 0 0 18px rgba(200,255,87,0.18);
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    white-space: nowrap;
   }
-  .pill-score-live .score-sep { color: var(--accent); opacity: 0.55; }
   .pill-live-tag {
-    margin-top: 2px;
-    font-size: 0.52rem; letter-spacing: 0.18em; font-weight: 700;
+    display: inline-block; vertical-align: middle;
+    padding: 0.2rem 0.42rem;
+    border-radius: 4px;
+    background: rgba(200,255,87,0.14);
+    border: 1px solid rgba(200,255,87,0.35);
+    font-size: 0.58rem; letter-spacing: 0.18em; font-weight: 700;
     color: var(--accent);
+    line-height: 1;
     animation: live-pulse 1.4s ease-in-out infinite;
   }
   @keyframes live-pulse {
@@ -1593,8 +1599,9 @@
                           {% if is_completed %}
                             <div class="pill-score">{{ f.home_score }}<span class="score-sep">–</span>{{ f.away_score }}</div>
                           {% elif f.live_home_score is not none and f.live_away_score is not none %}
-                            <div class="pill-score pill-score-live">{{ f.live_home_score }}<span class="score-sep">–</span>{{ f.live_away_score }}</div>
-                            <div class="pill-live-tag">● LIVE</div>
+                            <div class="pill-score pill-score-live">
+                              {{ f.live_home_score }}<span class="pill-live-tag">LIVE</span>{{ f.live_away_score }}
+                            </div>
                           {% else %}
                             <div class="pill-result pending">Live</div>
                           {% endif %}
