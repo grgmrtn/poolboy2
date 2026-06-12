@@ -265,6 +265,10 @@ def init_db():
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_pct REAL DEFAULT 0.10",
             "ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS ko_spy_cap REAL DEFAULT 20",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS team_name TEXT",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_home_score INTEGER",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_away_score INTEGER",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_status TEXT",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_updated_at TEXT",
         ]:
             c.execute(sql)
     else:
@@ -289,6 +293,10 @@ def init_db():
             ("scoring_config", "ko_spy_pct REAL DEFAULT 0.10"),
             ("scoring_config", "ko_spy_cap REAL DEFAULT 20"),
             ("users",          "team_name TEXT"),
+            ("fixtures",       "live_home_score INTEGER"),
+            ("fixtures",       "live_away_score INTEGER"),
+            ("fixtures",       "live_status TEXT"),
+            ("fixtures",       "live_updated_at TEXT"),
         ]
         for table, col_def in migrations:
             try:
@@ -612,6 +620,35 @@ def set_fixture_odds(fixture_id, home_odds, away_odds):
     conn.execute(
         "UPDATE fixtures SET home_odds=?, away_odds=? WHERE id=?",
         (home_odds, away_odds, fixture_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_live_score(fixture_id, home_score, away_score, status, updated_at):
+    """
+    Stash a running live score for a fixture (separate from the final
+    home_score/away_score that drive payouts). Called by the auto-score
+    cron when a match status is IN_PLAY / PAUSED. When the match later
+    goes FINISHED, clear_live_score() wipes these columns so the pill
+    falls back to rendering the final score.
+    """
+    conn = get_db()
+    conn.execute(
+        "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
+        "live_status=?, live_updated_at=? WHERE id=?",
+        (home_score, away_score, status, updated_at, fixture_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def clear_live_score(fixture_id):
+    conn = get_db()
+    conn.execute(
+        "UPDATE fixtures SET live_home_score=NULL, live_away_score=NULL, "
+        "live_status=NULL, live_updated_at=NULL WHERE id=?",
+        (fixture_id,)
     )
     conn.commit()
     conn.close()

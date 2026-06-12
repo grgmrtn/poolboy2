@@ -659,6 +659,26 @@
   }
   .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
 
+  /* Live in-play score: double-height, bright accent, animated pulse on
+     the LIVE tag below. Replaces the static "Live" label when the auto-
+     score cron has stashed a current score for an IN_PLAY fixture. */
+  .pill-score-live {
+    font-size: 2.6rem; line-height: 1.05;
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(200,255,87,0.18);
+  }
+  .pill-score-live .score-sep { color: var(--accent); opacity: 0.55; }
+  .pill-live-tag {
+    margin-top: 2px;
+    font-size: 0.52rem; letter-spacing: 0.18em; font-weight: 700;
+    color: var(--accent);
+    animation: live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+  }
+
   /* ── Spy modal ─────────────────────────────────────────────────────
      Hidden by default. JS toggles a single `.open` class to show. This
      avoids the previous fragility where re-clicking the same Spy button
@@ -1466,6 +1486,9 @@
                         <div class="pill-centre">
                           {% if is_completed %}
                             <div class="pill-score">{{ f.home_score }}<span class="score-sep">–</span>{{ f.away_score }}</div>
+                          {% elif f.live_home_score is not none and f.live_away_score is not none %}
+                            <div class="pill-score pill-score-live">{{ f.live_home_score }}<span class="score-sep">–</span>{{ f.live_away_score }}</div>
+                            <div class="pill-live-tag">● LIVE</div>
                           {% else %}
                             <div class="pill-result pending">Live</div>
                           {% endif %}
