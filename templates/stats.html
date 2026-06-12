@@ -73,7 +73,7 @@
   <div class="stats-header">
     <a href="{{ url_for('pool_page', pool_id=pool.id) }}"
        style="color:var(--text-dim);font-size:0.78rem">← {{ pool.name }}</a>
-    <h1>Points over time</h1>
+    <h1>Balance over time</h1>
   </div>
 
   {% if not timeline.fixtures or timeline.fixtures|length <= 1 %}
@@ -97,13 +97,13 @@
       {% if timeline.players %}
         <div class="meta-chip">
           Leader: <strong>{{ timeline.players[0].display_name }}</strong>
-          — {{ timeline.players[0].final_score }} pts
+          — ${{ "%.0f"|format(timeline.players[0].final_score) }}
         </div>
       {% endif %}
     </div>
 
     <div class="chart-card">
-      <div class="chart-title">Cumulative points — each player</div>
+      <div class="chart-title">Running balance — each player</div>
       <div class="chart-wrap">
         <canvas id="statsChart"></canvas>
       </div>
@@ -181,10 +181,11 @@
               return `${f.date_label} — ${f.label}${f.stage ? "  (" + f.stage + ")" : ""}`;
             },
             label(item) {
-              const prev = item.dataIndex > 0 ? item.dataset.data[item.dataIndex - 1] : 0;
-              const gained = item.parsed.y - prev;
-              const gainStr = gained > 0 ? ` (+${gained})` : (gained === 0 ? " (—)" : "");
-              return ` ${item.dataset.label}: ${item.parsed.y} pts${gainStr}`;
+              const prev = item.dataIndex > 0 ? item.dataset.data[item.dataIndex - 1] : item.parsed.y;
+              const delta = item.parsed.y - prev;
+              const sign = delta > 0 ? "+" : (delta < 0 ? "-" : "");
+              const deltaStr = delta === 0 ? " (—)" : ` (${sign}$${Math.abs(delta).toFixed(0)})`;
+              return ` ${item.dataset.label}: $${item.parsed.y.toFixed(0)}${deltaStr}`;
             },
           },
           itemSort(a, b) { return b.parsed.y - a.parsed.y; },
@@ -206,11 +207,14 @@
           grid: { color: "#1e1e28" },
         },
         y: {
-          ticks: { color: "#606070", font: { size: 11 } },
+          ticks: {
+            color: "#606070", font: { size: 11 },
+            callback(v) { return "$" + Math.round(v); },
+          },
           grid:  { color: "#1e1e28" },
           title: {
             display: true,
-            text: "Cumulative points",
+            text: "Balance ($)",
             color: "#505060",
             font: { size: 10 },
           },
@@ -233,7 +237,7 @@
       item.innerHTML = `
         <span class="legend-swatch" style="background:${ds.borderColor}"></span>
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${ds.label}</span>
-        <span class="legend-score">${ds._final} pts</span>
+        <span class="legend-score">$${ds._final.toFixed(0)}</span>
       `;
       item.addEventListener("click", () => {
         if (hidden.has(i)) {

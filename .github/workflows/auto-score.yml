@@ -1,8 +1,14 @@
 name: Auto-score fixtures
 
-# Pulls FINISHED matches from football-data.org every 30 minutes and writes
-# their scores back to fixtures + scores every affected pool's picks.
-# Idempotent: re-runs skip fixtures that already have a result.
+# Pulls FINISHED matches from football-data.org and writes scores back to
+# fixtures + credits payouts via process_fixture_result().
+# Idempotent: re-runs skip already-scored fixtures.
+#
+# Schedule is tuned to WC26 match-end windows. Kickoffs cluster at
+# 12/15/18/21 ET (= 16/19/22/01 UTC during EDT). Matches last ~105 min
+# regulation + injury (KO can add ~30 min ET + penalties), so finishes
+# land in 18:00–04:00 UTC. We poll every 10 min during that window and
+# skip overnight when there's nothing to catch.
 #
 # Required repo secrets:
 #   DATABASE_URL              Railway Postgres connection string
@@ -10,7 +16,8 @@ name: Auto-score fixtures
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 18-23 * * *"   # 2pm–8pm ET (afternoon match-ends)
+    - cron: "*/10 0-4 * * *"     # 8pm–12am ET + cushion for ET/penalties
   workflow_dispatch:
     inputs:
       apply:

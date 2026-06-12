@@ -1525,45 +1525,97 @@ def get_group_standings():
 # ── Stats ─────────────────────────────────────────────────────────────────
 
 def get_pool_score_timeline(pool_id, max_players=20):
-    """
-    Return data for the pool stats chart.
+    """Legacy alias — calls get_pool_balance_timeline. The stats page now
+    plots running balance, not the old points-only score_log accumulation."""
+    return get_pool_balance_timeline(pool_id, max_players=max_players)
 
-    Result dict:
-      fixtures  — list of {id, label, date_label} in kick_off order
-      players   — top max_players by final score, each with a `cumulative`
-                  list (one value per fixture, starting with 0)
-    Only scored fixtures are included.
+
+def _parse_ts(s):
+    """Parse a created_at TEXT column to a datetime. SQLite stores
+    'YYYY-MM-DD HH:MM:SS'; Postgres stores ISO with optional timezone."""
+    from datetime import datetime as _dt, timezone as _tz
+    if s is None: return None
+    s = str(s).strip()
+    if not s: return None
+    if " " in s and "T" not in s:
+        s = s.replace(" ", "T", 1)
+    try:
+        dt = _dt.fromisoformat(s)
+    except Exception:
+        return None
+    # Normalise to aware UTC so cross-row comparisons are well-defined
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_tz.utc)
+    return dt
+
+
+def get_pool_balance_timeline(pool_id, max_players=20):
     """
-    from datetime import datetime as _dt
+    Return data for the stats chart, plotting each member's running balance
+    over the timeline of scored fixtures.
+
+    For each scored fixture (in kick_off order) we anchor a "fixture end"
+    timestamp = kick_off + 3h, then for each member the cumulative balance
+    at that anchor = starting_balance + sum(transactions.amount where
+    created_at <= anchor). This captures every economy event (payouts, KO
+    bet deductions, spy purchases, admin adjustments) up to that point in
+    the tournament, not just the per-fixture payout.
+
+    Result dict (same shape as the old get_pool_score_timeline so the
+    template can stay stable):
+      fixtures  — [{id, label, date_label, stage}] in kick_off order, with
+                  index 0 being a synthetic "Start" anchor
+      players   — top max_players by final balance, each with a `cumulative`
+                  list (one value per fixture row, starting with the
+                  starting_balance at index 0)
+    """
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
     conn = get_db()
 
+    sc = conn.execute(
+        "SELECT starting_balance FROM scoring_config ORDER BY updated_at DESC LIMIT 1"
+    ).fetchone()
+    start_balance = float((sc and sc["starting_balance"]) or 100)
+
+    # Scored fixtures = any fixture with a payout transaction in this pool.
+    # That's what drives the chart's x-axis.
     fix_rows = conn.execute("""
         SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team, f.stage
-        FROM score_log sl
-        JOIN picks p ON p.id = sl.pick_id
-        JOIN fixtures f ON f.id = p.fixture_id
-        WHERE sl.pool_id = ?
+        FROM transactions t
+        JOIN fixtures f ON f.id = t.fixture_id
+        WHERE t.pool_id = ? AND t.type = 'payout'
         ORDER BY f.kick_off, f.id
     """, (pool_id,)).fetchall()
 
-    score_rows = conn.execute("""
-        SELECT sl.user_id, p.fixture_id, sl.points_awarded, u.display_name
-        FROM score_log sl
-        JOIN picks p ON p.id = sl.pick_id
-        JOIN users u ON u.id = sl.user_id
-        WHERE sl.pool_id = ?
+    # All transactions for the pool, ordered chronologically.
+    tx_rows = conn.execute("""
+        SELECT user_id, amount, created_at FROM transactions
+        WHERE pool_id = ?
+        ORDER BY created_at, id
+    """, (pool_id,)).fetchall()
+
+    member_rows = conn.execute("""
+        SELECT pm.user_id, u.display_name
+        FROM pool_members pm JOIN users u ON u.id = pm.user_id
+        WHERE pm.pool_id = ?
     """, (pool_id,)).fetchall()
 
     conn.close()
 
     if not fix_rows:
-        return {"fixtures": [], "players": []}
+        return {"fixtures": [], "players": [], "total_players": 0,
+                "starting_balance": start_balance}
 
-    fixture_ids = [r["id"] for r in fix_rows]
-
-    fixtures_out = [{"id": None, "label": "Start", "date_label": ""}]
+    # Build per-fixture time anchors (kick_off + 3h ≈ end of regulation+ET)
+    anchors = []
+    fixtures_out = [{"id": None, "label": "Start", "date_label": "",
+                     "stage": ""}]
     for r in fix_rows:
         ko = r["kick_off"] or ""
+        ko_dt = _parse_ts(ko)
+        if ko_dt is None:
+            ko_dt = _dt(2099, 1, 1, tzinfo=_tz.utc)
+        anchors.append(ko_dt + _td(hours=3))
         try:
             dt = _dt.fromisoformat(ko[:10])
             date_label = f"{dt.day} {dt.strftime('%b')}"
@@ -1578,32 +1630,40 @@ def get_pool_score_timeline(pool_id, max_players=20):
             "stage": r["stage"] or "",
         })
 
-    user_pts = {}
-    user_names = {}
-    for row in score_rows:
-        uid = row["user_id"]
-        user_names[uid] = row["display_name"]
-        user_pts.setdefault(uid, {})[row["fixture_id"]] = row["points_awarded"]
+    # Bucket transactions per user (created_at parsed once)
+    user_txns = {}
+    user_names = {m["user_id"]: m["display_name"] for m in member_rows}
+    for tx in tx_rows:
+        ts = _parse_ts(tx["created_at"])
+        if ts is None:
+            continue
+        user_txns.setdefault(tx["user_id"], []).append((ts, float(tx["amount"])))
 
+    # For each member, walk the anchors and accumulate
     players_out = []
-    for uid, pts_map in user_pts.items():
-        cumulative = [0]
-        running = 0
-        for fid in fixture_ids:
-            running += pts_map.get(fid, 0)
-            cumulative.append(running)
+    for uid, name in user_names.items():
+        txns = user_txns.get(uid, [])
+        cumulative = [start_balance]
+        running = start_balance
+        tx_i = 0
+        for anchor in anchors:
+            while tx_i < len(txns) and txns[tx_i][0] <= anchor:
+                running += txns[tx_i][1]
+                tx_i += 1
+            cumulative.append(round(running, 2))
         players_out.append({
-            "user_id": uid,
-            "display_name": user_names[uid],
-            "cumulative": cumulative,
-            "final_score": running,
+            "user_id":      uid,
+            "display_name": name,
+            "cumulative":   cumulative,
+            "final_score":  round(running, 2),
         })
 
     players_out.sort(key=lambda p: p["final_score"], reverse=True)
     return {
-        "fixtures": fixtures_out,
-        "players": players_out[:max_players],
-        "total_players": len(players_out),
+        "fixtures":         fixtures_out,
+        "players":          players_out[:max_players],
+        "total_players":    len(players_out),
+        "starting_balance": start_balance,
     }
 
 
