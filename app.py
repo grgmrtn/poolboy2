@@ -690,6 +690,16 @@ def group_page(pool_id, letter):
     group_standings = db.get_group_standings()
     teams = group_standings.get(stage, [])
 
+    # Per-fixture payouts for the user (same source the main pool page reads
+    # for the "+$5 / $0" badge under completed pills).
+    payout_conn = db.get_db()
+    payout_rows = payout_conn.execute("""
+        SELECT fixture_id, amount FROM transactions
+        WHERE user_id=? AND pool_id=? AND type='payout'
+    """, (user["id"], pool_id)).fetchall()
+    payout_conn.close()
+    payout_by_fixture = {r["fixture_id"]: r["amount"] for r in payout_rows}
+
     return render_template("group.html",
         pool=pool,
         stage=stage,
@@ -697,6 +707,7 @@ def group_page(pool_id, letter):
         fixtures=fixtures,
         teams=teams,
         existing_picks=existing_picks,
+        payout_by_fixture=payout_by_fixture,
         has_paid=has_paid,
         my_balance=my_balance,
         scoring_config=scoring_config,

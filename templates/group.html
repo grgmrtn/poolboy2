@@ -41,7 +41,7 @@
   .gtable td.team-name {
     text-align: left; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
-    display: flex; align-items: center; gap: 0.4rem;
+    display: flex; align-items: center; gap: 0.55rem;
   }
   .gtable td.team-name img { width: 18px; height: 13px; border-radius: 2px; flex-shrink: 0; }
   .gtable col.col-pos { width: 22px; }
@@ -94,6 +94,37 @@
 
   /* Wrap each fixture so the standard match-row layout fits inside it. */
   .group-fx-pill .match-row { gap: 0; }
+
+  /* Your-pick chip under each completed fixture */
+  .group-fx-mypick {
+    display: flex; align-items: center; gap: 0.55rem;
+    margin-top: 0.55rem;
+    padding: 0.4rem 0.7rem;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+  }
+  .group-fx-mypick.won   { border-left-color: var(--accent); }
+  .group-fx-mypick.lost  { border-left-color: var(--red); }
+  .group-fx-mypick.nopick { opacity: 0.6; }
+  .mp-label {
+    font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .mp-choice {
+    color: var(--text); font-weight: 700;
+    font-size: 0.86rem; letter-spacing: 0.02em;
+  }
+  .mp-choice.mp-nopick { color: var(--text-dim); font-weight: 500; }
+  .mp-pay {
+    margin-left: auto; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .mp-pay-pos  { color: var(--accent); }
+  .mp-pay-zero { color: var(--text-muted); }
+  .mp-pay-neg  { color: var(--red); }
 </style>
 
 {# Shared match-pill CSS — identical rules to what pool.html uses, so the
@@ -178,6 +209,9 @@
       {% set p            = existing_picks.get(f.id) %}
       {% set my_pick      = p.predicted_result if p else none %}
 
+      {% set my_pay  = payout_by_fixture.get(f.id) %}
+      {% set won     = is_completed and my_pick and my_pick == f.result %}
+      {% set lost    = is_completed and my_pick and my_pick != f.result %}
       <div class="group-fx-row" id="fixture-{{ f.id }}" data-fixture-id="{{ f.id }}">
         <div class="group-fx-meta">
           <div class="meta-date">{{ dy }} {{ MONTHS[mo] }}</div>
@@ -194,6 +228,27 @@
               {% include "_match_pill.html" %}
             </div>
           </div>
+          {% if is_completed %}
+          <div class="group-fx-mypick {{ 'won' if won else ('lost' if lost else 'nopick') }}">
+            <span class="mp-label">You picked</span>
+            {% if my_pick == 'H' %}
+              <span class="mp-choice">{{ ABBR.get(f.home_team) or (f.home_team or '?')[:3].upper() }}</span>
+            {% elif my_pick == 'A' %}
+              <span class="mp-choice">{{ ABBR.get(f.away_team) or (f.away_team or '?')[:3].upper() }}</span>
+            {% elif my_pick == 'D' %}
+              <span class="mp-choice">Draw</span>
+            {% else %}
+              <span class="mp-choice mp-nopick">—</span>
+            {% endif %}
+            {% if my_pay is not none %}
+              <span class="mp-pay {{ 'mp-pay-pos' if my_pay > 0 else ('mp-pay-zero' if my_pay == 0 else 'mp-pay-neg') }}">
+                {% if my_pay > 0 %}+${{ "%.0f"|format(my_pay) }}
+                {% elif my_pay < 0 %}-${{ "%.0f"|format(-my_pay) }}
+                {% else %}$0{% endif %}
+              </span>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
       </div>
     {% endfor %}

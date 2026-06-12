@@ -1162,12 +1162,16 @@
     font-variant-numeric: tabular-nums;
   }
   .standings-table td:first-child { text-align: center; color: var(--text-muted); font-size: 0.68rem; }
-  /* Team name cell: flag fixed left, name truncates with ellipsis instead
-     of pushing the rest of the row off-screen. */
-  .standings-table td.team-name,
-  .standings-table td[style*="text-align:left"] {
+  /* Team name cell: flag + abbreviation share one cell with gap so the
+     two read as a unit (no awkward squeezed-together flag-then-text). */
+  .standings-table td.team-name {
     text-align: left; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 0.45rem;
+  }
+  .standings-table td.team-name .flag {
+    width: 18px; height: 13px; border-radius: 2px;
+    object-fit: cover; flex-shrink: 0;
   }
   /* Fixed widths for the stat columns + flexible width for team */
   .standings-table col.col-pos { width: 22px; }
@@ -1865,8 +1869,7 @@
               <table class="standings-table">
                 <colgroup>
                   <col class="col-pos">
-                  <col class="col-flag">
-                  <col><!-- team name flexes -->
+                  <col><!-- team name (flag + abbr) flexes -->
                   <col class="col-stat">                       <!-- P -->
                   <col class="col-stat stat-wdl-col">          <!-- W -->
                   <col class="col-stat stat-wdl-col">          <!-- D -->
@@ -1879,7 +1882,7 @@
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th class="team-col" colspan="2">Team</th>
+                    <th class="team-col">Team</th>
                     <th>P</th>
                     <th class="stat-wdl">W</th>
                     <th class="stat-wdl">D</th>
@@ -1896,10 +1899,10 @@
                   {% set pos_cls = 'qual-auto' if loop.index <= 2 else ('qual-pot' if loop.index == 3 else 'qual-none') %}
                   <tr class="{{ pos_cls }}">
                     <td>{{ loop.index }}</td>
-                    <td>
+                    <td class="team-name" title="{{ t.team }}">
                       <img class="flag" src="https://flagcdn.com/{{ t.flag_code }}.svg" alt="" loading="lazy" onerror="this.style.display='none'">
+                      <span>{{ ABBR.get(t.team) or t.team[:3].upper() }}</span>
                     </td>
-                    <td class="team-name" title="{{ t.team }}">{{ ABBR.get(t.team) or t.team[:3].upper() }}</td>
                     <td>{{ t.played }}</td>
                     <td class="stat-wdl">{{ t.won }}</td>
                     <td class="stat-wdl">{{ t.drawn }}</td>
@@ -2394,8 +2397,16 @@
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────
-  const stageSections = document.querySelectorAll('.stage-section');
-  const stageTabs     = document.querySelectorAll('.stage-tab');
+  const stageSections = [...document.querySelectorAll('.stage-section')];
+  const standingsEl   = document.getElementById('group-standings');
+  // Observe the standings section too so the TBL tab highlights when it's
+  // the visible section. It uses data-stage="standings" instead of a
+  // numeric index, so we tag it for the matching selector below.
+  if (standingsEl) {
+    standingsEl.dataset.idx = 'standings';
+    stageSections.push(standingsEl);
+  }
+  const stageTabs = document.querySelectorAll('.stage-tab');
 
   if (stageSections.length) {
     const io = new IntersectionObserver(entries => {
