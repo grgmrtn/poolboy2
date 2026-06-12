@@ -16,6 +16,20 @@ migration, no schema change.
 RELEASES = [
     {
         "date":  "2026-06-12",
+        "emoji": "📡",
+        "title": "Happening Now banner (mobile)",
+        "changes": [
+            "New lime banner under the stage nav whenever a fixture is in play",
+            "Tap to expand — flags, big score numbers on each side of a black LIVE chip, and an estimated minute counter",
+            "Below the score: full picks-by-side breakdown — see who's on each team in real time",
+            "Knockouts show name · $bet; group stage shows just the first name. Your name appears as bold You",
+            "Multiple live games get a tab strip so you can switch between them",
+            "Live data refreshes every 30 seconds; pauses when you tab away",
+            "Group name in each match pill is now a tappable link to that group's dedicated pick page",
+        ],
+    },
+    {
+        "date":  "2026-06-12",
         "emoji": "🎯",
         "title": "Group standings + per-group pick pages",
         "changes": [

@@ -619,6 +619,11 @@ def pool_page(pool_id):
     # no per-team odds rendered). Gate the button until KO stages appear.
     has_ko_stage = any(db.is_knockout_stage(s) for s in grouped_fixtures)
 
+    # Live-now banner data — any fixture flagged IN_PLAY / PAUSED gets a
+    # picks-by-side breakdown so the banner can render bets without
+    # another DB hit. Re-used by the /live-now JSON endpoint below.
+    live_now_data = _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture)
+
     return render_template("pool.html",
         pool=pool,
         grouped_fixtures=grouped_fixtures,
@@ -644,7 +649,102 @@ def pool_page(pool_id):
         my_rank=my_rank,
         pool_size=pool_size,
         has_ko_stage=has_ko_stage,
+        live_now=live_now_data,
     )
+
+
+def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
+    """
+    For every fixture currently flagged IN_PLAY / PAUSED, produce a dict
+    of {fixture, picks_by_side, minute_est, is_ko} ready for the live
+    banner. picks_by_side splits all picks into H/D/A buckets, sorted by
+    bet_amount DESC (for KO) so the largest stakes surface first.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    LIVE = {"IN_PLAY", "PAUSED"}
+    now = _dt.now(_tz.utc)
+    out = []
+    for stage_fixtures in grouped_fixtures.values():
+        for f in stage_fixtures:
+            if (f.get("live_status") or "") not in LIVE:
+                continue
+            # Estimate minute from kick_off (best we have on the free API
+            # tier; ESPN exposes a real displayClock — see probe script).
+            minute_est = None
+            ko = f.get("kick_off") or ""
+            try:
+                ko_dt = _dt.fromisoformat(ko[:19].rstrip("Z"))
+                if ko_dt.tzinfo is None:
+                    ko_dt = ko_dt.replace(tzinfo=_tz.utc)
+                delta_min = int((now - ko_dt).total_seconds() // 60)
+                # Halftime occurs ~45-60 min in; we don't know when exactly
+                # so cap the displayed minute at 90+ when it goes past.
+                if 0 <= delta_min <= 120:
+                    minute_est = delta_min
+            except Exception:
+                pass
+
+            picks = all_picks_by_fixture.get(f["id"], [])
+            picks_by_side = {"H": [], "D": [], "A": []}
+            for p in picks:
+                side = p.get("predicted_result")
+                if side in picks_by_side:
+                    picks_by_side[side].append({
+                        "user_id":      p.get("user_id"),
+                        "email":        p.get("email"),
+                        "first_name":   (p.get("display_name") or "").split(" ")[0],
+                        "bet_amount":   p.get("bet_amount"),
+                    })
+            for side in picks_by_side:
+                picks_by_side[side].sort(
+                    key=lambda x: (-(x.get("bet_amount") or 0), x["first_name"].lower())
+                )
+            out.append({
+                "id":            f["id"],
+                "home_team":     f.get("home_team"),
+                "away_team":     f.get("away_team"),
+                "home_flag":     f.get("home_flag_code") or "un",
+                "away_flag":     f.get("away_flag_code") or "un",
+                "live_home":     f.get("live_home_score"),
+                "live_away":     f.get("live_away_score"),
+                "live_status":   f.get("live_status"),
+                "stage":         f.get("stage"),
+                "minute_est":    minute_est,
+                "picks_by_side": picks_by_side,
+                "is_ko":         db.is_knockout_stage(f.get("stage") or ""),
+            })
+    return out
+
+
+@app.route("/pool/<pool_id>/live-now")
+@login_required
+def live_now_json(pool_id):
+    """JSON endpoint the live-banner JS polls every 30s. Same shape as
+    the server-rendered `live_now` template var."""
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"error": "not a member"}), 403
+
+    # Re-run a minimal slice of the pool_page data prep — just enough to
+    # rebuild live_now_data without all the leaderboard / spy work.
+    grouped_raw = fx.get_all_fixtures()
+    for stage_fixtures in grouped_raw.values():
+        _attach_display_times(stage_fixtures)
+
+    conn = db.get_db()
+    pick_rows = conn.execute("""
+        SELECT p.fixture_id, u.id AS user_id, u.display_name, u.email,
+               p.predicted_result, p.bet_amount
+        FROM picks p JOIN users u ON u.id = p.user_id
+        WHERE p.pool_id=?
+    """, (pool_id,)).fetchall()
+    conn.close()
+    all_picks_by_fixture = {}
+    for r in pick_rows:
+        all_picks_by_fixture.setdefault(r["fixture_id"], []).append(dict(r))
+
+    live = _build_live_now_data(pool_id, grouped_raw, all_picks_by_fixture)
+    return jsonify({"live": live, "my_email": user["email"]})
 
 
 @app.route("/pool/<pool_id>/group/<letter>")

@@ -496,7 +496,179 @@
   .meta-date  { font-size: 0.78rem; color: var(--text); font-weight: 600; line-height: 1.2; }
   .meta-time  { font-size: 0.68rem; color: var(--text-muted); }
   .meta-group { font-size: 0.62rem; color: var(--accent); letter-spacing: 0.06em;
-                margin-top: 0.15rem; text-transform: uppercase; }
+                margin-top: 0.15rem; text-transform: uppercase;
+                text-decoration: none; display: inline-block; }
+  a.meta-group:hover { text-decoration: underline; }
+
+  /* ── Happening Now banner (mobile only) ─────────────────────────────
+     Sticky lime bar under the stage nav. Tap to expand into a hero view
+     with score bug + picks-by-side. Multi-live fixtures get a tab strip.
+     Hidden entirely when no live fixtures are running. */
+  .live-now-banner { display: none; }
+  .live-now-banner.is-empty { display: none !important; }
+  @media (max-width: 768px) {
+    .live-now-banner {
+      display: block;
+      position: sticky; top: 56px; z-index: 50;
+      background: var(--accent);
+      color: #0a0a0f;
+      border-bottom: 1px solid rgba(0,0,0,0.18);
+      font-family: var(--mono);
+    }
+    .ln-bar {
+      display: flex; align-items: stretch;
+      min-height: 38px;
+    }
+    .ln-tabs {
+      flex: 1; display: flex; align-items: stretch;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .ln-tabs::-webkit-scrollbar { display: none; }
+    .ln-tab {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      background: transparent; border: 0;
+      padding: 0 0.85rem;
+      color: #0a0a0f;
+      font-family: var(--mono); font-size: 0.74rem; font-weight: 700;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .ln-tab + .ln-tab { border-left: 1px solid rgba(0,0,0,0.12); }
+    .ln-tab.active { border-bottom-color: #0a0a0f; }
+    .ln-tab-dot {
+      color: #0a0a0f; font-size: 0.55rem; line-height: 1;
+      animation: live-pulse 1.4s ease-in-out infinite;
+    }
+    .ln-tab-teams { letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+    .ln-tab-min {
+      font-size: 0.62rem; color: rgba(10,10,15,0.65);
+      font-variant-numeric: tabular-nums;
+    }
+    .ln-expand-btn {
+      flex-shrink: 0;
+      background: rgba(0,0,0,0.08); border: 0; border-left: 1px solid rgba(0,0,0,0.18);
+      color: #0a0a0f; cursor: pointer;
+      width: 38px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ln-chev { font-size: 0.85rem; transition: transform 0.2s; }
+    .live-now-banner.is-expanded .ln-chev { transform: rotate(180deg); }
+
+    .ln-expanded {
+      display: none;
+      background: var(--accent);
+      color: #0a0a0f;
+      padding: 0.85rem 1rem 1.1rem;
+      border-top: 1px solid rgba(0,0,0,0.18);
+    }
+    .live-now-banner.is-expanded .ln-expanded { display: block; }
+
+    .ln-panel { display: none; }
+    .ln-panel.active { display: block; }
+
+    .ln-meta {
+      text-align: center; margin-bottom: 0.6rem;
+    }
+    .ln-stage-link {
+      font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(10,10,15,0.7); text-decoration: none; font-weight: 700;
+    }
+    .ln-stage-link:hover { color: #0a0a0f; }
+
+    .ln-hero {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0.6rem;
+      align-items: center;
+    }
+    .ln-team {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 0.45rem;
+    }
+    .ln-flag {
+      width: 56px; height: 40px; border-radius: 4px;
+      object-fit: cover;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
+    }
+    .ln-abbr {
+      font-size: 1.05rem; font-weight: 800; letter-spacing: 0.04em;
+      color: #0a0a0f;
+    }
+
+    .ln-score-bug {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 0.25rem;
+      padding: 0 0.2rem;
+    }
+    .ln-score-row {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      white-space: nowrap;
+    }
+    .ln-h-score, .ln-a-score {
+      font-size: 2.4rem; font-weight: 800; color: #0a0a0f;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .ln-live-tag {
+      display: inline-block; padding: 0.22rem 0.46rem;
+      background: #0a0a0f; color: var(--accent);
+      font-size: 0.6rem; letter-spacing: 0.18em; font-weight: 800;
+      border-radius: 4px;
+      animation: live-pulse 1.4s ease-in-out infinite;
+    }
+    .ln-min {
+      font-size: 0.78rem; font-weight: 700;
+      color: rgba(10,10,15,0.7);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ln-bets {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.5rem;
+      margin-top: 0.95rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid rgba(0,0,0,0.14);
+    }
+    .ln-bets:has(.ln-bets-col:only-child),
+    .ln-bets:has(.ln-bets-col + .ln-bets-col:last-child) {
+      grid-template-columns: 1fr 1fr;
+    }
+    .ln-bets-col { min-width: 0; }
+    .ln-bets-head {
+      display: flex; align-items: center; gap: 0.3rem;
+      font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+      font-weight: 800; color: #0a0a0f;
+      padding-bottom: 0.35rem; margin-bottom: 0.35rem;
+      border-bottom: 1px dashed rgba(0,0,0,0.18);
+    }
+    .ln-bets-head img { width: 16px; height: 11px; border-radius: 2px; }
+    .ln-bets-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ln-bets-count {
+      background: rgba(0,0,0,0.12); border-radius: 99px;
+      padding: 0.05rem 0.4rem; font-size: 0.58rem;
+    }
+    .ln-bets-list {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 0.15rem;
+    }
+    .ln-bet {
+      font-size: 0.7rem; font-weight: 600;
+      color: rgba(10,10,15,0.78);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ln-bet.is-me strong { color: #0a0a0f; font-weight: 800; }
+    .ln-bet-dot { color: rgba(10,10,15,0.4); margin: 0 0.2rem; }
+    .ln-bet-amt { font-weight: 700; color: #0a0a0f; }
+  }
+  @media (max-width: 400px) {
+    .ln-flag { width: 48px; height: 34px; }
+    .ln-abbr { font-size: 0.95rem; }
+    .ln-h-score, .ln-a-score { font-size: 1.95rem; }
+    .ln-live-tag { font-size: 0.52rem; padding: 0.18rem 0.38rem; }
+    .ln-bets { gap: 0.35rem; }
+  }
   .meta-countdown {
     font-size: 0.58rem; color: var(--amber); margin-top: 0.2rem;
     letter-spacing: 0.03em; line-height: 1.3;
@@ -1263,6 +1435,113 @@
   </button>
 </nav>
 
+{# ── HAPPENING NOW banner (mobile only) ──────────────────────────────
+   Hidden on desktop. Rendered server-side on first paint; the client
+   then polls /pool/<id>/live-now every 30s to refresh score + picks. #}
+<div id="live-now-banner" class="live-now-banner{% if not live_now %} is-empty{% endif %}"
+     data-pool-id="{{ pool.id }}"
+     data-my-email="{{ current_user.email }}">
+
+  {# Collapsed pill row + tabs (one chip per live fixture) #}
+  <div class="ln-bar">
+    <div class="ln-tabs" id="ln-tabs">
+      {% for lf in live_now %}
+        <button type="button"
+                class="ln-tab{% if loop.first %} active{% endif %}"
+                data-fixture-id="{{ lf.id }}"
+                onclick="selectLnTab(this)">
+          <span class="ln-tab-dot">●</span>
+          <span class="ln-tab-teams">
+            {{ ABBR.get(lf.home_team) or (lf.home_team or '?')[:3].upper() }}
+            {{ lf.live_home if lf.live_home is not none else '0' }}–{{ lf.live_away if lf.live_away is not none else '0' }}
+            {{ ABBR.get(lf.away_team) or (lf.away_team or '?')[:3].upper() }}
+          </span>
+          {% if lf.minute_est is not none %}
+          <span class="ln-tab-min">{{ lf.minute_est }}'</span>
+          {% endif %}
+        </button>
+      {% endfor %}
+    </div>
+    <button type="button" class="ln-expand-btn" id="ln-expand-btn" onclick="toggleLiveNow()" aria-label="Expand">
+      <span class="ln-chev">▾</span>
+    </button>
+  </div>
+
+  {# Expanded hero — one panel per live fixture, only the active tab shows #}
+  <div class="ln-expanded" id="ln-expanded">
+    {% for lf in live_now %}
+      {% set home_abbr = ABBR.get(lf.home_team) or (lf.home_team or '?')[:3].upper() %}
+      {% set away_abbr = ABBR.get(lf.away_team) or (lf.away_team or '?')[:3].upper() %}
+      <div class="ln-panel{% if loop.first %} active{% endif %}"
+           data-fixture-id="{{ lf.id }}">
+
+        <div class="ln-meta">
+          {% if lf.stage and lf.stage.startswith('Group ') %}
+            <a class="ln-stage-link" href="{{ url_for('group_page', pool_id=pool.id, letter=lf.stage[-1]) }}">{{ lf.stage }} →</a>
+          {% else %}
+            <span class="ln-stage-link">{{ lf.stage }}</span>
+          {% endif %}
+        </div>
+
+        {# Two team blocks, flag big + abbr centred #}
+        <div class="ln-hero">
+          <div class="ln-team">
+            <img class="ln-flag" src="https://flagcdn.com/{{ lf.home_flag }}.svg" alt="" loading="lazy">
+            <div class="ln-abbr">{{ home_abbr }}</div>
+          </div>
+
+          <div class="ln-score-bug">
+            <div class="ln-score-row">
+              <span class="ln-h-score" data-side="H">{{ lf.live_home if lf.live_home is not none else '0' }}</span>
+              <span class="ln-live-tag">LIVE</span>
+              <span class="ln-a-score" data-side="A">{{ lf.live_away if lf.live_away is not none else '0' }}</span>
+            </div>
+            <div class="ln-min" data-min-source="estimate">
+              {% if lf.minute_est is not none %}{{ lf.minute_est }}'{% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="ln-team">
+            <img class="ln-flag" src="https://flagcdn.com/{{ lf.away_flag }}.svg" alt="" loading="lazy">
+            <div class="ln-abbr">{{ away_abbr }}</div>
+          </div>
+        </div>
+
+        {# Picks-by-side. Group fixtures don't show bet amount + no draw
+           column hidden for KO. Current user appears as bold "You". #}
+        <div class="ln-bets" data-fixture-id="{{ lf.id }}">
+          {% for side, label in [('H', home_abbr), ('D', 'Draw'), ('A', away_abbr)] %}
+            {% if not (lf.is_ko and side == 'D') %}
+            <div class="ln-bets-col ln-bets-{{ side|lower }}">
+              <div class="ln-bets-head">
+                {% if side == 'H' %}<img src="https://flagcdn.com/{{ lf.home_flag }}.svg" alt="" loading="lazy">
+                {% elif side == 'A' %}<img src="https://flagcdn.com/{{ lf.away_flag }}.svg" alt="" loading="lazy">
+                {% endif %}
+                <span class="ln-bets-label">{{ label }}</span>
+                <span class="ln-bets-count">{{ lf.picks_by_side[side]|length }}</span>
+              </div>
+              <ul class="ln-bets-list">
+                {% for p in lf.picks_by_side[side] %}
+                  {% set is_me = p.email == current_user.email %}
+                  <li class="ln-bet{% if is_me %} is-me{% endif %}">
+                    {% if is_me %}<strong>You</strong>{% else %}{{ p.first_name }}{% endif %}
+                    {% if lf.is_ko and p.bet_amount %}
+                      <span class="ln-bet-dot">·</span>
+                      <span class="ln-bet-amt">${{ "%.0f"|format(p.bet_amount) }}</span>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="page">
 
   <div style="margin-bottom:1rem">
@@ -1562,13 +1841,14 @@
                   {% else %}
                     <div class="meta-date" style="color:var(--text-dim)">TBC</div>
                   {% endif %}
-                  <div class="meta-group">
-                    {%- if f.stage and f.stage.startswith('Group ') -%}
-                      Grp {{ f.stage[-1] }}
-                    {%- elif f.stage -%}
-                      {{ f.stage[:4] }}
-                    {%- else -%}—{%- endif -%}
-                  </div>
+                  {% if f.stage and f.stage.startswith('Group ') %}
+                    <a class="meta-group" href="{{ url_for('group_page', pool_id=pool.id, letter=f.stage[-1]) }}"
+                       title="Open Group {{ f.stage[-1] }} page">Grp {{ f.stage[-1] }}</a>
+                  {% elif f.stage %}
+                    <div class="meta-group">{{ f.stage[:4] }}</div>
+                  {% else %}
+                    <div class="meta-group">—</div>
+                  {% endif %}
                   {# Countdown shown only for upcoming unlocked fixtures #}
                   {% if f.kick_off and not is_completed and not is_started %}
                     <div class="meta-countdown" id="countdown-{{ f.id }}"></div>
@@ -2234,6 +2514,85 @@
     if (m) m.classList.add('open');
   }
 
+  // ── Live-now banner ─────────────────────────────────────────────────
+  function toggleLiveNow() {
+    const b = document.getElementById('live-now-banner');
+    if (b) b.classList.toggle('is-expanded');
+  }
+  function selectLnTab(tabBtn) {
+    if (!tabBtn) return;
+    const fid = tabBtn.dataset.fixtureId;
+    document.querySelectorAll('#ln-tabs .ln-tab').forEach(t => t.classList.remove('active'));
+    tabBtn.classList.add('active');
+    document.querySelectorAll('#ln-expanded .ln-panel').forEach(p => {
+      p.classList.toggle('active', p.dataset.fixtureId === fid);
+    });
+  }
+  // Refresh banner data every 30s. Pauses when tab is hidden so we don't
+  // burn battery on a background phone. Updates score numbers + minute +
+  // picks in place; if a fixture transitions from IN_PLAY to FINISHED
+  // we just re-render by removing it (a full reload picks up the next
+  // group / completed state).
+  function refreshLiveNow() {
+    const b = document.getElementById('live-now-banner');
+    if (!b) return Promise.resolve();
+    const url = `/pool/${b.dataset.poolId}/live-now`;
+    return fetch(url, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.live) return;
+        if (!data.live.length) {
+          // No live fixtures any more — hide the banner entirely.
+          b.classList.add('is-empty');
+          return;
+        }
+        b.classList.remove('is-empty');
+        const myEmail = data.my_email;
+        data.live.forEach(lf => {
+          const tab = b.querySelector(`.ln-tab[data-fixture-id="${lf.id}"]`);
+          if (tab) {
+            const min = lf.minute_est != null ? `${lf.minute_est}'` : '';
+            const minSpan = tab.querySelector('.ln-tab-min');
+            if (minSpan) minSpan.textContent = min;
+            const teams = tab.querySelector('.ln-tab-teams');
+            if (teams) {
+              const home = lf.live_home != null ? lf.live_home : 0;
+              const away = lf.live_away != null ? lf.live_away : 0;
+              // Replace just the scores; keep the abbreviations as-is.
+              const parts = teams.textContent.trim().split(/\s+/);
+              if (parts.length >= 4) {
+                parts[1] = `${home}–${away}`;
+                teams.textContent = ' ' + parts[0] + ' ' + parts[1] + ' ' + parts[3] + ' ';
+              }
+            }
+          }
+          const panel = b.querySelector(`.ln-panel[data-fixture-id="${lf.id}"]`);
+          if (panel) {
+            const h = panel.querySelector('.ln-h-score');
+            const a = panel.querySelector('.ln-a-score');
+            const m = panel.querySelector('.ln-min');
+            if (h) h.textContent = lf.live_home != null ? lf.live_home : 0;
+            if (a) a.textContent = lf.live_away != null ? lf.live_away : 0;
+            if (m) m.textContent = lf.minute_est != null ? `${lf.minute_est}'` : '—';
+          }
+        });
+      })
+      .catch(() => {});
+  }
+  let liveNowTimer = null;
+  function startLiveNowPolling() {
+    if (liveNowTimer) return;
+    liveNowTimer = setInterval(refreshLiveNow, 30_000);
+  }
+  function stopLiveNowPolling() {
+    if (liveNowTimer) clearInterval(liveNowTimer);
+    liveNowTimer = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopLiveNowPolling();
+    else { refreshLiveNow(); startLiveNowPolling(); }
+  });
+
   // ── What's-new modal ────────────────────────────────────────────────
   const WN_KEY = 'wc26_last_seen_release';
   const LATEST_RELEASE_DATE = {{ latest_release_date | tojson }};
@@ -2401,6 +2760,7 @@
     restorePoolIntroFromStorage();
     maybeShowA2HS();
     maybeShowWhatsNewDot();
+    startLiveNowPolling();
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────
