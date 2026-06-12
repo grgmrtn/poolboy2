@@ -1552,24 +1552,28 @@ def _parse_ts(s):
 def get_pool_balance_timeline(pool_id, max_players=20):
     """
     Return data for the stats chart, plotting each member's running balance
-    over the timeline of scored fixtures.
+    across the timeline of scored fixtures.
 
-    For each scored fixture (in kick_off order) we anchor a "fixture end"
-    timestamp = kick_off + 3h, then for each member the cumulative balance
-    at that anchor = starting_balance + sum(transactions.amount where
-    created_at <= anchor). This captures every economy event (payouts, KO
-    bet deductions, spy purchases, admin adjustments) up to that point in
-    the tournament, not just the per-fixture payout.
+    Each scored fixture is a column in kick_off order (index 0 is a synthetic
+    "Start" column carrying the starting_balance for everyone). Each
+    transaction is attributed to exactly one column:
+      - If the transaction has a fixture_id matching a scored fixture, it
+        lands in that fixture's column. This is what makes the chart
+        correct even when a fixture is scored late — the payout's
+        created_at can be hours behind kick_off and still get credited
+        to the right column.
+      - Otherwise (spy purchases, admin adjustments, or bets on an
+        unsettled fixture), the transaction is anchored by created_at to
+        the earliest column whose kick_off occurs at-or-after the
+        transaction time. Falls to the last column if it's after all
+        scored kick_offs.
 
-    Result dict (same shape as the old get_pool_score_timeline so the
-    template can stay stable):
-      fixtures  — [{id, label, date_label, stage}] in kick_off order, with
-                  index 0 being a synthetic "Start" anchor
-      players   — top max_players by final balance, each with a `cumulative`
-                  list (one value per fixture row, starting with the
-                  starting_balance at index 0)
+    Returns same shape as the old get_pool_score_timeline so the template
+    can stay stable: fixtures[], players[{user_id, display_name,
+    cumulative[], final_score}], total_players, starting_balance.
     """
-    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    from collections import defaultdict
+    from datetime import datetime as _dt, timezone as _tz
     conn = get_db()
 
     sc = conn.execute(
@@ -1578,7 +1582,6 @@ def get_pool_balance_timeline(pool_id, max_players=20):
     start_balance = float((sc and sc["starting_balance"]) or 100)
 
     # Scored fixtures = any fixture with a payout transaction in this pool.
-    # That's what drives the chart's x-axis.
     fix_rows = conn.execute("""
         SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team, f.stage
         FROM transactions t
@@ -1587,9 +1590,8 @@ def get_pool_balance_timeline(pool_id, max_players=20):
         ORDER BY f.kick_off, f.id
     """, (pool_id,)).fetchall()
 
-    # All transactions for the pool, ordered chronologically.
     tx_rows = conn.execute("""
-        SELECT user_id, amount, created_at FROM transactions
+        SELECT user_id, fixture_id, amount, created_at FROM transactions
         WHERE pool_id = ?
         ORDER BY created_at, id
     """, (pool_id,)).fetchall()
@@ -1606,16 +1608,17 @@ def get_pool_balance_timeline(pool_id, max_players=20):
         return {"fixtures": [], "players": [], "total_players": 0,
                 "starting_balance": start_balance}
 
-    # Build per-fixture time anchors (kick_off + 3h ≈ end of regulation+ET)
-    anchors = []
+    # Build columns. fix_id_to_col gives a fixture-id its column index
+    # (1-based; col 0 is the "Start" anchor that just shows starting_balance).
+    kickoffs = []   # parsed kick_offs in column order, for created_at fallback
+    fix_id_to_col = {}
     fixtures_out = [{"id": None, "label": "Start", "date_label": "",
                      "stage": ""}]
-    for r in fix_rows:
+    for i, r in enumerate(fix_rows):
+        fix_id_to_col[r["id"]] = i + 1
         ko = r["kick_off"] or ""
-        ko_dt = _parse_ts(ko)
-        if ko_dt is None:
-            ko_dt = _dt(2099, 1, 1, tzinfo=_tz.utc)
-        anchors.append(ko_dt + _td(hours=3))
+        ko_dt = _parse_ts(ko) or _dt(2099, 1, 1, tzinfo=_tz.utc)
+        kickoffs.append(ko_dt)
         try:
             dt = _dt.fromisoformat(ko[:10])
             date_label = f"{dt.day} {dt.strftime('%b')}"
@@ -1630,26 +1633,37 @@ def get_pool_balance_timeline(pool_id, max_players=20):
             "stage": r["stage"] or "",
         })
 
-    # Bucket transactions per user (created_at parsed once)
-    user_txns = {}
-    user_names = {m["user_id"]: m["display_name"] for m in member_rows}
+    # Bucket each transaction → (user, column) delta
+    deltas = defaultdict(lambda: defaultdict(float))   # uid → col → delta
     for tx in tx_rows:
-        ts = _parse_ts(tx["created_at"])
-        if ts is None:
-            continue
-        user_txns.setdefault(tx["user_id"], []).append((ts, float(tx["amount"])))
+        uid    = tx["user_id"]
+        amt    = float(tx["amount"])
+        fid    = tx["fixture_id"]
+        col    = fix_id_to_col.get(fid) if fid else None
+        if col is None:
+            # No fixture, OR fixture not in scored set yet — anchor by time.
+            ts = _parse_ts(tx["created_at"])
+            if ts is None:
+                col = len(kickoffs)   # bucket at the latest column
+            else:
+                col = len(kickoffs)
+                for i, ko in enumerate(kickoffs):
+                    if ko >= ts:
+                        col = i + 1
+                        break
+        deltas[uid][col] += amt
 
-    # For each member, walk the anchors and accumulate
+    user_names = {m["user_id"]: m["display_name"] for m in member_rows}
+
+    # Build cumulative per user. Col 0 always = starting_balance; from there,
+    # each step adds the column's delta.
     players_out = []
+    n_cols = len(fix_rows) + 1  # +1 for "Start"
     for uid, name in user_names.items():
-        txns = user_txns.get(uid, [])
-        cumulative = [start_balance]
         running = start_balance
-        tx_i = 0
-        for anchor in anchors:
-            while tx_i < len(txns) and txns[tx_i][0] <= anchor:
-                running += txns[tx_i][1]
-                tx_i += 1
+        cumulative = [round(running, 2)]
+        for col_i in range(1, n_cols):
+            running += deltas[uid].get(col_i, 0.0)
             cumulative.append(round(running, 2))
         players_out.append({
             "user_id":      uid,
