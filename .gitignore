@@ -2,3 +2,10 @@ instance/
 __pycache__/
 *.pyc
 .env
+.DS_Store
+
+# Local DB dumps — never commit (user PII + password hashes)
+backup-*.sql
+backup-*.dump
+backup-*.json
+backup.sql
