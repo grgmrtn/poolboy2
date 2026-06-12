@@ -1,0 +1,166 @@
+{# ─────────────────────────────────────────────────────────────────────
+   _match_pill_css.html — shared CSS for the match pill component.
+   Included by both pool.html (main flow) and group.html (per-group
+   pick page) so the visual pill renders identically in both places.
+
+   Includes container chrome (.match-row, .match-container), the pill
+   itself (.match-pill + variants), team flag/abbreviation styling,
+   pick-buttons for group fixtures, pill-result/pill-score readouts,
+   and the live-score double-height treatment.
+   ───────────────────────────────────────────────────────────────────── #}
+<style>
+  .match-row {
+    position: relative;
+    display: flex; align-items: center;
+    gap: 0.5rem;
+  }
+
+  .match-container {
+    flex: 1; min-width: 0; width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.4s;
+  }
+
+  .match-pill {
+    display: flex; flex-direction: column;
+    background: transparent;
+    border: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .match-pill-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: stretch;
+    width: 100%;
+  }
+  .match-pill-row.pick-row { height: 56px; }
+  .match-pill-row.count-row {
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.18);
+  }
+  .pill-count {
+    display: flex; align-items: baseline; justify-content: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.45rem;
+    border-right: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    min-width: 0;
+  }
+  .pill-count:last-child { border-right: none; }
+  .pill-count b { font-weight: 700; font-size: 0.98rem; letter-spacing: -0.01em;
+                  font-variant-numeric: tabular-nums; }
+  .pill-count-label { color: var(--text-muted); }
+  .pill-count-home b { color: var(--home-color, var(--blue)); }
+  .pill-count-away b { color: var(--away-color, var(--red));  }
+  .pill-count-draw b { color: var(--accent); }
+  .count-row.is-ko-row .pill-count-draw { visibility: hidden; }
+
+  .match-container.saved-pulse,
+  .match-pill.saved-pulse {
+    animation: matchPillGlow 0.95s ease-out 1;
+  }
+  @keyframes matchPillGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(200,255,87,0.0); }
+    20%  { box-shadow: 0 0 0 4px rgba(200,255,87,0.45); }
+    100% { box-shadow: 0 0 0 0 rgba(200,255,87,0.0); }
+  }
+  .match-container:has(.match-pill.has-pick)    { border-color: rgba(200,255,87,0.20); }
+  .match-container:has(.match-pill.completed)   { border-color: rgba(255,190,87,0.18); }
+  .match-container:has(.match-pill.scored-win)  { border-color: rgba(200,255,87,0.32); }
+  .match-container:has(.match-pill.scored-loss) { border-color: rgba(255,87,87,0.18); }
+  .match-container:has(.match-pill.locked)      { border-color: rgba(255,190,87,0.12); }
+
+  .pill-side {
+    min-width: 0;
+    display: flex; align-items: center; gap: 0.45rem;
+    padding: 0 0.85rem;
+    justify-content: center;
+  }
+  .pill-side.home { border-right: 1px solid var(--border); }
+  .pill-side.away { border-left: 1px solid var(--border); flex-direction: row-reverse; }
+  .pill-centre {
+    min-width: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+
+  .team-abbr {
+    font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .flag { width: 22px; height: 16px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+
+  /* Pick buttons (group stage, in-pill) */
+  .pick-btn {
+    background: transparent; border: none; cursor: pointer;
+    font-family: var(--mono); transition: all 0.12s;
+    display: flex; align-items: center;
+  }
+  .pick-home {
+    min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
+    border-right: 1px solid var(--border);
+    height: 100%; justify-content: center;
+  }
+  .pick-away {
+    min-width: 0; gap: 0.45rem; padding: 0 0.85rem;
+    border-left: 1px solid var(--border);
+    flex-direction: row-reverse; height: 100%;
+    justify-content: center;
+  }
+  .pick-home .team-abbr, .pick-away .team-abbr { color: var(--text-muted); }
+  .pick-draw {
+    min-width: 0; height: 100%; justify-content: center;
+    font-size: 0.92rem; font-weight: 600; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-muted);
+  }
+  .pick-btn:hover .team-abbr { color: var(--text); }
+  .pick-draw:hover { background: var(--surface2); color: var(--text); }
+  .pick-home.active { background: var(--home-bg); }
+  .pick-home.active .team-abbr { color: var(--home-color, var(--blue)); }
+  .pick-draw.active { background: rgba(200,255,87,0.10); color: var(--accent); }
+  .pick-away.active { background: var(--away-bg); }
+  .pick-away.active .team-abbr { color: var(--away-color, var(--red)); }
+
+  /* Result + score readouts */
+  .pill-result {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+    width: 24px; height: 24px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pill-result.H { background: rgba(87,179,255,0.15); color: var(--blue); }
+  .pill-result.D { background: rgba(200,255,87,0.12); color: var(--accent); }
+  .pill-result.A { background: rgba(255,87,87,0.13); color: var(--red); }
+  .pill-result.pending {
+    font-size: 0.52rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--amber); background: rgba(255,190,87,0.10);
+    width: auto; padding: 0 0.3rem;
+  }
+  .pill-score {
+    font-size: 1.4rem; font-weight: 700; color: var(--text);
+    line-height: 1; white-space: nowrap; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .score-sep { color: var(--text-dim); margin: 0 4px; font-weight: 400; }
+
+  /* Live in-play score: double-height, bright accent, animated pulse. */
+  .pill-score-live {
+    font-size: 2.6rem; line-height: 1.05;
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(200,255,87,0.18);
+  }
+  .pill-score-live .score-sep { color: var(--accent); opacity: 0.55; }
+  .pill-live-tag {
+    margin-top: 2px;
+    font-size: 0.52rem; letter-spacing: 0.18em; font-weight: 700;
+    color: var(--accent);
+    animation: live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+  }
+</style>

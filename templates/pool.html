@@ -108,6 +108,86 @@
     font-size: 0.65rem; font-weight: 700;
   }
 
+  /* What's-new chip — opens a release-notes modal */
+  .whats-new-chip {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    margin: 0 0 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.45rem 0.9rem 0.45rem 0.7rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--text);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, background 0.15s;
+    max-width: 100%;
+  }
+  .whats-new-chip:hover { border-color: var(--accent); background: rgba(200,255,87,0.05); }
+  .wn-icon  { font-size: 0.95rem; line-height: 1; }
+  .wn-label {
+    color: var(--accent); font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    font-size: 0.62rem;
+  }
+  .wn-headline {
+    color: var(--text-muted); font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 220px;
+  }
+  .wn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(200,255,87,0.55);
+    flex-shrink: 0;
+  }
+
+  /* Release-notes modal — scrollable list of all releases. Larger
+     modal-box override for the long-form content. */
+  .wn-modal .modal-box {
+    max-width: 540px; width: 94%;
+    max-height: 78vh;
+    display: flex; flex-direction: column;
+  }
+  .wn-list {
+    margin-top: 0.6rem;
+    overflow-y: auto; flex: 1;
+    padding-right: 0.4rem;
+    display: flex; flex-direction: column; gap: 1.25rem;
+  }
+  .wn-release {
+    border-left: 2px solid var(--border);
+    padding: 0.25rem 0 0.25rem 0.9rem;
+  }
+  .wn-release:first-child {
+    border-left-color: var(--accent);
+  }
+  .wn-release-head {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    margin-bottom: 0.45rem;
+  }
+  .wn-release-emoji { font-size: 0.95rem; line-height: 1; }
+  .wn-release-title { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+  .wn-release-date {
+    margin-left: auto;
+    font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .wn-release ul {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 0.35rem;
+  }
+  .wn-release li {
+    font-size: 0.78rem; line-height: 1.5;
+    color: var(--text-muted);
+    padding-left: 1rem; position: relative;
+  }
+  .wn-release li::before {
+    content: '·'; position: absolute; left: 0.25rem; top: -0.05rem;
+    color: var(--accent); font-weight: 700;
+  }
+
   /* iOS Safari — Add to Home Screen guide.
      Shown only on iOS Safari (not standalone, not Chrome-iOS/Firefox-iOS).
      JS toggles the .is-visible class after the UA check. */
@@ -1222,6 +1302,16 @@
     <span class="pill-q">?</span> How it works
   </button>
 
+  <!-- ── What's new chip ─────────────────────────────────────────────── -->
+  {% if releases %}
+  <button type="button" id="whats-new-chip" class="whats-new-chip" onclick="openWhatsNew()">
+    <span class="wn-icon">📣</span>
+    <span class="wn-label">What's new</span>
+    <span class="wn-headline">{{ releases[0].title }}</span>
+    <span class="wn-dot" id="whats-new-dot" style="display:none"></span>
+  </button>
+  {% endif %}
+
   {% if pool.entry_fee and not has_paid %}
   <div style="
     background: rgba(200,255,87,0.06); border: 1px solid rgba(200,255,87,0.25);
@@ -1809,7 +1899,7 @@
                     <td>
                       <img class="flag" src="https://flagcdn.com/{{ t.flag_code }}.svg" alt="" loading="lazy" onerror="this.style.display='none'">
                     </td>
-                    <td class="team-name">{{ t.team }}</td>
+                    <td class="team-name" title="{{ t.team }}">{{ ABBR.get(t.team) or t.team[:3].upper() }}</td>
                     <td>{{ t.played }}</td>
                     <td class="stat-wdl">{{ t.won }}</td>
                     <td class="stat-wdl">{{ t.drawn }}</td>
@@ -1935,6 +2025,30 @@
         </div>
       </form>
     </details>
+  </div>
+</div>
+
+<!-- ── What's New modal ───────────────────────────────────────────── -->
+<div id="whats-new-modal" class="modal-backdrop wn-modal" data-modal-close="wn">
+  <div class="modal-box">
+    <button type="button" class="modal-x-close" aria-label="Close" data-modal-close="wn">×</button>
+    <div class="modal-title">📣 What's new</div>
+    <div class="wn-list">
+      {% for rel in releases %}
+        <div class="wn-release">
+          <div class="wn-release-head">
+            {% if rel.emoji %}<span class="wn-release-emoji">{{ rel.emoji }}</span>{% endif %}
+            <span class="wn-release-title">{{ rel.title }}</span>
+            <span class="wn-release-date">{{ rel.date }}</span>
+          </div>
+          <ul>
+            {% for change in rel.changes %}
+              <li>{{ change }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
@@ -2109,6 +2223,30 @@
     const m = document.getElementById('walk-modal');
     if (m) m.classList.add('open');
   }
+
+  // ── What's-new modal ────────────────────────────────────────────────
+  const WN_KEY = 'wc26_last_seen_release';
+  const LATEST_RELEASE_DATE = {{ latest_release_date | tojson }};
+  function openWhatsNew() {
+    const m = document.getElementById('whats-new-modal');
+    if (m) m.classList.add('open');
+    try { localStorage.setItem(WN_KEY, LATEST_RELEASE_DATE); } catch (e) {}
+    const dot = document.getElementById('whats-new-dot');
+    if (dot) dot.style.display = 'none';
+  }
+  function closeWhatsNew() {
+    const m = document.getElementById('whats-new-modal');
+    if (m) m.classList.remove('open');
+  }
+  function maybeShowWhatsNewDot() {
+    try {
+      const lastSeen = localStorage.getItem(WN_KEY) || '';
+      if (LATEST_RELEASE_DATE && LATEST_RELEASE_DATE > lastSeen) {
+        const dot = document.getElementById('whats-new-dot');
+        if (dot) dot.style.display = 'inline-block';
+      }
+    } catch (e) {}
+  }
   function closeWalkthrough() {
     const m = document.getElementById('walk-modal');
     if (m) m.classList.remove('open');
@@ -2252,6 +2390,7 @@
     maybeAutoShowWalkthrough();
     restorePoolIntroFromStorage();
     maybeShowA2HS();
+    maybeShowWhatsNewDot();
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────
@@ -2518,6 +2657,7 @@
       if (which === 'spy') closeSpyModal();
       else if (which === 'walk') closeWalkthrough();
       else if (which === 'edit') closeEditDisplay();
+      else if (which === 'wn')   closeWhatsNew();
       return;
     }
     // Spy trigger

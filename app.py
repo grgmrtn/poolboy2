@@ -204,6 +204,14 @@ def inject_team_abbr():
     return {"ABBR": TEAM_ABBR}
 
 
+# What's-new releases feed, surfaced as a chip on the pool page + a modal
+# listing every release in reverse chronological order.
+from releases import RELEASES as _RELEASES, latest_release_date as _latest_rel
+@app.context_processor
+def inject_releases():
+    return {"releases": _RELEASES, "latest_release_date": _latest_rel()}
+
+
 app.jinja_env.globals['enumerate'] = enumerate
 
 
