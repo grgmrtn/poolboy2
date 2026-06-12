@@ -1185,14 +1185,14 @@
 
   /* .field-pill removed: counts now render in count-row inside .match-pill */
 
-  /* ── Unified Spy button — sized to match the "You" player pill ───── */
+  /* ── Combined Spy + picks-in button: "👁 Spy on 21 picks" ────────── */
   .spy-trigger {
     display: inline-flex; align-items: center; justify-content: center;
-    gap: 0.45rem;
-    height: 44px; padding: 0 1.05rem;
+    gap: 0.4rem;
+    height: 44px; padding: 0 0.95rem;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); flex-shrink: 0;
-    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    font-family: var(--mono);
     color: var(--text-muted); cursor: pointer;
     transition: all 0.15s; white-space: nowrap; letter-spacing: 0.03em;
   }
@@ -1200,41 +1200,35 @@
     border-color: var(--amber); color: var(--amber);
     background: rgba(255,200,112,0.06);
   }
-  .spy-trigger span:first-child { font-size: 1rem; line-height: 1; }
-
-  /* "Picks in" count — sized to match the other action-row elements (44px),
-     number left, label right, both on the same line. */
-  .picks-in-count {
-    display: inline-flex; align-items: center; justify-content: center;
-    gap: 0.35rem;
-    height: 44px; padding: 0 0.8rem;
-    border-radius: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    line-height: 1;
-    flex-shrink: 0;
-    white-space: nowrap;
+  .spy-trigger .spy-eye { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+  .spy-trigger .spy-prefix {
+    font-size: 0.74rem; font-weight: 700;
+    color: var(--text-muted); letter-spacing: 0.03em;
   }
-  .picks-in-count .picks-num {
+  .spy-trigger .picks-num {
     color: var(--text);
-    font-size: 1.1rem; font-weight: 700;
+    font-size: 1.25rem; font-weight: 800;
     font-variant-numeric: tabular-nums;
+    line-height: 1;
   }
-  .picks-in-count .picks-label {
-    color: var(--text-muted);
-    font-size: 0.6rem; font-weight: 600;
+  .spy-trigger .picks-label {
+    font-size: 0.6rem; font-weight: 700;
     letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted);
   }
+  .spy-trigger:hover .spy-prefix,
+  .spy-trigger:hover .picks-num,
+  .spy-trigger:hover .picks-label { color: var(--amber); }
   .fixture-actions { align-items: center; }
 
-  /* Mobile: tighten so You + Spy + picks-in fit on one line on iPhones */
+  /* Mobile: tighten so You + Spy bubble fit on one line on iPhones */
   @media (max-width: 700px) {
     .player-pill.is-me { width: 110px; padding: 0 0.45rem; gap: 0.3rem; }
-    .spy-trigger      { padding: 0 0.7rem; gap: 0.3rem; font-size: 0.78rem; }
-    .picks-in-count   { padding: 0 0.55rem; gap: 0.25rem; }
-    .picks-in-count .picks-num   { font-size: 1rem; }
-    .picks-in-count .picks-label { font-size: 0.55rem; }
-    .fixture-actions  { gap: 0.25rem 0.35rem; }
+    .spy-trigger { padding: 0 0.7rem; gap: 0.3rem; }
+    .spy-trigger .spy-prefix { font-size: 0.66rem; }
+    .spy-trigger .picks-num { font-size: 1.1rem; }
+    .spy-trigger .picks-label { font-size: 0.55rem; }
+    .fixture-actions { gap: 0.25rem 0.35rem; }
   }
   @media (max-width: 380px) {
     .player-pill.is-me { width: 95px; }
@@ -2115,24 +2109,24 @@
                        above (between match pill and action row), aligned with
                        the H/D/A columns of the match pill. #}
 
-                    {# ── Single Spy button + "X picks in" count ── #}
+                    {# Combined spy + picks-in button: "👁 Spy on 21 picks" #}
                     {% if not is_completed and not is_started %}
+                      {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
                       <button type="button" class="spy-trigger"
+                              id="picks-in-{{ f.id }}"
                               data-pool="{{ pool.id }}"
                               data-fixture="{{ f.id }}"
                               data-field-cost="{{ field_spy_cost_by_fixture.get(f.id, scoring_config.aggregate_spy_cost) }}"
                               data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
-                              data-field-bought="{{ 'true' if (f.id in aggregate_spy_set) else 'false' }}">
-                        <span>👁</span> Spy
-                      </button>
-                      {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
-                      <span class="picks-in-count" id="picks-in-{{ f.id }}"
-                            data-picks="{{ picks_so_far }}"
-                            data-i-have-picked="{{ '1' if my_pick else '0' }}"
-                            title="Picks submitted on this match so far">
+                              data-field-bought="{{ 'true' if (f.id in aggregate_spy_set) else 'false' }}"
+                              data-picks="{{ picks_so_far }}"
+                              data-i-have-picked="{{ '1' if my_pick else '0' }}"
+                              title="Reveal who's picked which side">
+                        <span class="spy-eye">👁</span>
+                        <span class="spy-prefix">Spy on</span>
                         <span class="picks-num">{{ picks_so_far }}</span>
-                        <span class="picks-label">{{ 'pick' if picks_so_far == 1 else 'picks' }} in</span>
-                      </span>
+                        <span class="picks-label">{{ 'pick' if picks_so_far == 1 else 'picks' }}</span>
+                      </button>
                     {% endif %}
 
                   </div><!-- /.fixture-actions -->
@@ -3366,7 +3360,8 @@
     const numEl   = el.querySelector('.picks-num');
     const labelEl = el.querySelector('.picks-label');
     if (numEl)   numEl.textContent = String(next);
-    if (labelEl) labelEl.textContent = (next === 1 ? 'pick' : 'picks') + ' in';
+    // Merged button — label is just 'pick' or 'picks', no trailing " in".
+    if (labelEl) labelEl.textContent = (next === 1 ? 'pick' : 'picks');
   }
 
   function showSavedFeedback(fixtureId) {
