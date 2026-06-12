@@ -172,6 +172,38 @@ def inject_user():
     return {"current_user": current_user()}
 
 
+# Country team-name → 3-letter abbreviation lookup. Lives here (vs. each
+# template's {% set %}) so both pool.html and group.html — and any future
+# templates that render match pills — share one source of truth.
+TEAM_ABBR = {
+    'United States':'USA','South Korea':'KOR','Saudi Arabia':'KSA',
+    'New Zealand':'NZL','South Africa':'RSA','Czech Republic':'CZE',
+    'Ivory Coast':'CIV','Costa Rica':'CRC','Cape Verde Islands':'CPV',
+    'Bosnia-Herzegovina':'BIH','El Salvador':'ESA','Congo DR':'COD',
+    'Curaçao':'CUW','Czechia':'CZE',
+    'Argentina':'ARG','Brazil':'BRA','Belgium':'BEL','Mexico':'MEX',
+    'Canada':'CAN','England':'ENG','France':'FRA','Germany':'GER',
+    'Spain':'ESP','Portugal':'POR','Netherlands':'NED','Italy':'ITA',
+    'Croatia':'CRO','Switzerland':'SUI','Denmark':'DEN','Sweden':'SWE',
+    'Poland':'POL','Serbia':'SRB','Senegal':'SEN','Morocco':'MAR',
+    'Australia':'AUS','Japan':'JPN','Iran':'IRN','Iraq':'IRQ',
+    'Algeria':'ALG','Tunisia':'TUN','Cameroon':'CMR','Ghana':'GHA',
+    'Nigeria':'NGA','Egypt':'EGY','Jordan':'JOR','Qatar':'QAT',
+    'Uruguay':'URU','Colombia':'COL','Ecuador':'ECU','Peru':'PER',
+    'Chile':'CHI','Paraguay':'PAR','Bolivia':'BOL','Venezuela':'VEN',
+    'Panama':'PAN','Honduras':'HON','Haiti':'HAI',
+    'Norway':'NOR','Uzbekistan':'UZB','Scotland':'SCO','Wales':'WAL',
+    'Turkey':'TUR','Ukraine':'UKR','Hungary':'HUN','Romania':'ROU',
+    'Slovakia':'SVK','Slovenia':'SVN','Austria':'AUT','Georgia':'GEO',
+    'Albania':'ALB','Indonesia':'IDN','Mali':'MLI','Zambia':'ZAM',
+    'Dominican Republic':'DOM',
+}
+
+@app.context_processor
+def inject_team_abbr():
+    return {"ABBR": TEAM_ABBR}
+
+
 app.jinja_env.globals['enumerate'] = enumerate
 
 

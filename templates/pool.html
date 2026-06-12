@@ -1139,31 +1139,7 @@
 {% set LOCK_MIN = lock_minutes %}
 {% set now_dt = now_iso %}
 
-{# Country abbreviations hoisted to top-level so the Completed-table renders
-   the same way the inline fixture pills do. #}
-{% set ABBR = {
-  'United States':'USA','South Korea':'KOR','Saudi Arabia':'KSA',
-  'New Zealand':'NZL','South Africa':'RSA','Czech Republic':'CZE',
-  'Ivory Coast':'CIV','Costa Rica':'CRC','Cape Verde Islands':'CPV',
-  'Bosnia-Herzegovina':'BIH','El Salvador':'ESA','Congo DR':'COD',
-  'Curaçao':'CUW','Czechia':'CZE',
-  'Argentina':'ARG','Brazil':'BRA','Belgium':'BEL','Mexico':'MEX',
-  'Canada':'CAN','England':'ENG','France':'FRA','Germany':'GER',
-  'Spain':'ESP','Portugal':'POR','Netherlands':'NED','Italy':'ITA',
-  'Croatia':'CRO','Switzerland':'SUI','Denmark':'DEN','Sweden':'SWE',
-  'Poland':'POL','Serbia':'SRB','Senegal':'SEN','Morocco':'MAR',
-  'Australia':'AUS','Japan':'JPN','Iran':'IRN','Iraq':'IRQ',
-  'Algeria':'ALG','Tunisia':'TUN','Cameroon':'CMR','Ghana':'GHA',
-  'Nigeria':'NGA','Egypt':'EGY','Jordan':'JOR','Qatar':'QAT',
-  'Uruguay':'URU','Colombia':'COL','Ecuador':'ECU','Peru':'PER',
-  'Chile':'CHI','Paraguay':'PAR','Bolivia':'BOL','Venezuela':'VEN',
-  'Panama':'PAN','Honduras':'HON','Haiti':'HAI',
-  'Norway':'NOR','Uzbekistan':'UZB','Scotland':'SCO','Wales':'WAL',
-  'Turkey':'TUR','Ukraine':'UKR','Hungary':'HUN','Romania':'ROU',
-  'Slovakia':'SVK','Slovenia':'SVN','Austria':'AUT','Georgia':'GEO',
-  'Albania':'ALB','Indonesia':'IDN','Mali':'MLI','Zambia':'ZAM',
-  'Dominican Republic':'DOM'
-} %}
+{# ABBR is injected globally via Flask context processor (see app.py:TEAM_ABBR). #}
 
 <!-- ── Stage navigation ───────────────────────────────────────────── -->
 {% set SHORT = {

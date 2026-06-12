@@ -1,0 +1,81 @@
+{# ─────────────────────────────────────────────────────────────────────
+   _match_pill.html — the visual match pill, shared between the main
+   pool page and per-group pick pages so both render identical chrome.
+
+   Required context:
+     f                — fixture dict (home_team, away_team, *_flag_code,
+                        result, *_score, live_*_score, stage)
+     pool             — pool dict (used for the save-pick AJAX URL)
+     my_pick          — 'H' | 'D' | 'A' | None — current user's pick
+     is_completed     — bool
+     is_started       — bool
+     is_ko_stage      — bool
+     ABBR             — dict of {team_name: abbreviation}
+   ───────────────────────────────────────────────────────────────────── #}
+{% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
+{% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
+{% if is_completed %}
+  {% set pill_cls = 'match-pill completed ' + ('scored-win' if my_pick == f.result else 'scored-loss') %}
+{% elif my_pick %}
+  {% set pill_cls = 'match-pill has-pick' %}
+{% elif is_started %}
+  {% set pill_cls = 'match-pill locked' %}
+{% else %}
+  {% set pill_cls = 'match-pill' %}
+{% endif %}
+
+<div class="{{ pill_cls }}"
+     data-home-flag="{{ f.home_flag_code or 'un' }}"
+     data-away-flag="{{ f.away_flag_code or 'un' }}">
+
+  <div class="match-pill-row pick-row">
+  {% if is_completed or is_started %}
+    <div class="pill-side home">
+      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+      <span class="team-abbr">{{ home_abbr }}</span>
+    </div>
+    <div class="pill-centre">
+      {% if is_completed %}
+        <div class="pill-score">{{ f.home_score }}<span class="score-sep">–</span>{{ f.away_score }}</div>
+      {% elif f.live_home_score is not none and f.live_away_score is not none %}
+        <div class="pill-score pill-score-live">{{ f.live_home_score }}<span class="score-sep">–</span>{{ f.live_away_score }}</div>
+        <div class="pill-live-tag">● LIVE</div>
+      {% else %}
+        <div class="pill-result pending">Live</div>
+      {% endif %}
+    </div>
+    <div class="pill-side away">
+      <span class="team-abbr">{{ away_abbr }}</span>
+      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+    </div>
+
+  {% elif is_ko_stage %}
+    <div class="pill-side home">
+      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+      <span class="team-abbr">{{ home_abbr }}</span>
+    </div>
+    <div class="pill-centre">
+      <span style="font-size:0.55rem;color:var(--text-dim);letter-spacing:0.08em">KO</span>
+    </div>
+    <div class="pill-side away">
+      <span class="team-abbr">{{ away_abbr }}</span>
+      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+    </div>
+
+  {% else %}
+    {# Pre-lock group fixture: in-pill pick buttons #}
+    <button class="pick-btn pick-home{% if my_pick == 'H' %} active{% endif %}"
+            onclick="savePick('{{ pool.id }}','{{ f.id }}','H',this)">
+      <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+      <span class="team-abbr">{{ home_abbr }}</span>
+    </button>
+    <button class="pick-btn pick-draw{% if my_pick == 'D' %} active{% endif %}"
+            onclick="savePick('{{ pool.id }}','{{ f.id }}','D',this)">Draw</button>
+    <button class="pick-btn pick-away{% if my_pick == 'A' %} active{% endif %}"
+            onclick="savePick('{{ pool.id }}','{{ f.id }}','A',this)">
+      <span class="team-abbr">{{ away_abbr }}</span>
+      <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">
+    </button>
+  {% endif %}
+  </div>
+</div>
