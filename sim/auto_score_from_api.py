@@ -7,8 +7,10 @@ For each FINISHED match returned by the API:
      as fixtures.id, so this is a direct PK lookup).
   2. If the fixture is already scored (result IS NOT NULL), skip.
   3. Otherwise UPDATE home_score / away_score / result.
-  4. Call calculate_scores_for_fixture(fid) to award points to all picks.
-     That helper is idempotent via the score_log UNIQUE(pick_id) constraint.
+  4. Call process_fixture_result(fid) — the economy-aware scoring entry
+     point. Credits group_win/draw/loss payouts to pool_members.balance
+     and writes a 'payout' transaction per pick. Idempotent via prior-
+     payout reversal at the top of the function.
 
 Default is DRY-RUN: prints what would be written but touches nothing.
 Add --apply to actually write.
@@ -110,8 +112,8 @@ def main():
     # run), so per-call connection cost is fine.
     for w in to_write:
         db.update_fixture_result(w["id"], w["home"], w["away"])
-        db.calculate_scores_for_fixture(w["id"])
-        print(f"  ✓ scored {w['label']}")
+        n_picks = db.process_fixture_result(w["id"])
+        print(f"  ✓ scored {w['label']}  ({n_picks} picks processed)")
 
 
 if __name__ == "__main__":
