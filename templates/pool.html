@@ -1063,21 +1063,55 @@
     color: var(--text-muted); border-bottom: 1px solid var(--border);
     font-weight: 700;
   }
-  .standings-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .standings-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.78rem;
+    table-layout: fixed;             /* lets us cap the team column width */
+  }
   .standings-table th {
-    padding: 0.3rem 0.55rem; text-align: center;
-    font-size: 0.65rem; letter-spacing: 0.08em; color: var(--text-muted);
+    padding: 0.3rem 0.4rem; text-align: center;
+    font-size: 0.62rem; letter-spacing: 0.08em; color: var(--text-muted);
     font-weight: 500;
   }
-  .standings-table th:first-child { text-align: left; width: 24px; }
+  .standings-table th:first-child { text-align: left; width: 22px; }
   .standings-table th.team-col { text-align: left; }
-  .standings-table td { padding: 0.35rem 0.55rem; border-top: 1px solid rgba(255,255,255,0.04); text-align: center; }
-  .standings-table td:first-child { text-align: center; color: var(--text-muted); font-size: 0.7rem; }
-  .standings-table td.team-name { text-align: left; display: flex; align-items: center; gap: 0.3rem; }
+  .standings-table td {
+    padding: 0.35rem 0.4rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .standings-table td:first-child { text-align: center; color: var(--text-muted); font-size: 0.68rem; }
+  /* Team name cell: flag fixed left, name truncates with ellipsis instead
+     of pushing the rest of the row off-screen. */
+  .standings-table td.team-name,
+  .standings-table td[style*="text-align:left"] {
+    text-align: left; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Fixed widths for the stat columns + flexible width for team */
+  .standings-table col.col-pos { width: 22px; }
+  .standings-table col.col-flag { width: 22px; }
+  .standings-table col.col-stat { width: 28px; }
+  .standings-table col.col-pts  { width: 32px; }
   .standings-table tr.qual-auto td { background: rgba(80,200,100,0.07); }
   .standings-table tr.qual-pot  td { background: rgba(255,190,87,0.06); }
   .standings-table tr.qual-none td { opacity: 0.65; }
   .standings-pts { font-weight: 700; color: var(--accent); }
+  .standings-table td.standings-pts { font-size: 0.86rem; }
+
+  /* On narrow screens, drop the redundant W / D / L columns (derivable
+     from P + Pts) and the goals-against column. Pts is always preserved. */
+  @media (max-width: 640px) {
+    .standings-table { font-size: 0.74rem; }
+    .standings-table th.stat-wdl,
+    .standings-table td.stat-wdl,
+    .standings-table th.stat-ga,
+    .standings-table td.stat-ga {
+      display: none;
+    }
+    .standings-table th, .standings-table td { padding: 0.3rem 0.3rem; }
+  }
 
   /* ── Mobile tweaks ───────────────────────────────────────────────── */
   /* Note: match-pill is now a grid container that spans its parent's full
@@ -1763,12 +1797,30 @@
                 {{ group_name }} <span style="color:var(--text-dim);font-weight:400;font-size:0.7rem">→</span>
               </a>
               <table class="standings-table">
+                <colgroup>
+                  <col class="col-pos">
+                  <col class="col-flag">
+                  <col><!-- team name flexes -->
+                  <col class="col-stat">                       <!-- P -->
+                  <col class="col-stat stat-wdl-col">          <!-- W -->
+                  <col class="col-stat stat-wdl-col">          <!-- D -->
+                  <col class="col-stat stat-wdl-col">          <!-- L -->
+                  <col class="col-stat">                       <!-- GF -->
+                  <col class="col-stat stat-ga-col">           <!-- GA -->
+                  <col class="col-stat">                       <!-- GD -->
+                  <col class="col-pts">                        <!-- Pts -->
+                </colgroup>
                 <thead>
                   <tr>
                     <th>#</th>
                     <th class="team-col" colspan="2">Team</th>
-                    <th>P</th><th>W</th><th>D</th><th>L</th>
-                    <th>GF</th><th>GA</th><th>GD</th>
+                    <th>P</th>
+                    <th class="stat-wdl">W</th>
+                    <th class="stat-wdl">D</th>
+                    <th class="stat-wdl">L</th>
+                    <th>GF</th>
+                    <th class="stat-ga">GA</th>
+                    <th>GD</th>
                     <th>Pts</th>
                   </tr>
                 </thead>
@@ -1781,13 +1833,13 @@
                     <td>
                       <img class="flag" src="https://flagcdn.com/{{ t.flag_code }}.svg" alt="" loading="lazy" onerror="this.style.display='none'">
                     </td>
-                    <td style="text-align:left;white-space:nowrap">{{ t.team }}</td>
+                    <td class="team-name">{{ t.team }}</td>
                     <td>{{ t.played }}</td>
-                    <td>{{ t.won }}</td>
-                    <td>{{ t.drawn }}</td>
-                    <td>{{ t.lost }}</td>
+                    <td class="stat-wdl">{{ t.won }}</td>
+                    <td class="stat-wdl">{{ t.drawn }}</td>
+                    <td class="stat-wdl">{{ t.lost }}</td>
                     <td>{{ t.goals_for }}</td>
-                    <td>{{ t.goals_against }}</td>
+                    <td class="stat-ga">{{ t.goals_against }}</td>
                     <td>{% if t.goal_diff > 0 %}+{% endif %}{{ t.goal_diff }}</td>
                     <td class="standings-pts">{{ t.points }}</td>
                   </tr>
