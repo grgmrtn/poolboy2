@@ -269,6 +269,8 @@ def init_db():
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_away_score INTEGER",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_status TEXT",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_updated_at TEXT",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_minute INTEGER",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS city TEXT",
         ]:
             c.execute(sql)
     else:
@@ -297,6 +299,8 @@ def init_db():
             ("fixtures",       "live_away_score INTEGER"),
             ("fixtures",       "live_status TEXT"),
             ("fixtures",       "live_updated_at TEXT"),
+            ("fixtures",       "live_minute INTEGER"),
+            ("fixtures",       "city TEXT"),
         ]
         for table, col_def in migrations:
             try:
@@ -625,29 +629,55 @@ def set_fixture_odds(fixture_id, home_odds, away_odds):
     conn.close()
 
 
-def update_live_score(fixture_id, home_score, away_score, status, updated_at):
+def update_live_score(fixture_id, home_score, away_score, status, updated_at,
+                       minute=None, city=None):
     """
     Stash a running live score for a fixture (separate from the final
     home_score/away_score that drive payouts). Called by the auto-score
     cron when a match status is IN_PLAY / PAUSED. When the match later
-    goes FINISHED, clear_live_score() wipes these columns so the pill
-    falls back to rendering the final score.
+    goes FINISHED, clear_live_score() wipes the live_* columns so the
+    pill falls back to rendering the final score.
+
+    minute / city are optional — only updated when provided so a
+    follow-up call from a different source (football-data has no
+    minute or city) doesn't overwrite the richer data.
     """
     conn = get_db()
-    conn.execute(
-        "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
-        "live_status=?, live_updated_at=? WHERE id=?",
-        (home_score, away_score, status, updated_at, fixture_id)
-    )
+    if minute is not None and city is not None:
+        conn.execute(
+            "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
+            "live_status=?, live_updated_at=?, live_minute=?, city=? WHERE id=?",
+            (home_score, away_score, status, updated_at, minute, city, fixture_id)
+        )
+    elif minute is not None:
+        conn.execute(
+            "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
+            "live_status=?, live_updated_at=?, live_minute=? WHERE id=?",
+            (home_score, away_score, status, updated_at, minute, fixture_id)
+        )
+    elif city is not None:
+        conn.execute(
+            "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
+            "live_status=?, live_updated_at=?, city=? WHERE id=?",
+            (home_score, away_score, status, updated_at, city, fixture_id)
+        )
+    else:
+        conn.execute(
+            "UPDATE fixtures SET live_home_score=?, live_away_score=?, "
+            "live_status=?, live_updated_at=? WHERE id=?",
+            (home_score, away_score, status, updated_at, fixture_id)
+        )
     conn.commit()
     conn.close()
 
 
 def clear_live_score(fixture_id):
+    """Clear running live data when a fixture transitions to FINISHED.
+    Preserves city (it's the venue, not a transient state)."""
     conn = get_db()
     conn.execute(
         "UPDATE fixtures SET live_home_score=NULL, live_away_score=NULL, "
-        "live_status=NULL, live_updated_at=NULL WHERE id=?",
+        "live_status=NULL, live_updated_at=NULL, live_minute=NULL WHERE id=?",
         (fixture_id,)
     )
     conn.commit()

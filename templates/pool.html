@@ -130,19 +130,25 @@
   }
   .top-chip-row > * { margin: 0 !important; }   /* override chip margins */
 
-  /* Compact uniform chip — used for How it works, What's new, Stats */
+  /* Compact uniform chip — used for How it works, What's new, Stats.
+     Padding kept tight so all three fit on one line on a 375px iPhone. */
   .how-it-works-pill {
-    display: inline-flex; align-items: center; gap: 0.4rem;
+    display: inline-flex; align-items: center; gap: 0.3rem;
     margin-bottom: 1.25rem;
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 0.4rem 0.85rem;
-    color: var(--text-muted); font-size: 0.74rem; font-weight: 500;
+    padding: 0.32rem 0.7rem;
+    color: var(--text-muted); font-size: 0.7rem; font-weight: 500;
     letter-spacing: 0.04em;
     cursor: pointer;
     font-family: var(--mono);
-    text-decoration: none;       /* keeps `<a>` style identical to `<button>` */
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  @media (max-width: 400px) {
+    .how-it-works-pill { padding: 0.3rem 0.55rem; font-size: 0.66rem; }
+    .top-chip-row { gap: 0.35rem; }
   }
   .how-it-works-pill:hover { color: var(--text); border-color: var(--border-hi); }
   /* Icon slot. For the literal "?" character it renders as a lime bullet
@@ -601,6 +607,10 @@
       min-width: 0;
     }
     .ln-tab-min:empty { display: none; }
+    .ln-city {
+      font-size: 0.62rem; letter-spacing: 0.04em;
+      color: rgba(10,10,15,0.62); font-weight: 600;
+    }
     .ln-expand-btn {
       flex-shrink: 0;
       background: rgba(0,0,0,0.08); border: 0; border-left: 1px solid rgba(0,0,0,0.18);
@@ -1503,7 +1513,7 @@
                 class="ln-tab{% if loop.first %} active{% endif %}"
                 data-fixture-id="{{ lf.id }}"
                 data-home-abbr="{{ _ht }}" data-away-abbr="{{ _at }}"
-                onclick="event.stopPropagation(); selectLnTab(this)">
+                onclick="selectLnTab(this, event)">
           <span class="ln-tab-live">LIVE:</span>
           <span class="ln-tab-teams">{{ _ht }} {{ lf.live_home if lf.live_home is not none else '0' }}–{{ lf.live_away if lf.live_away is not none else '0' }} {{ _at }}</span>
           <span class="ln-tab-min">{% if lf.minute_est is not none %}{{ lf.minute_est }}'{% endif %}</span>
@@ -1528,6 +1538,9 @@
             <a class="ln-stage-link" href="{{ url_for('group_page', pool_id=pool.id, letter=lf.stage[-1]) }}">{{ lf.stage }} →</a>
           {% else %}
             <span class="ln-stage-link">{{ lf.stage }}</span>
+          {% endif %}
+          {% if lf.city %}
+            <span class="ln-city"> · {{ lf.city }}</span>
           {% endif %}
         </div>
 
@@ -1655,18 +1668,13 @@
   <!-- ── Always-present chip row: How it Works · What's New · Stats ──── -->
   <div class="top-chip-row">
     <button type="button" id="how-it-works-pill" class="how-it-works-pill"
-            onclick="openWalkthrough()">
-      <span class="pill-q">?</span> How it works
-    </button>
+            onclick="openWalkthrough()">How it works</button>
     {% if releases %}
     <button type="button" id="whats-new-chip" class="how-it-works-pill" onclick="openWhatsNew()">
-      <span class="pill-q">📣</span> What's new
-      <span class="wn-dot" id="whats-new-dot" style="display:none"></span>
+      What's new<span class="wn-dot" id="whats-new-dot" style="display:none"></span>
     </button>
     {% endif %}
-    <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" class="how-it-works-pill">
-      <span class="pill-q">📈</span> Stats
-    </a>
+    <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" class="how-it-works-pill">Stats</a>
   </div>
 
   {% if pool.entry_fee and not has_paid %}
@@ -2594,14 +2602,18 @@
       row.classList.toggle('is-in-live-banner', liveIds.has(row.dataset.fixtureId));
     });
   }
-  function selectLnTab(tabBtn) {
+  function selectLnTab(tabBtn, ev) {
     if (!tabBtn) return;
+    if (ev) ev.stopPropagation();             // never bubble to bar's toggle
     const fid = tabBtn.dataset.fixtureId;
     document.querySelectorAll('#ln-tabs .ln-tab').forEach(t => t.classList.remove('active'));
     tabBtn.classList.add('active');
     document.querySelectorAll('#ln-expanded .ln-panel').forEach(p => {
       p.classList.toggle('active', p.dataset.fixtureId === fid);
     });
+    // Collapsed → tab tap also opens. Open → tab tap just switches.
+    const b = document.getElementById('live-now-banner');
+    if (b && !b.classList.contains('is-expanded')) b.classList.add('is-expanded');
   }
   // Refresh banner data every 30s. Pauses when tab is hidden so we don't
   // burn battery on a background phone. Updates score numbers + minute +

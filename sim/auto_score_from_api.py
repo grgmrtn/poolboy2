@@ -34,6 +34,110 @@ COMPETITION   = "2000"   # FIFA World Cup on football-data.org
 API_URL       = f"https://api.football-data.org/v4/competitions/{COMPETITION}/matches"
 LIVE_STATUSES = {"IN_PLAY", "PAUSED", "LIVE"}
 
+# ESPN's public WC scoreboard. No auth. Gives us:
+#   - status.displayClock ("21'", "45+2'", "HT")
+#   - status.type.state ("in", "pre", "post")
+#   - score per competitor (mid-match live)
+#   - venue.fullName / venue.address.city
+ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
+
+# Team-name aliases for ESPN → football-data normalisation. ESPN uses
+# slightly different long-form names for some teams; map to ours.
+ESPN_TEAM_ALIASES = {
+    "USA": "United States",
+    "Korea Republic": "South Korea",
+    "IR Iran": "Iran",
+    "Republic of Ireland": "Ireland",
+    # add more as discovered in the wild
+}
+
+
+def _normalise_team(name):
+    if not name:
+        return ""
+    name = name.strip()
+    return ESPN_TEAM_ALIASES.get(name, name)
+
+
+def _parse_minute(display_clock, period):
+    """Turn ESPN's displayClock string into a minute integer. Examples:
+        "21'"     → 21
+        "45+2'"   → 45
+        "0'"      → 0
+        "HT"      → 45  (halftime)
+        "FT"      → 90
+    Returns None on parse failure."""
+    if not display_clock:
+        return None
+    s = str(display_clock).strip()
+    if s in ("HT", "Halftime"):
+        return 45
+    if s in ("FT", "Full Time"):
+        return 90
+    import re as _re
+    m = _re.match(r"(\d+)", s)
+    if m:
+        try:
+            base = int(m.group(1))
+            return min(120, base)
+        except ValueError:
+            pass
+    return None
+
+
+def fetch_espn_live(fixtures_by_team_pair):
+    """Return list of {fixture_id, home, away, status, minute, city, updated_at}
+    for every ESPN event in state=in that matches one of our fixtures by
+    (home_team, away_team)."""
+    out = []
+    try:
+        r = requests.get(ESPN_URL, timeout=15)
+        if r.status_code != 200:
+            print(f"  ESPN HTTP {r.status_code} — skipping ESPN pass")
+            return out
+        data = r.json()
+    except Exception as e:
+        print(f"  ESPN fetch failed: {e}")
+        return out
+
+    for evt in data.get("events", []):
+        status_obj = evt.get("status") or {}
+        state = (status_obj.get("type") or {}).get("state", "")
+        if state not in ("in", "live"):
+            continue
+        comps = (evt.get("competitions") or [{}])[0].get("competitors", [])
+        if len(comps) != 2:
+            continue
+        home_c = next((c for c in comps if c.get("homeAway") == "home"), None)
+        away_c = next((c for c in comps if c.get("homeAway") == "away"), None)
+        if not home_c or not away_c:
+            continue
+        home_team = _normalise_team(home_c.get("team", {}).get("displayName"))
+        away_team = _normalise_team(away_c.get("team", {}).get("displayName"))
+        fixture_id = fixtures_by_team_pair.get((home_team, away_team))
+        if not fixture_id:
+            continue
+        # Score (None if not started — but state=in shouldn't see that)
+        try:
+            h_score = int(home_c.get("score") or 0)
+            a_score = int(away_c.get("score") or 0)
+        except (ValueError, TypeError):
+            continue
+        minute = _parse_minute(status_obj.get("displayClock"),
+                                status_obj.get("period"))
+        venue = (evt.get("competitions") or [{}])[0].get("venue") or {}
+        city = (venue.get("address") or {}).get("city")
+        out.append({
+            "fixture_id": fixture_id,
+            "home": h_score, "away": a_score,
+            "status": "IN_PLAY",
+            "minute": minute,
+            "city": city,
+            "updated_at": evt.get("date") or "",
+            "label": f"{home_team} {h_score}-{a_score} {away_team}",
+        })
+    return out
+
 
 def derive_result(home, away):
     if home > away:  return "H"
@@ -148,8 +252,23 @@ def main():
         db.update_live_score(w["id"], w["home"], w["away"], w["status"], w["updated_at"])
     for fid in live_clears:
         db.clear_live_score(fid)
-    print(f"\ndone — {len(finalise)} finalised, {len(live_updates)} live, "
-          f"{len(live_clears)} cleared")
+
+    # ── ESPN pass: enrich live snapshots with minute + venue city ──────
+    fixtures_by_team_pair = {
+        (r["home_team"], r["away_team"]): r["id"]
+        for r in rows
+        if r["home_team"] and r["away_team"]
+    }
+    espn_live = fetch_espn_live(fixtures_by_team_pair)
+    for w in espn_live:
+        db.update_live_score(
+            w["fixture_id"], w["home"], w["away"], w["status"],
+            w["updated_at"], minute=w["minute"], city=w["city"],
+        )
+        print(f"  ESPN     {w['label']}    minute={w['minute']}  city={w['city']!r}")
+
+    print(f"\ndone — {len(finalise)} finalised, {len(live_updates)} live (FD), "
+          f"{len(espn_live)} live (ESPN), {len(live_clears)} cleared")
 
 
 if __name__ == "__main__":

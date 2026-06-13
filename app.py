@@ -26,6 +26,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 import database as db
 import fixtures as fx
+import live_now_helper
 
 # ── App setup ──────────────────────────────────────────────────────────────
 
@@ -270,6 +271,95 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """
+    Self-service password reset. Form takes an email; if the account
+    exists, we mint a magic-login token signed with SECRET_KEY and email
+    the deep-link to the user. They click it, land logged in, and can
+    change their password from the My Account dialog.
+
+    Security: response is identical whether or not the email exists, so
+    this endpoint can't be used to enumerate users.
+    """
+    if request.method != "POST":
+        return render_template("forgot_password.html")
+
+    email = (request.form.get("email", "") or "").strip().lower()
+    if not email:
+        flash("Email is required.", "error")
+        return render_template("forgot_password.html")
+
+    user = db.get_user_by_email(email)
+    if user:
+        try:
+            import magic
+            token = magic.make_magic_token(user["id"])
+            site_url = os.environ.get(
+                "SITE_URL",
+                "https://poolboy2-app-production.up.railway.app"
+            ).rstrip("/")
+            link = f"{site_url}/m/{token}?next=/home"
+            _send_reset_email(user, link)
+        except Exception as e:
+            print(f"[forgot_password] failed to send reset to {email}: {e}")
+
+    # Same flash regardless of whether email exists.
+    flash(
+        "If an account exists for that email, a sign-in link is on the way. "
+        "Check your inbox (and spam folder).",
+        "success",
+    )
+    return redirect(url_for("login"))
+
+
+def _send_reset_email(user, link):
+    """Send a one-click magic-login email styled to match the pool's
+    lime/mono aesthetic."""
+    from email_helper import send_email
+    display = (user.get("display_name") or "there").split(" ")[0]
+    plain = (
+        f"Hey {display},\n\n"
+        f"Tap the link below to sign in to your WC26 Pool account. The link\n"
+        f"is good for 14 days — once you're in, you can rotate your password\n"
+        f"from the My Account dialog at the top of the pool page.\n\n"
+        f"{link}\n\n"
+        f"If you didn't request this, you can safely ignore the email.\n\n"
+        f"— WC26 Pool"
+    )
+    html = f"""<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head><body style="margin:0;padding:0;background:#f4f4f7;font-family:'JetBrains Mono',Menlo,Consolas,monospace;color:#2a2a35;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding:32px 16px;">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;background:#fff;border:1px solid #e3e3ec;border-radius:12px;overflow:hidden;">
+      <tr><td style="padding:24px 28px 0;">
+        <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#7ea200;font-weight:700;">WC26 Pool</div>
+        <h1 style="margin:6px 0 0;font-size:18px;font-weight:700;">Sign in to your account</h1>
+      </td></tr>
+      <tr><td style="padding:18px 28px 6px;font-size:14px;">Hey {display},</td></tr>
+      <tr><td style="padding:0 28px 18px;font-size:13px;color:#6c6c80;line-height:1.55;">
+        Tap the button below to sign in. The link is good for 14 days — once
+        you're in, you can rotate your password from <strong style="color:#2a2a35">My Account</strong>
+        at the top of the pool page.
+      </td></tr>
+      <tr><td align="center" style="padding:8px 28px 22px;">
+        <a href="{link}" style="display:inline-block;padding:13px 32px;background:#d3ff67;color:#2a2a35;font-weight:800;text-decoration:none;border-radius:8px;font-size:14px;letter-spacing:0.02em;">
+          Sign in →
+        </a>
+      </td></tr>
+      <tr><td style="padding:0 28px 22px;border-top:1px solid #e3e3ec;font-size:11px;color:#9090a4;text-align:center;letter-spacing:0.04em;">
+        Didn't request this? You can safely ignore the email. — WC26 Pool
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>"""
+    send_email(user["email"], "WC26 Pool — sign-in link",
+               plain, body_html=html)
 
 
 @app.route("/m/<token>")
@@ -622,6 +712,11 @@ def pool_page(pool_id):
     # Pick accuracy for the top stats tile ("4/14 picks").
     pick_accuracy = db.get_user_pick_accuracy(user["id"], pool_id)
 
+    # Augment every fixture with ESPN's live snapshot (in-memory only —
+    # no DB write). Cached 30s so concurrent users share one fetch.
+    all_fix_iter = (f for stage_fixtures in grouped_fixtures.values() for f in stage_fixtures)
+    live_now_helper.augment_fixtures_with_espn(all_fix_iter)
+
     # Live-now banner data — any fixture flagged IN_PLAY / PAUSED gets a
     # picks-by-side breakdown so the banner can render bets without
     # another DB hit. Re-used by the /live-now JSON endpoint below.
@@ -700,9 +795,10 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
                 if not (lock_dt <= now < ko_dt + _td(hours=4)):
                     continue
                 is_pre_kick = now < ko_dt
-            # Compute display minute (post-kick only).
-            minute_est = None
-            if ko_dt is not None and now >= ko_dt:
+            # Prefer the real minute that ESPN supplies; fall back to
+            # kick-off-derived estimate when no ESPN data is available.
+            minute_est = f.get("live_minute")
+            if minute_est is None and ko_dt is not None and now >= ko_dt:
                 delta_min = int((now - ko_dt).total_seconds() // 60)
                 if 0 <= delta_min <= 120:
                     minute_est = delta_min
@@ -732,6 +828,7 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
                 "live_away":     f.get("live_away_score"),
                 "live_status":   f.get("live_status"),
                 "stage":         f.get("stage"),
+                "city":          f.get("city"),
                 "minute_est":    minute_est,
                 "picks_by_side": picks_by_side,
                 "is_ko":         db.is_knockout_stage(f.get("stage") or ""),
@@ -754,6 +851,10 @@ def live_now_json(pool_id):
     grouped_raw = fx.get_all_fixtures()
     for stage_fixtures in grouped_raw.values():
         _attach_display_times(stage_fixtures)
+
+    # ESPN augmentation (same cached fetch as the page render).
+    all_fix_iter = (f for sf in grouped_raw.values() for f in sf)
+    live_now_helper.augment_fixtures_with_espn(all_fix_iter)
 
     conn = db.get_db()
     pick_rows = conn.execute("""
