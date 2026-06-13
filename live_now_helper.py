@@ -22,7 +22,12 @@ import time
 import requests
 
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
-_TTL_SECONDS = 30
+# Short TTL because Railway runs the web service in multiple containers, each
+# with its own in-memory cache. A long TTL meant the user's round-robin polls
+# could see "score → goal → score back" flicker when two containers had
+# different cached snapshots. 5s is plenty short to mask that, and ESPN's
+# public CDN absorbs the load (a few thousand requests/day is trivial).
+_TTL_SECONDS = 5
 
 # (timestamp, list[event]) — module-global cache; safe under multiple
 # concurrent Flask requests because GIL serialises the dict update.
