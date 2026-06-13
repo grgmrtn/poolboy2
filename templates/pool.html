@@ -130,21 +130,33 @@
   }
   .top-chip-row > * { margin: 0 !important; }   /* override chip margins */
 
-  /* Compact replacement pill — sits next to What's New now */
+  /* Compact uniform chip — used for How it works, What's new, Stats */
   .how-it-works-pill {
-    display: inline-flex; align-items: center; gap: 0.35rem;
+    display: inline-flex; align-items: center; gap: 0.4rem;
     margin-bottom: 1.25rem;
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 0.35rem 0.85rem;
+    padding: 0.4rem 0.85rem;
     color: var(--text-muted); font-size: 0.74rem; font-weight: 500;
     letter-spacing: 0.04em;
     cursor: pointer;
+    font-family: var(--mono);
+    text-decoration: none;       /* keeps `<a>` style identical to `<button>` */
   }
   .how-it-works-pill:hover { color: var(--text); border-color: var(--border-hi); }
+  /* Icon slot. For the literal "?" character it renders as a lime bullet
+     for the "help" affordance; emoji icons render at full size without
+     the circle wrap. */
   .how-it-works-pill .pill-q {
     display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; line-height: 1;
+  }
+  .how-it-works-pill .pill-q:not(:has(*)):not(.is-emoji) {
+    /* Falls back to the original lime-circle for short text chars like "?" */
+  }
+  /* Lime-circle treatment for the single-character "?" only */
+  #how-it-works-pill .pill-q {
     width: 14px; height: 14px; border-radius: 50%;
     background: var(--accent); color: #0a0a0f;
     font-size: 0.65rem; font-weight: 700;
@@ -179,10 +191,11 @@
     max-width: 220px;
   }
   .wn-dot {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 7px; height: 7px; border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 8px rgba(200,255,87,0.55);
     flex-shrink: 0;
+    margin-left: 0.15rem;
   }
 
   /* Release-notes modal — scrollable list of all releases. Larger
@@ -401,7 +414,7 @@
     display: none;
     position: absolute;
     top: 100%; left: 50%; transform: translateX(-50%);
-    margin-top: 6px; z-index: 30;
+    margin-top: 8px; z-index: 30;
     width: max-content; max-width: 280px;
     border-radius: 6px;
     padding: 0.55rem 0.7rem;
@@ -411,13 +424,27 @@
     box-shadow: 0 6px 18px rgba(0,0,0,0.55);
     pointer-events: none;
     font-family: var(--mono);
-    /* Solid dark background so names stay legible; the country / side
-       colour comes through on the border + header only. */
+    /* Solid dark background so names stay legible. */
     background: #15151e;
     border: 1px solid var(--border-hi);
-    border-left-width: 3px;
     color: var(--text);
+    --tip-arrow-color: var(--border-hi);
   }
+  /* Pointer triangle on the tooltip's top edge. Its horizontal position
+     shifts depending on which side fired the tip (tip-h / tip-d / tip-a)
+     so it visually aligns under the cell the user tapped. */
+  .ct-pickers-tip::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid var(--tip-arrow-color);
+  }
+  .ct-pickers-tip.tip-h::before { left: 18%; }
+  .ct-pickers-tip.tip-d::before { left: 50%; transform: translateX(-50%); }
+  .ct-pickers-tip.tip-a::before { right: 18%; }
   .ct-pickers-tip strong {
     display: block;
     font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
@@ -425,23 +452,14 @@
     margin-bottom: 0.3rem;
     color: var(--text-dim);
   }
-  /* Side-tinted accents (border + header). Background stays solid dark.
-     The country-specific home/away colours are painted via JS at init —
-     these classes only catch the static draw case + provide a fallback. */
-  .ct-pickers-tip.tip-h {
-    border-color: var(--blue);
-    border-left-color: var(--blue);
-  }
+  /* Side-tinted accents (border + header + arrow). Background stays
+     solid dark. JS overrides border colour for home/away with the
+     country tint at init; draw stays lime. */
+  .ct-pickers-tip.tip-h { border-color: var(--blue); --tip-arrow-color: var(--blue); }
   .ct-pickers-tip.tip-h strong { color: var(--blue); }
-  .ct-pickers-tip.tip-a {
-    border-color: var(--red);
-    border-left-color: var(--red);
-  }
+  .ct-pickers-tip.tip-a { border-color: var(--red); --tip-arrow-color: var(--red); }
   .ct-pickers-tip.tip-a strong { color: var(--red); }
-  .ct-pickers-tip.tip-d {
-    border-color: var(--accent);
-    border-left-color: var(--accent);
-  }
+  .ct-pickers-tip.tip-d { border-color: var(--accent); --tip-arrow-color: var(--accent); }
   .ct-pickers-tip.tip-d strong { color: var(--accent); }
 
   .ct-team.has-tip:hover, .ct-m-side.has-tip:hover { overflow: visible; }
@@ -455,32 +473,16 @@
     .ct-desk { display: none; }
     .ct-mob  { display: inline-flex; }
 
-    /* Triangle markers next to each side — tell the user the cell is
-       interactive and indicate which side a tooltip belongs to. Hidden on
-       desktop (default) where the tooltip pops from the cell itself. */
-    .ct-tri {
-      display: inline-block;
-      margin-left: 0.2rem;
-      font-size: 0.55rem; line-height: 1;
-      color: var(--text-dim);
-      transition: color 0.15s, transform 0.15s;
-    }
-    .ct-m-side.has-tip:hover .ct-tri,
-    .ct-m-score.has-tip:hover .ct-tri {
-      color: var(--accent); transform: translateY(1px);
-    }
-    /* When one side is being hovered, dim the rest of the match cell so
-       the active side is unambiguous. */
-    .ct-match:has(.has-tip:hover) > :not(:hover) { opacity: 0.4; }
-
     /* Tooltip on mobile: anchor to the .ct-row (not the side cell) so
        its on-screen position is the same regardless of which side fired
-       it. The cells go position:static; the row gains position:relative. */
+       it. The cells go position:static; the row gains position:relative.
+       A small arrow on the tooltip's top edge points UP at whichever
+       side was tapped (home left, draw centre, away right). */
     .ct-row { position: relative; }
     .ct-m-side.has-tip, .ct-m-score.has-tip { position: static; }
     .ct-pickers-tip {
       left: 0; right: 0; transform: none;
-      margin: 6px auto 0;
+      margin: 8px auto 0;
       max-width: min(88vw, 340px);
       font-size: 0.7rem;
       padding: 0.5rem 0.65rem;
@@ -548,6 +550,12 @@
      Hidden entirely when no live fixtures are running. */
   .live-now-banner { display: none; }
   .live-now-banner.is-empty { display: none !important; }
+  /* When the live banner is showing a fixture, hide its main-grid row on
+     mobile so the same match doesn't render twice. Desktop keeps both
+     visible since the banner is hidden there. */
+  @media (max-width: 768px) {
+    .fixture-row.is-in-live-banner { display: none; }
+  }
   @media (max-width: 768px) {
     .live-now-banner {
       display: block;
@@ -1593,8 +1601,6 @@
       <a href="{{ url_for('home') }}" style="color:var(--text-dim);font-size:0.78rem">← home</a>
       <a href="javascript:void(0)" onclick="openEditDisplay()"
          style="color:var(--text-dim);font-size:0.78rem;margin-left:auto">my account →</a>
-      <a href="{{ url_for('pool_stats', pool_id=pool.id) }}"
-         style="color:var(--text-dim);font-size:0.78rem">stats →</a>
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
@@ -1646,19 +1652,21 @@
     </a>
   </div>
 
-  <!-- ── Always-present chip row: How it Works + What's New ──────────── -->
+  <!-- ── Always-present chip row: How it Works · What's New · Stats ──── -->
   <div class="top-chip-row">
     <button type="button" id="how-it-works-pill" class="how-it-works-pill"
             onclick="openWalkthrough()">
       <span class="pill-q">?</span> How it works
     </button>
     {% if releases %}
-    <button type="button" id="whats-new-chip" class="whats-new-chip" onclick="openWhatsNew()">
-      <span class="wn-icon">📣</span>
-      <span class="wn-label">What's new</span>
+    <button type="button" id="whats-new-chip" class="how-it-works-pill" onclick="openWhatsNew()">
+      <span class="pill-q">📣</span> What's new
       <span class="wn-dot" id="whats-new-dot" style="display:none"></span>
     </button>
     {% endif %}
+    <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" class="how-it-works-pill">
+      <span class="pill-q">📈</span> Stats
+    </a>
   </div>
 
   {% if pool.entry_fee and not has_paid %}
@@ -1710,14 +1718,14 @@
                 <span role="columnheader" class="ct-desk">Date</span>
                 <span role="columnheader" class="ct-desk">Time</span>
                 <span role="columnheader" class="ct-mob">When</span>
-                <span role="columnheader">Grp</span>
+                <span role="columnheader" class="ct-grp">Grp</span>
                 <span role="columnheader" class="ct-team ct-team-home ct-desk">Home</span>
                 <span role="columnheader" class="ct-score ct-desk">Score</span>
                 <span role="columnheader" class="ct-team ct-desk">Away</span>
                 <span role="columnheader" class="ct-mob">Match</span>
                 <span role="columnheader">Bet</span>
-                <span role="columnheader" class="ct-num">Payout</span>
-                <span role="columnheader" class="ct-num" title="% of field that picked the winning side">Fld%</span>
+                <span role="columnheader" class="ct-num">Paid</span>
+                <span role="columnheader" class="ct-num" title="% of field that picked the winning side">Pct</span>
               </div>
               {% for f in fixtures %}
                 {% set ko_d   = f.kick_off_display or f.kick_off or '' %}
@@ -1799,8 +1807,7 @@
                   </span>
                   <span role="cell" class="ct-match ct-mob">
                     <span class="ct-m-side {% if f.result == 'H' %}ct-m-win{% endif %}{% if ct_h_pickers %} has-tip{% endif %}">
-                      <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}{% if ct_h_pickers %}<span class="ct-tri" aria-hidden="true">▾</span>{% endif %}
-                      {% if ct_h_pickers %}
+                      <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}                      {% if ct_h_pickers %}
                       <span class="ct-pickers-tip tip-h">
                         <strong>{{ ct_home }} · {{ ct_h_pickers|length }}</strong>
                         {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
@@ -1808,8 +1815,7 @@
                       {% endif %}
                     </span>
                     <span class="ct-m-score{% if ct_d_pickers %} has-tip{% endif %}">
-                      {{ f.home_score }}–{{ f.away_score }}{% if ct_d_pickers %}<span class="ct-tri ct-tri-draw" aria-hidden="true">▾</span>{% endif %}
-                      {% if ct_d_pickers %}
+                      {{ f.home_score }}–{{ f.away_score }}                      {% if ct_d_pickers %}
                       <span class="ct-pickers-tip tip-d">
                         <strong>Draw · {{ ct_d_pickers|length }}</strong>
                         {% for o in ct_d_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
@@ -1817,8 +1823,7 @@
                       {% endif %}
                     </span>
                     <span class="ct-m-side {% if f.result == 'A' %}ct-m-win{% endif %}{% if ct_a_pickers %} has-tip{% endif %}">
-                      <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}{% if ct_a_pickers %}<span class="ct-tri" aria-hidden="true">▾</span>{% endif %}
-                      {% if ct_a_pickers %}
+                      <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}                      {% if ct_a_pickers %}
                       <span class="ct-pickers-tip tip-a">
                         <strong>{{ ct_away }} · {{ ct_a_pickers|length }}</strong>
                         {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
@@ -2575,6 +2580,20 @@
     const b = document.getElementById('live-now-banner');
     if (b) b.classList.toggle('is-expanded');
   }
+  // Mark each main-grid .fixture-row whose id appears in the live banner
+  // so CSS can hide it on mobile (the banner already shows it). Called
+  // on initial paint AND after every /live-now poll refresh.
+  function syncLiveBannerHides() {
+    const b = document.getElementById('live-now-banner');
+    if (!b) return;
+    const liveIds = new Set(
+      [...b.querySelectorAll('.ln-panel[data-fixture-id]')]
+        .map(p => p.dataset.fixtureId)
+    );
+    document.querySelectorAll('.fixture-row[data-fixture-id]').forEach(row => {
+      row.classList.toggle('is-in-live-banner', liveIds.has(row.dataset.fixtureId));
+    });
+  }
   function selectLnTab(tabBtn) {
     if (!tabBtn) return;
     const fid = tabBtn.dataset.fixtureId;
@@ -2769,10 +2788,10 @@
       const hc = brightenForDarkBg(COUNTRY_COLORS[row.dataset.homeFlag] || '#57b3ff');
       const ac = brightenForDarkBg(COUNTRY_COLORS[row.dataset.awayFlag] || '#ff5757');
       const paint = (tip, c) => {
-        // Solid dark background — country colour shows on border + header
-        // only, so the names stay legible against #15151e.
-        tip.style.borderColor     = c;
-        tip.style.borderLeftColor = c;
+        // Solid dark background — country colour shows on border, header,
+        // and the pointer arrow.
+        tip.style.borderColor = c;
+        tip.style.setProperty('--tip-arrow-color', c);
         const s = tip.querySelector('strong');
         if (s) s.style.color = c;
       };
@@ -2813,6 +2832,7 @@
     restorePoolIntroFromStorage();
     maybeShowA2HS();
     maybeShowWhatsNewDot();
+    syncLiveBannerHides();
     startLiveNowPolling();
   });
 

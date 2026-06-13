@@ -659,34 +659,53 @@ def pool_page(pool_id):
 
 def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
     """
-    For every fixture currently flagged IN_PLAY / PAUSED, produce a dict
-    of {fixture, picks_by_side, minute_est, is_ko} ready for the live
-    banner. picks_by_side splits all picks into H/D/A buckets, sorted by
-    bet_amount DESC (for KO) so the largest stakes surface first.
+    Per-fixture data for the Live banner. Includes any fixture that's
+    either (a) flagged IN_PLAY / PAUSED by the auto-score cron, OR (b)
+    locked — i.e. kick_off is within LOCK_MINUTES of now, but not yet
+    completed. The "locked" window means the banner opens up to 15 min
+    before kickoff so users get the deep view in the build-up too.
+
+    Skips completed fixtures (those that already settled).
+
+    Each entry: {id, home_team, away_team, *_flag, live_*, stage,
+                 minute_est, picks_by_side, is_ko, is_pre_kick}
     """
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
     LIVE = {"IN_PLAY", "PAUSED"}
     now = _dt.now(_tz.utc)
     out = []
     for stage_fixtures in grouped_fixtures.values():
         for f in stage_fixtures:
-            if (f.get("live_status") or "") not in LIVE:
+            if f.get("result"):                      # already settled
                 continue
-            # Estimate minute from kick_off (best we have on the free API
-            # tier; ESPN exposes a real displayClock — see probe script).
-            minute_est = None
+            live_status = (f.get("live_status") or "")
+            is_live = live_status in LIVE
+
             ko = f.get("kick_off") or ""
+            ko_dt = None
             try:
                 ko_dt = _dt.fromisoformat(ko[:19].rstrip("Z"))
                 if ko_dt.tzinfo is None:
                     ko_dt = ko_dt.replace(tzinfo=_tz.utc)
-                delta_min = int((now - ko_dt).total_seconds() // 60)
-                # Halftime occurs ~45-60 min in; we don't know when exactly
-                # so cap the displayed minute at 90+ when it goes past.
-                if 0 <= delta_min <= 120:
-                    minute_est = delta_min
             except Exception:
                 pass
+
+            is_pre_kick = False
+            if not is_live:
+                # Not flagged live by the API yet — check the lock window.
+                # The banner opens once lock fires (kick_off - LOCK_MINUTES).
+                if ko_dt is None:
+                    continue
+                lock_dt = ko_dt - _td(minutes=LOCK_MINUTES)
+                if not (lock_dt <= now < ko_dt + _td(hours=4)):
+                    continue
+                is_pre_kick = now < ko_dt
+            # Compute display minute (post-kick only).
+            minute_est = None
+            if ko_dt is not None and now >= ko_dt:
+                delta_min = int((now - ko_dt).total_seconds() // 60)
+                if 0 <= delta_min <= 120:
+                    minute_est = delta_min
 
             picks = all_picks_by_fixture.get(f["id"], [])
             picks_by_side = {"H": [], "D": [], "A": []}
@@ -716,6 +735,7 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
                 "minute_est":    minute_est,
                 "picks_by_side": picks_by_side,
                 "is_ko":         db.is_knockout_stage(f.get("stage") or ""),
+                "is_pre_kick":   is_pre_kick,
             })
     return out
 
