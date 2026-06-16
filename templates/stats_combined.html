@@ -105,9 +105,10 @@
     /* Mobile layout: each row is a horizontal flex with rank | name+real
        (stacked) | balance, then optional stat lines below. Clean strips —
        no per-cell boxes. */
-    .lb-table, .lb-table tbody, .lb-table tr, .lb-table td {
-      display: block; width: 100%; min-width: 0;
+    .lb-table, .lb-table tbody, .lb-table tr {
+      display: block; min-width: 0;
     }
+    .lb-table td { display: block; min-width: 0; }    /* no width:100% */
     .lb-table thead { display: none; }
     .lb-table tr.lb-row {
       padding: 0.85rem 0.95rem;
@@ -118,10 +119,11 @@
     }
     .lb-table tr.lb-row:first-child { border-top: none; }
     .lb-row.is-me { background: rgba(200,255,87,0.06); }
-    .lb-table td {
+    .lb-row td {
       padding: 0; border: 0; background: transparent;
       font-size: 0.78rem; line-height: 1.3;
-      display: block;
+      width: auto;
+      flex: 0 0 auto;
     }
     .lb-row .lb-rank {
       font-size: 0.78rem; font-weight: 800;
