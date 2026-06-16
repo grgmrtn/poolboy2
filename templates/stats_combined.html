@@ -489,6 +489,8 @@
       _uid:            p.user_id,
       _final:          p.final_score,
       _details:        p.details,
+      _team_name:      p.team_name || null,
+      _real_name:      p.display_name || '',
     };
   });
 
@@ -513,13 +515,26 @@
           titleColor: "#e0e0e8",
           bodyColor: "#c0c0d0",
           padding: 11,
+          // Keep only the first item — protects against the rare case
+          // where two players' points overlap exactly at the same (x,y)
+          // and Chart.js considers them equally near.
+          filter: (item, index) => index === 0,
           callbacks: {
             title(items) {
               if (!items.length) return "";
-              const item = items[0];
-              const d = item.dataset.data[item.dataIndex];
-              const ds = item.dataset;
-              return ds.label;
+              const ds = items[0].dataset;
+              // Team name is the primary identity; if there is none, the
+              // team_name slot already holds the real name. Real name
+              // shown as a muted second line when distinct.
+              return ds._team_name || ds._real_name || ds.label;
+            },
+            beforeBody(items) {
+              if (!items.length) return [];
+              const ds = items[0].dataset;
+              if (ds._team_name && ds._real_name && ds._team_name !== ds._real_name) {
+                return [`(${ds._real_name})`];
+              }
+              return [];
             },
             label(item) {
               const idx = item.dataIndex;
