@@ -152,7 +152,8 @@
       color: var(--text-muted);
       font-size: 0.74rem;
       padding: 0.35rem 0 0 calc(1.4rem + 0.55rem);  /* aligns under name */
-      display: flex; align-items: baseline; gap: 0;
+      display: flex; align-items: center; gap: 0;    /* center, not baseline */
+      min-height: 1.5rem;
     }
     .lb-row .lb-pct::before,
     .lb-row .lb-streak::before,
@@ -224,11 +225,14 @@
      The score in the middle is highlighted ONLY when the user picked Draw —
      otherwise it stays muted so it doesn't compete with the team highlights. */
   .lb-rare { min-width: 180px; }
-  .lb-rare-row { display: inline-flex; align-items: center; gap: 0.3rem; }
+  /* Tight 0.15rem gap so home / score / away read as one matched-up line;
+     pill padding (0.18 / 0.25) keeps the chips legible but doesn't push
+     the away team off into its own visual zone. */
+  .lb-rare-row { display: inline-flex; align-items: center; gap: 0.15rem; }
   .lb-rare-side, .lb-rare-score {
     display: inline-flex; align-items: center; gap: 0.3rem;
     color: var(--text-dim); font-weight: 500; font-size: 0.78rem;
-    padding: 0.18rem 0.4rem; border-radius: 4px;
+    padding: 0.18rem 0.3rem; border-radius: 4px;
     border: 1px solid transparent;
     font-variant-numeric: tabular-nums;
   }
