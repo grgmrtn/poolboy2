@@ -83,6 +83,75 @@
     Scoring, results, pools, and users.
   </p>
 
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- ── User management ────────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>User management</h2>
+    <div class="card" style="max-width:760px">
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem">
+        Pick a user from the dropdown to load their fields. All edits save
+        immediately when you click Save under each section.
+      </p>
+
+      <div class="form-group" style="max-width:420px">
+        <label class="form-label" for="um-select">User</label>
+        <select id="um-select" class="form-input" onchange="loadUmUser(this.value)">
+          <option value="">— select a user —</option>
+          {% for u in users|sort(attribute='display_name') %}
+            <option value="{{ u.id }}">
+              {{ u.display_name }} ({{ u.email }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Per-user panel — populated by JS on selection -->
+      <div id="um-panel" style="display:none">
+        <!-- Profile -->
+        <div class="um-sub">
+          <h3 class="um-h3">Profile</h3>
+          <form id="um-profile-form" method="POST" class="um-form">
+            <input type="hidden" name="_action" value="profile">
+            <div class="form-group">
+              <label class="form-label" for="um-display-name">Real first name</label>
+              <input class="form-input" type="text" id="um-display-name" name="display_name" maxlength="30" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="um-team-name">Team name (optional)</label>
+              <input class="form-input" type="text" id="um-team-name" name="team_name" maxlength="40">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save profile</button>
+          </form>
+        </div>
+
+        <!-- Pool memberships -->
+        <div class="um-sub">
+          <h3 class="um-h3">Pool memberships</h3>
+          <div id="um-memberships"></div>
+        </div>
+
+        <!-- Password reset -->
+        <div class="um-sub">
+          <h3 class="um-h3">Password reset</h3>
+          <p style="font-size:0.74rem;color:var(--text-muted);margin-bottom:0.65rem">
+            Sends a one-click sign-in link to the user's email. They can rotate
+            their password from My Account after signing in.
+          </p>
+          <form id="um-reset-form" method="POST">
+            <button type="submit" class="btn btn-primary btn-sm">📧 Email reset link</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Global scoring ─────────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>Global scoring &amp; economy defaults</h2>
@@ -565,4 +634,102 @@
   {% endfor %}
 
 </div>
+
+<style>
+  .um-sub { margin-top: 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+  .um-h3 {
+    font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 700; margin-bottom: 0.65rem;
+  }
+  .um-form { max-width: 380px; }
+  .um-pool-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;
+    padding: 0.7rem 0.9rem;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+  }
+  .um-pool-name { font-weight: 700; flex: 1; min-width: 140px; }
+  .um-pool-fields {
+    display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  }
+  .um-pool-fields label {
+    font-size: 0.7rem; color: var(--text-muted);
+    display: inline-flex; align-items: center; gap: 0.35rem;
+  }
+  .um-pool-fields input[type="number"] {
+    width: 90px; padding: 0.3rem 0.45rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text);
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .um-pool-fields .btn { padding: 0.3rem 0.6rem; font-size: 0.74rem; }
+</style>
+
+<script>
+  // User memberships keyed by user_id (server-injected).
+  const UM_MEMBERSHIPS = {{ user_memberships | tojson }};
+  const UM_USERS = {
+    {% for u in users %}
+      {{ u.id | tojson }}: {
+        "id":           {{ u.id | tojson }},
+        "email":        {{ u.email | tojson }},
+        "display_name": {{ u.display_name | tojson }},
+        "team_name":    {{ (u.team_name or '') | tojson }},
+      },
+    {% endfor %}
+  };
+
+  function loadUmUser(userId) {
+    const panel = document.getElementById('um-panel');
+    if (!userId) { panel.style.display = 'none'; return; }
+    const u = UM_USERS[userId];
+    if (!u) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+
+    // Profile
+    document.getElementById('um-display-name').value = u.display_name || '';
+    document.getElementById('um-team-name').value    = u.team_name    || '';
+    const profileForm = document.getElementById('um-profile-form');
+    profileForm.action = `/admin/user/${userId}/profile`;
+
+    // Memberships
+    const memWrap = document.getElementById('um-memberships');
+    const memberships = UM_MEMBERSHIPS[userId] || [];
+    if (!memberships.length) {
+      memWrap.innerHTML = '<p style="color:var(--text-dim);font-size:0.78rem">Not a member of any pool.</p>';
+    } else {
+      memWrap.innerHTML = memberships.map(m => `
+        <div class="um-pool-row">
+          <div class="um-pool-name">${escHtml(m.pool_name)}</div>
+          <div class="um-pool-fields">
+            <form method="POST" action="/admin/user/${userId}/balance" style="display:contents">
+              <input type="hidden" name="pool_id" value="${m.pool_id}">
+              <label>Balance
+                <input type="number" name="balance" step="0.01" value="${m.balance.toFixed(2)}">
+              </label>
+              <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+            <form method="POST" action="/admin/pool/${m.pool_id}/member/${userId}/paid" style="display:contents">
+              <label>
+                <input type="checkbox" name="has_paid" value="1" onchange="this.form.submit()"
+                       ${m.has_paid ? 'checked' : ''}>
+                Paid
+              </label>
+            </form>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Password reset
+    document.getElementById('um-reset-form').action = `/admin/user/${userId}/send-reset`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+</script>
 {% endblock %}

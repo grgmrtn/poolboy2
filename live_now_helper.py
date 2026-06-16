@@ -20,8 +20,26 @@ import os
 import re
 import time
 import requests
+from requests.adapters import HTTPAdapter
+try:
+    from urllib3.util.retry import Retry
+except ImportError:
+    from requests.packages.urllib3.util.retry import Retry
 
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
+
+def _make_resilient_session():
+    s = requests.Session()
+    retry = Retry(
+        total=3, backoff_factor=0.6,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "HEAD"]),
+        raise_on_status=False,
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    return s
+
+_HTTP = _make_resilient_session()
 # Short TTL because Railway runs the web service in multiple containers, each
 # with its own in-memory cache. A long TTL meant the user's round-robin polls
 # could see "score → goal → score back" flicker when two containers had
@@ -76,7 +94,7 @@ def get_espn_live():
         return _CACHE["events"]
     out = []
     try:
-        r = requests.get(ESPN_URL, timeout=8)
+        r = _HTTP.get(ESPN_URL, timeout=8)
         if r.status_code == 200:
             data = r.json()
             for evt in data.get("events", []):

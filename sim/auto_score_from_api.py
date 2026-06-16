@@ -25,9 +25,34 @@ import os
 import sys
 import argparse
 import requests
+from requests.adapters import HTTPAdapter
+try:
+    from urllib3.util.retry import Retry
+except ImportError:
+    from requests.packages.urllib3.util.retry import Retry
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import database as db
+
+
+def _make_resilient_session():
+    """A requests.Session that auto-retries on transient connection blips
+    (RemoteDisconnected, 5xx). Football-data.org and ESPN both occasionally
+    return half-open connections — without retries the whole cron tick
+    crashes and we lose ~3 min of liveness."""
+    s = requests.Session()
+    retry = Retry(
+        total=4, backoff_factor=1.5,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "HEAD"]),
+        raise_on_status=False,
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    s.mount("http://", HTTPAdapter(max_retries=retry))
+    return s
+
+
+HTTP = _make_resilient_session()
 
 
 COMPETITION   = "2000"   # FIFA World Cup on football-data.org
@@ -91,7 +116,7 @@ def fetch_espn_live(fixtures_by_team_pair):
     (home_team, away_team)."""
     out = []
     try:
-        r = requests.get(ESPN_URL, timeout=15)
+        r = HTTP.get(ESPN_URL, timeout=15)
         if r.status_code != 200:
             print(f"  ESPN HTTP {r.status_code} — skipping ESPN pass")
             return out
@@ -161,7 +186,14 @@ def main():
     if dry_run:
         print("=== DRY-RUN (no writes). Add --apply to commit. ===\n")
 
-    r = requests.get(API_URL, headers={"X-Auth-Token": api_key}, timeout=20)
+    # Wrap in try/except too — Retry handles 5xx + connect errors but a
+    # full crash from football-data should still log + exit gracefully so
+    # Railway shows a non-zero status instead of an opaque restart.
+    try:
+        r = HTTP.get(API_URL, headers={"X-Auth-Token": api_key}, timeout=20)
+    except requests.exceptions.RequestException as e:
+        print(f"football-data fetch failed (transient): {e}")
+        sys.exit(0)   # exit 0 so Railway doesn't loop-restart
     if r.status_code != 200:
         print(f"API error {r.status_code}: {r.text[:300]}"); sys.exit(1)
     matches = r.json().get("matches", [])

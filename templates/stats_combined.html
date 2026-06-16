@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }} — Stats{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  .sc-page { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+  .sc-back { color: var(--text-muted); font-size: 0.8rem; text-decoration: none; letter-spacing: 0.04em; }
+  .sc-back:hover { color: var(--text); }
+  .sc-title { font-size: 1.6rem; font-weight: 700; margin: 0.5rem 0 0.25rem; letter-spacing: 0.02em; }
+  .sc-sub   { color: var(--text-muted); font-size: 0.86rem; margin-bottom: 1.25rem; }
+
+  /* Sticky nav — matches the secondary stage-nav design from the pool
+     page: underline-style tabs on the left, muted toggle pill on the
+     right end. */
+  .sc-nav {
+    position: sticky;
+    top: 56px;
+    top: calc(56px + env(safe-area-inset-top, 0));
+    z-index: 30;
+    background: rgba(10,10,15,0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: stretch;
+    overflow-x: auto; scrollbar-width: none;
+    padding: 0 0.5rem;
+    margin: 0 -1rem 1.25rem;     /* break out of .sc-page padding */
+    gap: 0;
+  }
+  .sc-nav::-webkit-scrollbar { display: none; }
+  .sc-tab {
+    flex-shrink: 0;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.72rem; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); text-decoration: none;
+    border-bottom: 2px solid transparent;
+    background: transparent; border-top: 0; border-left: 0; border-right: 0;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
+  .sc-tab:hover { color: var(--text); }
+  .sc-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  /* Push toggle pill to right end */
+  .sc-detail-toggle {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    color: var(--text-muted); font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+    cursor: pointer;
+    align-self: center;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .sc-detail-toggle:hover { color: var(--text); border-color: var(--border-hi); }
+  .sc-detail-toggle.is-on { color: var(--accent); border-color: var(--accent); }
+
+  /* By default the detail columns are HIDDEN; the toggle adds .show-detail
+     to body to reveal them. Always-shown columns: rank, name, balance.
+     !important is needed because the mobile @media block sets
+     `display: flex` on all .lb-table td (higher specificity than a bare
+     class selector). */
+  .lb-pct, .lb-streak, .lb-rare,
+  th.lb-pct, th.lb-streak, th.lb-rare {
+    display: none !important;
+  }
+  body.show-detail .lb-pct,
+  body.show-detail .lb-streak,
+  body.show-detail .lb-rare,
+  body.show-detail th.lb-pct,
+  body.show-detail th.lb-streak,
+  body.show-detail th.lb-rare {
+    display: table-cell !important;
+  }
+  @media (max-width: 640px) {
+    body.show-detail .lb-pct,
+    body.show-detail .lb-streak,
+    body.show-detail .lb-rare {
+      display: flex !important;
+    }
+  }
+
+  /* ── Leaderboard table ────────────────────────────────────────────── */
+  .lb-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 1.75rem;
+  }
+  .lb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .lb-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.85rem;
+    min-width: 720px;          /* triggers horizontal scroll on desktop ≥640px */
+  }
+  @media (max-width: 640px) {
+    /* Stack-card layout on mobile: each row becomes a tile with label/value
+       pairs so the leaderboard never needs horizontal scrolling. */
+    .lb-table, .lb-table tbody, .lb-table tr, .lb-table td {
+      display: block; width: 100%; min-width: 0;
+    }
+    .lb-table thead { display: none; }
+    .lb-table tr.lb-row {
+      padding: 0.85rem 0.95rem;
+      border-top: 1px solid var(--border);
+    }
+    .lb-table tr.lb-row:first-child { border-top: none; }
+    .lb-row.is-me { background: rgba(200,255,87,0.06); }
+    .lb-table td {
+      padding: 0; border: 0;
+      display: flex; align-items: baseline; gap: 0.5rem;
+      font-size: 0.78rem; line-height: 1.4;
+    }
+    /* Stacked rank + name + balance header */
+    .lb-table td.lb-rank, .lb-table td.lb-name, .lb-table td.lb-balance {
+      display: inline-flex;
+    }
+    .lb-row {
+      display: grid !important;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.4rem 0.6rem;
+      align-items: baseline;
+    }
+    .lb-row .lb-rank   { grid-column: 1; }
+    .lb-row .lb-name   { grid-column: 2; font-size: 0.95rem; font-weight: 700; }
+    .lb-row .lb-balance{ grid-column: 3; text-align: right; }
+    /* Below the header, the stat cells lay out as label-prefixed pills */
+    .lb-row .lb-pct,
+    .lb-row .lb-streak,
+    .lb-row .lb-rare {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+      padding-top: 0.4rem;
+      color: var(--text-muted);
+      font-size: 0.74rem;
+    }
+    .lb-row .lb-pct::before    { content: 'Correct '; color: var(--text-dim);
+                                  font-size: 0.6rem; letter-spacing: 0.08em;
+                                  text-transform: uppercase; margin-right: 0.4rem; }
+    .lb-row .lb-streak::before { content: 'Streak '; color: var(--text-dim);
+                                  font-size: 0.6rem; letter-spacing: 0.08em;
+                                  text-transform: uppercase; margin-right: 0.4rem; }
+    .lb-row .lb-rare::before   { content: 'Rarest '; color: var(--text-dim);
+                                  font-size: 0.6rem; letter-spacing: 0.08em;
+                                  text-transform: uppercase; margin-right: 0.4rem;
+                                  align-self: flex-start; }
+    .lb-rare-row { flex-wrap: wrap; }
+  }
+  .lb-table th {
+    text-align: left; color: var(--text-dim);
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    white-space: nowrap;
+  }
+  .lb-table td {
+    padding: 0.7rem 0.85rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+  }
+  .lb-row.is-me td { background: rgba(200,255,87,0.06); }
+  .lb-rank {
+    color: var(--text-muted); font-weight: 700;
+    text-align: right; width: 2.5rem;
+  }
+  .lb-row.is-me .lb-rank { color: var(--accent); }
+  .lb-name {
+    color: var(--text); font-weight: 600;
+    min-width: 110px;
+  }
+  .lb-real {
+    color: var(--text-muted); font-size: 0.72rem; font-weight: 500;
+    display: block; margin-top: 1px;
+  }
+  /* Bumped substantially over the surrounding row text so the balance
+     reads as the primary metric per player. */
+  .lb-table td.lb-balance {
+    color: var(--accent); font-weight: 800;
+    font-size: 1.55rem; line-height: 1.1;
+    text-align: right; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 640px) {
+    .lb-table td.lb-balance { font-size: 1.45rem; }
+  }
+  .lb-pct, .lb-streak { color: var(--text-muted); font-weight: 600; text-align: center; }
+  .lb-streak-flame { color: var(--accent); font-weight: 700; }
+
+  /* Rarest-pick cell — flags + score, with the user's selection in bold. */
+  .lb-rare { min-width: 180px; }
+  .lb-rare-row { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .lb-rare-side {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    color: var(--text-muted); font-weight: 600; font-size: 0.78rem;
+  }
+  .lb-rare-side img {
+    width: 18px; height: 13px; border-radius: 2px;
+    object-fit: cover; flex-shrink: 0;
+  }
+  .lb-rare-side.picked { color: var(--accent); font-weight: 800; }
+  .lb-rare-score {
+    color: var(--text); font-weight: 700;
+    padding: 0 0.3rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-rare-score.picked { color: var(--accent); font-weight: 800; }
+  .lb-rare-pct {
+    color: var(--text-dim); font-size: 0.62rem;
+    letter-spacing: 0.05em; margin-left: 0.4rem;
+    font-weight: 600;
+  }
+  .lb-rare-empty { color: var(--text-dim); font-size: 0.75rem; }
+
+  /* Chart card */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.25rem 1rem;
+  }
+  .chart-title {
+    font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 1rem;
+  }
+  .chart-wrap { position: relative; height: 420px; }
+  @media (max-width: 600px) { .chart-wrap { height: 280px; } }
+
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.3rem 1rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.75rem; cursor: pointer;
+    color: var(--text-muted);
+    padding: 0.15rem 0;
+  }
+  .legend-item:hover { color: var(--text); }
+  .legend-item.is-me { color: var(--text); font-weight: 700; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-swatch { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .legend-score {
+    margin-left: auto; font-weight: 700; font-size: 0.7rem;
+    color: var(--accent); white-space: nowrap;
+  }
+
+  .empty-state {
+    padding: 3rem 1.5rem; text-align: center;
+    color: var(--text-dim); font-size: 0.82rem;
+    border: 1px dashed var(--border); border-radius: var(--radius-lg);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sc-page">
+  <a href="{{ url_for('pool_page', pool_id=pool.id) }}" class="sc-back">← Back to {{ pool.name }}</a>
+  <h1 class="sc-title">Stats</h1>
+  <div class="sc-sub">
+    {{ leaderboard|length }} {{ 'players' if leaderboard|length != 1 else 'player' }}
+    · ranked by current balance
+  </div>
+
+  <div class="sc-nav">
+    <button type="button" class="sc-tab active" data-target="lb-section"
+            onclick="scrollSc(this)">Leader</button>
+    <button type="button" class="sc-tab" data-target="chart-section"
+            onclick="scrollSc(this)">Chart</button>
+    <button type="button" id="sc-detail-toggle" class="sc-detail-toggle"
+            onclick="toggleDetailedStats()">
+      <span id="sc-detail-toggle-label">Show detailed</span>
+    </button>
+  </div>
+
+  <!-- ── Leaderboard table ─────────────────────────────────────────── -->
+  <div class="lb-wrap" id="lb-section">
+    <div class="lb-scroll">
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th class="lb-rank">#</th>
+            <th>Player</th>
+            <th class="lb-balance" style="text-align:right">Balance</th>
+            <th class="lb-pct" style="text-align:center">% Correct</th>
+            <th class="lb-streak" style="text-align:center">Streak</th>
+            <th class="lb-rare">Rarest Pick</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in leaderboard %}
+          <tr class="lb-row{% if row.email == current_user.email %} is-me{% endif %}">
+            <td class="lb-rank">{{ loop.index }}</td>
+            <td class="lb-name">
+              {% if row.team_name %}{{ row.team_name }}
+                <span class="lb-real">{{ row.display_name }}</span>
+              {% else %}{{ row.display_name }}{% endif %}
+            </td>
+            <td class="lb-balance">${{ "%.0f"|format(row.balance) }}</td>
+            <td class="lb-pct">
+              {% if row.pct is not none %}
+                {{ row.correct }}/{{ row.total }} <span style="color:var(--text-dim)">({{ row.pct|int }}%)</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="lb-streak">
+              {% if row.streak and row.streak >= 3 %}
+                <span class="lb-streak-flame">🔥 {{ row.streak }}</span>
+              {% elif row.streak %}
+                {{ row.streak }}
+              {% else %}—{% endif %}
+            </td>
+            <td class="lb-rare">
+              {% if row.rare_pick %}
+                {% set rp = row.rare_pick %}
+                {% set ha = TEAM_ABBR.get(rp.home_team) or (rp.home_team or '?')[:3].upper() %}
+                {% set aa = TEAM_ABBR.get(rp.away_team) or (rp.away_team or '?')[:3].upper() %}
+                <div class="lb-rare-row">
+                  <span class="lb-rare-side{% if rp.my_pick == 'H' %} picked{% endif %}">
+                    <img src="https://flagcdn.com/{{ rp.home_flag }}.svg" alt="" onerror="this.style.display='none'">
+                    {{ ha }}
+                  </span>
+                  <span class="lb-rare-score{% if rp.my_pick == 'D' %} picked{% endif %}">{{ rp.home_score }}–{{ rp.away_score }}</span>
+                  <span class="lb-rare-side{% if rp.my_pick == 'A' %} picked{% endif %}">
+                    {{ aa }}
+                    <img src="https://flagcdn.com/{{ rp.away_flag }}.svg" alt="" onerror="this.style.display='none'">
+                  </span>
+                  <span class="lb-rare-pct">{{ rp.field_pct|round|int }}%</span>
+                </div>
+              {% else %}
+                <span class="lb-rare-empty">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Balance over time chart ─────────────────────────────────────── -->
+  <div id="chart-section">
+  {% if timeline.fixtures|length <= 1 %}
+    <div class="empty-state">
+      Balance chart will appear once matches start being scored.
+    </div>
+  {% else %}
+    <div class="chart-card">
+      <div class="chart-title">Balance over matches — each player</div>
+      <div class="chart-wrap"><canvas id="statsChart"></canvas></div>
+      <div class="legend-grid" id="legend"></div>
+    </div>
+  {% endif %}
+  </div><!-- /#chart-section -->
+</div>
+
+<script>
+  // ── Detailed-stats show/hide toggle ────────────────────────────────
+  const DETAIL_KEY = 'wc26_stats_show_detail';
+  function toggleDetailedStats() {
+    const on = !document.body.classList.contains('show-detail');
+    document.body.classList.toggle('show-detail', on);
+    const btn = document.getElementById('sc-detail-toggle');
+    const lbl = document.getElementById('sc-detail-toggle-label');
+    if (btn) btn.classList.toggle('is-on', on);
+    if (lbl) lbl.textContent = on ? 'Hide detailed stats' : 'Show detailed stats';
+    try { localStorage.setItem(DETAIL_KEY, on ? '1' : '0'); } catch (e) {}
+  }
+  // Restore the user's previous choice on load
+  (function () {
+    try {
+      if (localStorage.getItem(DETAIL_KEY) === '1') toggleDetailedStats();
+    } catch (e) {}
+  })();
+
+  // ── Stats/Chart tabs: scroll to section + activate ────────────────
+  function scrollSc(tabBtn) {
+    document.querySelectorAll('.sc-nav .sc-tab').forEach(t => t.classList.remove('active'));
+    tabBtn.classList.add('active');
+    const target = document.getElementById(tabBtn.dataset.target);
+    if (target) {
+      const offset = 56 + 44 + 8;   // navbar + sticky tabbar + breathing
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+  }
+  // Scroll-spy — highlight active tab as user scrolls between sections
+  document.addEventListener('DOMContentLoaded', () => {
+    const sections = ['lb-section', 'chart-section']
+      .map(id => document.getElementById(id))
+      .filter(Boolean);
+    if (!sections.length) return;
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          document.querySelectorAll('.sc-nav .sc-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.target === id);
+          });
+        }
+      });
+    }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+    sections.forEach(s => io.observe(s));
+  });
+</script>
+<script>
+(function () {
+  const MY_UID   = {{ my_user_id      | tojson }};
+  const fixtures = {{ timeline.fixtures | tojson }};
+  const players  = {{ timeline.players  | tojson }};
+
+  if (!fixtures || fixtures.length <= 1 || !players.length) return;
+
+  Chart.defaults.font.family = "'JetBrains Mono', Menlo, Consolas, monospace";
+  Chart.defaults.font.size   = 11;
+  Chart.defaults.color       = "#a0a0c0";
+
+  const PALETTE = [
+    "#57b3ff","#c8ff57","#ff7c57","#c557ff","#57ffd8",
+    "#ffdd57","#ff5792","#57d8ff","#a0ff57","#ff9657",
+    "#9b57ff","#57ffae","#ff5757","#57c8ff","#f0ff57",
+    "#ff57c8","#57ffff","#ff8c57","#7c57ff","#57ff7c",
+  ];
+
+  // X axis: bare match numbers (0 = Start, 1..N = each match in order)
+  const labels = fixtures.map((_, i) => i === 0 ? "0" : String(i));
+
+  const datasets = players.map((p, i) => {
+    const isMe  = p.user_id === MY_UID;
+    const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
+    return {
+      label:           p.team_name || p.display_name,
+      data:            p.cumulative,
+      borderColor:     color,
+      backgroundColor: color + "18",
+      borderWidth:     isMe ? 2.5 : 1.3,
+      pointRadius:     isMe ? 2.5 : 0.8,
+      pointHoverRadius: isMe ? 6 : 4,
+      tension:         0.2,
+      fill:            false,
+      _uid:            p.user_id,
+      _final:          p.final_score,
+    };
+  });
+
+  const ctx = document.getElementById("statsChart").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "nearest", intersect: false, axis: "x" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(10,10,15,0.92)",
+          borderColor: "#2a2a35",
+          borderWidth: 1,
+          titleColor: "#e0e0e8",
+          bodyColor: "#c0c0d0",
+          padding: 10,
+          callbacks: {
+            title(items) {
+              const i = items[0].dataIndex;
+              if (i === 0) return "Start";
+              return fixtures[i] ? `Match ${i}: ${fixtures[i].label}` : "";
+            },
+            label(item) {
+              return ` ${item.dataset.label}: $${Math.round(item.parsed.y)}`;
+            },
+          },
+          itemSort(a, b) { return b.parsed.y - a.parsed.y; },
+        },
+      },
+      scales: {
+        x: {
+          type: "category",
+          ticks: {
+            color: "#606070",
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 12,
+          },
+          grid: { color: "#1e1e28" },
+        },
+        y: {
+          ticks: {
+            color: "#606070",
+            callback(v) { return "$" + Math.round(v); },
+          },
+          grid:  { color: "#1e1e28" },
+          title: {
+            display: true,
+            text:  "Balance ($)",
+            color: "#505060",
+            font:  { size: 10 },
+          },
+        },
+      },
+    },
+  });
+
+  // Legend
+  const legendEl = document.getElementById("legend");
+  const hidden = new Set();
+  function rebuildLegend() {
+    legendEl.innerHTML = "";
+    datasets.forEach((ds, i) => {
+      const isMe = ds._uid === MY_UID;
+      const isDimmed = hidden.has(i);
+      const item = document.createElement("div");
+      item.className = `legend-item${isMe ? " is-me" : ""}${isDimmed ? " dimmed" : ""}`;
+      item.innerHTML = `
+        <span class="legend-swatch" style="background:${ds.borderColor}"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${ds.label}</span>
+        <span class="legend-score">$${Math.round(ds._final)}</span>
+      `;
+      item.addEventListener("click", () => {
+        if (hidden.has(i)) { hidden.delete(i); chart.show(i); }
+        else { hidden.add(i); chart.hide(i); }
+        rebuildLegend();
+      });
+      legendEl.appendChild(item);
+    });
+  }
+  rebuildLegend();
+})();
+</script>
+{% endblock %}

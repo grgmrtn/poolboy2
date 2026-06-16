@@ -557,11 +557,11 @@ def create_pool(pool_id, name, description, is_public=1,
 def get_pool_leaderboard(pool_id):
     """
     Return all members of a pool ranked by current balance, highest first.
-    Each row: display_name, team_name, email, balance, joined_at.
+    Each row: user_id, display_name, team_name, email, balance, joined_at.
     """
     conn = get_db()
     rows = conn.execute("""
-        SELECT u.display_name, u.team_name, u.email,
+        SELECT u.id AS user_id, u.display_name, u.team_name, u.email,
                COALESCE(pm.balance, 100.0) AS balance,
                pm.joined_at
         FROM pool_members pm
@@ -878,6 +878,81 @@ def get_member_balance(user_id, pool_id):
     return row["balance"] if row else 0.0
 
 
+def get_user_current_streak(user_id, pool_id):
+    """
+    Walk this user's picks on completed fixtures in chronological order
+    (kick_off DESC) and count the run of correct predictions starting from
+    the most recent. Returns 0 if the most recent pick was wrong.
+    """
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT p.predicted_result, f.result
+        FROM picks p JOIN fixtures f ON f.id = p.fixture_id
+        WHERE p.user_id=? AND p.pool_id=?
+          AND f.result IS NOT NULL AND f.result <> ''
+        ORDER BY f.kick_off DESC
+    """, (user_id, pool_id)).fetchall()
+    conn.close()
+    streak = 0
+    for r in rows:
+        if r["predicted_result"] == r["result"]:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def get_user_rarest_pick(user_id, pool_id):
+    """
+    Find this user's pick that had the lowest field-share on a completed
+    fixture. Returns a dict {fixture, pick, was_correct, field_pct} or
+    None if the user has no picks on completed fixtures yet.
+    """
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT
+            f.id AS fixture_id,
+            f.home_team, f.away_team,
+            f.home_flag_code, f.away_flag_code,
+            f.home_score, f.away_score, f.result,
+            p.predicted_result AS my_pick,
+            (
+                SELECT CAST(SUM(CASE WHEN p2.predicted_result=p.predicted_result THEN 1 ELSE 0 END) AS REAL)
+                       * 100.0 /
+                       NULLIF(COUNT(*), 0)
+                FROM picks p2
+                WHERE p2.pool_id=? AND p2.fixture_id=p.fixture_id
+            ) AS field_pct
+        FROM picks p JOIN fixtures f ON f.id = p.fixture_id
+        WHERE p.user_id=? AND p.pool_id=?
+          AND f.result IS NOT NULL AND f.result <> ''
+        ORDER BY field_pct ASC, f.kick_off DESC
+        LIMIT 1
+    """, (pool_id, user_id, pool_id)).fetchone()
+    conn.close()
+    if not row_present(rows):
+        return None
+    r = rows
+    return {
+        "fixture_id": r["fixture_id"],
+        "home_team":  r["home_team"],
+        "away_team":  r["away_team"],
+        "home_flag":  r["home_flag_code"] or "un",
+        "away_flag":  r["away_flag_code"] or "un",
+        "home_score": r["home_score"],
+        "away_score": r["away_score"],
+        "result":     r["result"],
+        "my_pick":    r["my_pick"],
+        "was_correct": r["my_pick"] == r["result"],
+        "field_pct":  float(r["field_pct"] or 0),
+    }
+
+
+def row_present(row):
+    """Small null-safe predicate for sqlite/Postgres rows."""
+    return row is not None
+
+
 def get_user_pick_accuracy(user_id, pool_id):
     """
     Return {"correct": int, "total": int} for a user's picks on completed
@@ -920,6 +995,21 @@ def _update_balance(conn, user_id, pool_id, delta):
         "UPDATE pool_members SET balance = COALESCE(balance, 100) + ? WHERE user_id=? AND pool_id=?",
         (delta, user_id, pool_id)
     )
+
+
+def write_adjustment_transaction(user_id, pool_id, amount, description=""):
+    """Apply a signed delta to a member's balance + record an 'adjustment'
+    transaction so the timeline (and the stats chart) stays consistent."""
+    import uuid as _uuid
+    conn = get_db()
+    _update_balance(conn, user_id, pool_id, amount)
+    conn.execute(
+        "INSERT INTO transactions (id, user_id, pool_id, fixture_id, type, amount, description) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (str(_uuid.uuid4()), user_id, pool_id, None, "adjustment", amount, description)
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_spy_count_for_user_in_pool(user_id, pool_id):
@@ -1643,6 +1733,122 @@ def _parse_ts(s):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=_tz.utc)
     return dt
+
+
+def get_pool_balance_per_match(pool_id, max_players=20):
+    """
+    Per-match cumulative balance per player — used by the combined Stats
+    page so the x-axis can show one tick per scored match (instead of a
+    real time axis). Each scored fixture becomes a column; the value at
+    column N is the player's running balance after that match resolved.
+
+    fixtures[] is in kick_off order. cumulative[0] is the starting
+    balance (synthetic "Start" column); cumulative[i] for i>=1 corresponds
+    to fixtures[i-1].
+    """
+    from collections import defaultdict
+    conn = get_db()
+    sc = conn.execute(
+        "SELECT starting_balance FROM scoring_config ORDER BY updated_at DESC LIMIT 1"
+    ).fetchone()
+    start_balance = float((sc and sc["starting_balance"]) or 100)
+
+    fix_rows = conn.execute("""
+        SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team, f.stage
+        FROM transactions t
+        JOIN fixtures f ON f.id = t.fixture_id
+        WHERE t.pool_id = ? AND t.type = 'payout'
+        ORDER BY f.kick_off, f.id
+    """, (pool_id,)).fetchall()
+
+    tx_rows = conn.execute("""
+        SELECT user_id, fixture_id, amount, created_at FROM transactions
+        WHERE pool_id = ?
+    """, (pool_id,)).fetchall()
+
+    member_rows = conn.execute("""
+        SELECT pm.user_id, u.display_name, u.team_name, u.email
+        FROM pool_members pm JOIN users u ON u.id = pm.user_id
+        WHERE pm.pool_id = ?
+    """, (pool_id,)).fetchall()
+    conn.close()
+
+    if not fix_rows or not member_rows:
+        return {"fixtures": [{"id": None, "label": "Start"}],
+                "players": [], "total_players": len(member_rows),
+                "starting_balance": start_balance}
+
+    fix_id_to_col = {r["id"]: i + 1 for i, r in enumerate(fix_rows)}
+    n_cols = len(fix_rows) + 1
+
+    fixtures_out = [{"id": None, "label": "Start", "date_label": "", "stage": ""}]
+    for r in fix_rows:
+        ko = r["kick_off"] or ""
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(ko[:10])
+            date_label = f"{dt.day} {dt.strftime('%b')}"
+        except Exception:
+            date_label = ko[:10]
+        ha = (r["home_team"] or "")[:3].upper()
+        aa = (r["away_team"] or "")[:3].upper()
+        fixtures_out.append({
+            "id":         r["id"],
+            "label":      f"{ha} v {aa}",
+            "date_label": date_label,
+            "stage":      r["stage"] or "",
+        })
+
+    # Bucket per-user deltas. Fixture-id-matched transactions go into the
+    # matching column; non-fixture txns get bucketed by created_at (anchored
+    # to the first fixture whose kick_off >= created_at).
+    from datetime import datetime as _dt, timezone as _tz
+    kickoffs = []
+    for r in fix_rows:
+        ts = _parse_ts(r["kick_off"]) or _dt(2099, 1, 1, tzinfo=_tz.utc)
+        kickoffs.append(ts)
+
+    deltas = defaultdict(lambda: defaultdict(float))
+    for tx in tx_rows:
+        uid = tx["user_id"]
+        amt = float(tx["amount"])
+        fid = tx["fixture_id"]
+        col = fix_id_to_col.get(fid) if fid else None
+        if col is None:
+            ts = _parse_ts(tx["created_at"])
+            if ts is None:
+                col = len(kickoffs)
+            else:
+                col = len(kickoffs)
+                for i, ko in enumerate(kickoffs):
+                    if ko >= ts:
+                        col = i + 1
+                        break
+        deltas[uid][col] += amt
+
+    players = []
+    for m in member_rows:
+        uid = m["user_id"]
+        running = start_balance
+        cum = [round(running, 2)]
+        for c in range(1, n_cols):
+            running += deltas[uid].get(c, 0.0)
+            cum.append(round(running, 2))
+        players.append({
+            "user_id":      uid,
+            "display_name": m["display_name"],
+            "team_name":    m["team_name"],
+            "email":        m["email"],
+            "cumulative":   cum,
+            "final_score":  round(running, 2),
+        })
+    players.sort(key=lambda p: p["final_score"], reverse=True)
+    return {
+        "fixtures":         fixtures_out,
+        "players":          players[:max_players],
+        "total_players":    len(players),
+        "starting_balance": start_balance,
+    }
 
 
 def get_pool_balance_timeline(pool_id, max_players=20):

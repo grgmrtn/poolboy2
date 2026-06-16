@@ -554,27 +554,29 @@
      Sticky lime bar under the stage nav. Tap to expand into a hero view
      with score bug + picks-by-side. Multi-live fixtures get a tab strip.
      Hidden entirely when no live fixtures are running. */
-  .live-now-banner { display: none; }
   .live-now-banner.is-empty { display: none !important; }
-  /* When the live banner is showing a fixture, hide its main-grid row on
-     mobile so the same match doesn't render twice. Desktop keeps both
-     visible since the banner is hidden there. */
-  @media (max-width: 768px) {
-    .fixture-row.is-in-live-banner { display: none; }
+  /* Banner is universal (desktop + mobile). Hide the in-pill duplicate row
+     whenever a fixture is in the banner — applies on every viewport. */
+  .fixture-row.is-in-live-banner { display: none; }
+
+  .live-now-banner {
+    display: block;
+    /* Stack BELOW the stage nav. Stage nav sits at top:56px and is ~40px
+       tall, so the banner sticks at calc(56 + 40). z-index above stage nav
+       (90) so the banner is what users see when both want the same space. */
+    position: sticky; top: 96px; z-index: 95;
+    background: var(--accent);
+    color: #0a0a0f;
+    border-bottom: 1px solid rgba(0,0,0,0.18);
+    font-family: var(--mono);
   }
-  @media (max-width: 768px) {
-    .live-now-banner {
-      display: block;
-      position: sticky; top: 56px; z-index: 50;
-      background: var(--accent);
-      color: #0a0a0f;
-      border-bottom: 1px solid rgba(0,0,0,0.18);
-      font-family: var(--mono);
-    }
-    .ln-bar {
-      display: flex; align-items: stretch;
-      min-height: 38px;
-    }
+  .ln-bar {
+    display: flex; align-items: stretch;
+    min-height: 38px;
+    cursor: pointer;       /* whole bar is the toggle target */
+  }
+  /* Universal-applies rules (no @media gate). The narrow-mobile @media
+     block at the bottom tightens spacing for <=400px only. */
     .ln-tabs {
       flex: 1; display: flex; align-items: stretch;
       overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -726,6 +728,14 @@
     .ln-bet.is-me strong { color: #0a0a0f; font-weight: 800; }
     .ln-bet-dot { color: rgba(10,10,15,0.4); margin: 0 0.2rem; }
     .ln-bet-amt { font-weight: 700; color: #0a0a0f; }
+
+  /* Desktop refinement: cap the expanded-panel content width so the hero
+     doesn't stretch absurdly on wide monitors. */
+  @media (min-width: 769px) {
+    .live-now-banner .ln-expanded { padding: 1.25rem 2rem; }
+    .live-now-banner .ln-panel { max-width: 760px; margin: 0 auto; }
+    .ln-flag { width: 72px; height: 52px; }
+    .ln-h-score, .ln-a-score { font-size: 3rem; }
   }
   @media (max-width: 400px) {
     .ln-flag { width: 48px; height: 34px; }
@@ -1790,7 +1800,7 @@
                     {% if ct_h_pickers %}
                     <span class="ct-pickers-tip tip-h">
                       <strong>{{ ct_home }} · {{ ct_h_pickers|length }} {{ 'pick' if ct_h_pickers|length == 1 else 'picks' }}</strong>
-                      {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                      {% for o in ct_h_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </span>
                     {% endif %}
                   </span>
@@ -1799,7 +1809,7 @@
                     {% if ct_d_pickers %}
                     <span class="ct-pickers-tip tip-d">
                       <strong>Draw · {{ ct_d_pickers|length }} {{ 'pick' if ct_d_pickers|length == 1 else 'picks' }}</strong>
-                      {% for o in ct_d_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                      {% for o in ct_d_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </span>
                     {% endif %}
                   </span>
@@ -1809,7 +1819,7 @@
                     {% if ct_a_pickers %}
                     <span class="ct-pickers-tip tip-a">
                       <strong>{{ ct_away }} · {{ ct_a_pickers|length }} {{ 'pick' if ct_a_pickers|length == 1 else 'picks' }}</strong>
-                      {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                      {% for o in ct_a_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </span>
                     {% endif %}
                   </span>
@@ -1818,7 +1828,7 @@
                       <img class="ct-flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_home }}                      {% if ct_h_pickers %}
                       <span class="ct-pickers-tip tip-h">
                         <strong>{{ ct_home }} · {{ ct_h_pickers|length }}</strong>
-                        {% for o in ct_h_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                        {% for o in ct_h_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                       </span>
                       {% endif %}
                     </span>
@@ -1826,7 +1836,7 @@
                       {{ f.home_score }}–{{ f.away_score }}                      {% if ct_d_pickers %}
                       <span class="ct-pickers-tip tip-d">
                         <strong>Draw · {{ ct_d_pickers|length }}</strong>
-                        {% for o in ct_d_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                        {% for o in ct_d_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                       </span>
                       {% endif %}
                     </span>
@@ -1834,7 +1844,7 @@
                       <img class="ct-flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" onerror="this.style.display='none'" loading="lazy">{{ ct_away }}                      {% if ct_a_pickers %}
                       <span class="ct-pickers-tip tip-a">
                         <strong>{{ ct_away }} · {{ ct_a_pickers|length }}</strong>
-                        {% for o in ct_a_pickers %}{{ o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
+                        {% for o in ct_a_pickers %}{{ o.short_name or o.display_name.split(' ')[0] }}{% if not loop.last %} · {% endif %}{% endfor %}
                       </span>
                       {% endif %}
                     </span>
@@ -2047,7 +2057,7 @@
                         {% if show_this %}
                           {% set pay = fixture_payouts.get(o.email) %}
                           <div class="reveal-name">
-                            {{ o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}{% if is_completed and pay is not none and pay != 0 %} <span class="reveal-name-pay {% if pay > 0 %}pay-pos{% else %}pay-neg{% endif %}">{% if pay > 0 %}+{% endif %}${{ "%.0f"|format(pay) }}</span>{% endif %}
+                            {{ o.short_name or o.display_name.split(' ')[0] }}{% if is_ko_stage and o.bet_amount %} <span class="reveal-name-bet">${{ "%.0f"|format(o.bet_amount) }}</span>{% endif %}{% if is_completed and pay is not none and pay != 0 %} <span class="reveal-name-pay {% if pay > 0 %}pay-pos{% else %}pay-neg{% endif %}">{% if pay > 0 %}+{% endif %}${{ "%.0f"|format(pay) }}</span>{% endif %}
                           </div>
                           {% set side_count.shown = side_count.shown + 1 %}
                         {% endif %}

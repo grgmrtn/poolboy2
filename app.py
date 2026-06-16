@@ -205,6 +205,51 @@ def inject_team_abbr():
     return {"ABBR": TEAM_ABBR}
 
 
+def _short_name(display_name):
+    return (display_name or "").split(" ")[0]
+
+
+def _disambiguate_short_names(picks):
+    """
+    Given a list of pick-dicts (each with display_name + email), return
+    a dict {email: short_name} that uses the first name when unique and
+    adds a last-initial (or further fallback) when two picks share a
+    first name. Used by the reveal grid + completed-table tooltips +
+    the live banner picks list so duplicate-Greg lists don't confuse.
+    """
+    by_first = {}
+    for p in picks:
+        first = _short_name(p.get("display_name"))
+        by_first.setdefault(first, []).append(p)
+    out = {}
+    for first, group in by_first.items():
+        if len(group) <= 1:
+            email = group[0].get("email") if group else None
+            if email:
+                out[email] = first
+            continue
+        # Multiple with the same first name — try last initial.
+        for p in group:
+            parts = (p.get("display_name") or "").split(" ", 1)
+            if len(parts) > 1 and parts[1]:
+                out[p["email"]] = f"{first} {parts[1][0].upper()}"
+            else:
+                # No surname at all — fall back to email prefix.
+                out[p["email"]] = (p.get("email") or first).split("@")[0][:10]
+        # Catch the unlikely "Greg M" vs "Greg M" case (two Marlons).
+        # Re-check uniqueness within the group; for remaining dupes,
+        # use the first 8 chars of email.
+        seen = {}
+        for p in group:
+            short = out[p["email"]]
+            seen.setdefault(short, []).append(p)
+        for short, dupes in seen.items():
+            if len(dupes) > 1:
+                for p in dupes:
+                    out[p["email"]] = (p.get("email") or "").split("@")[0][:10]
+    return out
+
+
 # What's-new releases feed, surfaced as a chip on the pool page + a modal
 # listing every release in reverse chronological order.
 from releases import RELEASES as _RELEASES, latest_release_date as _latest_rel
@@ -317,8 +362,10 @@ def forgot_password():
 
 def _send_reset_email(user, link):
     """Send a one-click magic-login email styled to match the pool's
-    lime/mono aesthetic."""
+    lime/mono aesthetic. `user` may be a sqlite3.Row, a psycopg2 dict
+    row, or a plain dict — accept all three by going through dict()."""
     from email_helper import send_email
+    user = dict(user)
     display = (user.get("display_name") or "there").split(" ")[0]
     plain = (
         f"Hey {display},\n\n"
@@ -606,6 +653,11 @@ def pool_page(pool_id):
         completed = bool(f_data.get("result"))
         locked    = _is_locked(f_data.get("kick_off"))
 
+        # Disambiguate duplicate first names within this fixture's pick set,
+        # so reveal tooltips render "Greg M" / "Greg P" instead of two
+        # ambiguous "Greg"s.
+        shorts = _disambiguate_short_names(picks)
+
         enriched = []
         for p in picks:
             if p["email"] == user["email"]:
@@ -616,7 +668,11 @@ def pool_page(pool_id):
                 visible = True
             else:
                 visible = False
-            enriched.append({**p, "visible": visible})
+            enriched.append({
+                **p,
+                "visible":    visible,
+                "short_name": shorts.get(p["email"], _short_name(p.get("display_name"))),
+            })
         all_picks_by_fixture[fid] = enriched
 
     group_standings = db.get_group_standings()
@@ -804,6 +860,9 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
                     minute_est = delta_min
 
             picks = all_picks_by_fixture.get(f["id"], [])
+            # Disambiguate first names across this fixture's pick set so the
+            # banner doesn't show two ambiguous "Greg"s.
+            shorts = _disambiguate_short_names(picks)
             picks_by_side = {"H": [], "D": [], "A": []}
             for p in picks:
                 side = p.get("predicted_result")
@@ -811,7 +870,8 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
                     picks_by_side[side].append({
                         "user_id":      p.get("user_id"),
                         "email":        p.get("email"),
-                        "first_name":   (p.get("display_name") or "").split(" ")[0],
+                        "first_name":   shorts.get(p.get("email"),
+                                                   _short_name(p.get("display_name"))),
                         "bet_amount":   p.get("bet_amount"),
                     })
             for side in picks_by_side:
@@ -941,10 +1001,10 @@ def group_page(pool_id, letter):
     )
 
 
-@app.route("/pool/<pool_id>/leaderboard")
-@login_required
-def leaderboard_page(pool_id):
-    """Dedicated leaderboard page — moved off the main pool page."""
+def _render_combined_stats(pool_id):
+    """Shared renderer for /leaderboard and /stats. Builds the leaderboard
+    with enrichment columns (correct%, rarest pick, current streak) plus
+    the per-match balance chart data."""
     g.nav_pool_id = pool_id
     user = current_user()
     pool = db.get_pool_by_id(pool_id)
@@ -956,13 +1016,52 @@ def leaderboard_page(pool_id):
         return redirect(url_for("home"))
 
     leaderboard = db.get_pool_leaderboard(pool_id)
-    members_with_balance = db.get_pool_members_with_balances(pool_id)
-    return render_template("leaderboard.html",
+    # Enrich every leaderboard row with the new stats columns. Three
+    # lightweight queries per user — fine at the pool sizes we expect (50).
+    enriched = []
+    for row in leaderboard:
+        uid = row["user_id"]
+        acc    = db.get_user_pick_accuracy(uid, pool_id)
+        streak = db.get_user_current_streak(uid, pool_id)
+        rare   = db.get_user_rarest_pick(uid, pool_id)
+        pct    = round((acc["correct"] * 100 / acc["total"]), 0) if acc["total"] else None
+        enriched.append({
+            **dict(row),
+            "correct":   acc["correct"],
+            "total":     acc["total"],
+            "pct":       pct,
+            "streak":    streak,
+            "rare_pick": rare,
+        })
+
+    # Balance per scored match (one column per match).
+    balance_timeline = db.get_pool_balance_per_match(pool_id, max_players=10_000)
+    # If user not in top of leaderboard's first 20 chart slice, ensure their
+    # series is appended so they always see themselves on the chart.
+    my_uid = user["id"]
+    chart_players = balance_timeline["players"][:20]
+    if not any(p["user_id"] == my_uid for p in chart_players):
+        for p in balance_timeline["players"]:
+            if p["user_id"] == my_uid:
+                chart_players = chart_players + [p]
+                break
+    balance_timeline["players"] = chart_players
+
+    return render_template("stats_combined.html",
         pool=pool,
-        leaderboard=leaderboard,
-        members_with_balance=members_with_balance,
+        leaderboard=enriched,
         my_balance=db.get_member_balance(user["id"], pool_id),
+        my_user_id=my_uid,
+        timeline=balance_timeline,
+        TEAM_ABBR=TEAM_ABBR,
     )
+
+
+@app.route("/pool/<pool_id>/leaderboard")
+@login_required
+def leaderboard_page(pool_id):
+    """Now an alias for the combined Stats page (kept for back-compat)."""
+    return _render_combined_stats(pool_id)
 
 
 @app.route("/pool/<pool_id>/pick", methods=["POST"])
@@ -1326,7 +1425,6 @@ def spy_pick(pool_id):
 @admin_required
 def admin_page():
     config    = db.get_active_scoring_config()
-    # db.get_fixtures returns Row objects; convert to dicts so we can mutate
     fixtures  = [dict(f) for f in db.get_fixtures()]
     _attach_display_times(fixtures)
     all_pools = db.get_all_public_pools()
@@ -1350,16 +1448,88 @@ def admin_page():
             for m in pool_balances[pid]
         }
 
+    # Build per-user memberships-with-balance dict for the user-management
+    # dropdown panel. Each user gets a list of their pool memberships with
+    # has_paid + balance + pool_name surfaced.
+    user_memberships = {}
+    for u in users:
+        uid = u["id"]
+        m_for_user = []
+        for pool in all_pools:
+            pid = pool["id"]
+            mem = next((m for m in pool_balances[pid] if m["id"] == uid), None)
+            if mem:
+                m_for_user.append({
+                    "pool_id":    pid,
+                    "pool_name":  pool["name"],
+                    "has_paid":   bool(mem.get("has_paid")),
+                    "balance":    float(mem.get("balance") or 0),
+                })
+        user_memberships[uid] = m_for_user
+
     return render_template("admin.html",
         config=config,
         fixtures=fixtures,
         all_pools=all_pools,
         users=users,
+        user_memberships=user_memberships,
         pool_scoring=pool_scoring,
         pool_members=pool_members,
         pool_balances=pool_balances,
         pool_transactions=pool_transactions,
     )
+
+
+@app.route("/admin/user/<user_id>/send-reset", methods=["POST"])
+@admin_required
+def admin_send_reset(user_id):
+    """Admin-triggered magic-login email — the user gets a sign-in link
+    they can use to log in without their password, then rotate it from
+    My Account."""
+    target = db.get_user_by_id(user_id)
+    if not target:
+        flash("User not found.", "error")
+        return redirect(url_for("admin_page"))
+    try:
+        import magic
+        token = magic.make_magic_token(target["id"])
+        site_url = os.environ.get(
+            "SITE_URL",
+            "https://poolboy2-app-production.up.railway.app"
+        ).rstrip("/")
+        link = f"{site_url}/m/{token}?next=/home"
+        _send_reset_email(target, link)
+        flash(f"Reset link emailed to {target['email']}.", "success")
+    except Exception as e:
+        flash(f"Failed to send reset: {e}", "error")
+    return redirect(url_for("admin_page"))
+
+
+@app.route("/admin/user/<user_id>/balance", methods=["POST"])
+@admin_required
+def admin_override_balance(user_id):
+    """Override a user's balance on a specific pool. Records a 'adjustment'
+    transaction with the delta so the timeline stays honest."""
+    pool_id = (request.form.get("pool_id") or "").strip()
+    if not pool_id:
+        flash("Missing pool_id.", "error")
+        return redirect(url_for("admin_page"))
+    try:
+        new_balance = float(request.form.get("balance"))
+    except (TypeError, ValueError):
+        flash("Balance must be a number.", "error")
+        return redirect(url_for("admin_page"))
+    current = db.get_member_balance(user_id, pool_id)
+    delta = round(new_balance - float(current), 2)
+    if abs(delta) < 0.005:
+        flash("No change to balance.", "info")
+        return redirect(url_for("admin_page"))
+    db.write_adjustment_transaction(
+        user_id, pool_id, delta,
+        description=f"Admin adjustment to ${new_balance:.2f}"
+    )
+    flash(f"Balance updated by ${delta:+.2f}.", "success")
+    return redirect(url_for("admin_page"))
 
 
 @app.route("/admin/scoring", methods=["POST"])
@@ -1579,31 +1749,8 @@ def admin_adjust_balance(pool_id, user_id):
 @app.route("/pool/<pool_id>/stats")
 @login_required
 def pool_stats(pool_id):
-    user = current_user()
-    pool = db.get_pool_by_id(pool_id)
-    if not pool:
-        flash("Pool not found.", "error")
-        return redirect(url_for("home"))
-    if not db.is_pool_member(user["id"], pool_id):
-        flash("You're not a member of that pool.", "error")
-        return redirect(url_for("home"))
-
-    timeline = db.get_pool_score_timeline(pool_id)
-
-    my_uid = user["id"]
-    in_top = any(p["user_id"] == my_uid for p in timeline["players"])
-    if not in_top:
-        full = db.get_pool_score_timeline(pool_id, max_players=10_000)
-        for p in full["players"]:
-            if p["user_id"] == my_uid:
-                timeline["players"].append(p)
-                break
-
-    return render_template("stats.html",
-        pool=pool,
-        timeline=timeline,
-        my_user_id=my_uid,
-    )
+    """Same destination as /leaderboard — combined Stats page."""
+    return _render_combined_stats(pool_id)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
