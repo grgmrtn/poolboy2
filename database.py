@@ -1744,7 +1744,9 @@ def get_pool_balance_per_match(pool_id, max_players=20):
 
     fixtures[] is in kick_off order. cumulative[0] is the starting
     balance (synthetic "Start" column); cumulative[i] for i>=1 corresponds
-    to fixtures[i-1].
+    to fixtures[i-1]. Players also carry a parallel `details[]` list — one
+    entry per column — with {pick, result, bet_amount, delta} so the
+    chart tooltip can show what the user did on that specific match.
     """
     from collections import defaultdict
     conn = get_db()
@@ -1771,9 +1773,9 @@ def get_pool_balance_per_match(pool_id, max_players=20):
         FROM pool_members pm JOIN users u ON u.id = pm.user_id
         WHERE pm.pool_id = ?
     """, (pool_id,)).fetchall()
-    conn.close()
 
     if not fix_rows or not member_rows:
+        conn.close()
         return {"fixtures": [{"id": None, "label": "Start"}],
                 "players": [], "total_players": len(member_rows),
                 "starting_balance": start_balance}
@@ -1826,20 +1828,70 @@ def get_pool_balance_per_match(pool_id, max_players=20):
                         break
         deltas[uid][col] += amt
 
+    # Pull per-user per-fixture picks + bets so the chart tooltip can
+    # show what a player did on that specific match.
+    pick_rows = conn.execute("""
+        SELECT user_id, fixture_id, predicted_result, bet_amount
+        FROM picks
+        WHERE pool_id = ?
+    """, (pool_id,)).fetchall()
+    picks_by_user_fixture = {}
+    for r in pick_rows:
+        picks_by_user_fixture[(r["user_id"], r["fixture_id"])] = {
+            "pick":       r["predicted_result"],
+            "bet_amount": float(r["bet_amount"]) if r["bet_amount"] is not None else None,
+        }
+
+    # Also fetch each fixture's final result + scores for the tooltip line.
+    fix_summary = {}
+    for r in fix_rows:
+        fix_summary[r["id"]] = {
+            "home": r["home_team"], "away": r["away_team"],
+            "stage": r["stage"] or "",
+        }
+    fix_full = conn.execute("""
+        SELECT id, home_score, away_score, result FROM fixtures
+        WHERE id IN ({})
+    """.format(",".join("?" * len(fix_rows))) if fix_rows else "SELECT 0 AS id, 0 AS home_score, 0 AS away_score, '' AS result WHERE 1=0",
+        [r["id"] for r in fix_rows]
+    ).fetchall() if fix_rows else []
+    for r in fix_full:
+        fix_summary[r["id"]].update({
+            "home_score": r["home_score"],
+            "away_score": r["away_score"],
+            "result":     r["result"],
+        })
+    conn.close()
+
     players = []
     for m in member_rows:
         uid = m["user_id"]
         running = start_balance
         cum = [round(running, 2)]
+        details = [None]   # index 0 = "Start"; no match details
         for c in range(1, n_cols):
-            running += deltas[uid].get(c, 0.0)
+            delta = deltas[uid].get(c, 0.0)
+            running += delta
             cum.append(round(running, 2))
+            fid = fix_rows[c - 1]["id"]
+            fs = fix_summary.get(fid, {})
+            pick_info = picks_by_user_fixture.get((uid, fid))
+            details.append({
+                "label":  f"{(fs.get('home') or '?')[:3].upper()} v {(fs.get('away') or '?')[:3].upper()}",
+                "home":   fs.get("home"), "away": fs.get("away"),
+                "home_score": fs.get("home_score"), "away_score": fs.get("away_score"),
+                "result": fs.get("result"),
+                "pick":   pick_info["pick"] if pick_info else None,
+                "bet":    pick_info["bet_amount"] if pick_info else None,
+                "delta":  round(delta, 2),
+            })
         players.append({
             "user_id":      uid,
             "display_name": m["display_name"],
             "team_name":    m["team_name"],
             "email":        m["email"],
             "cumulative":   cum,
+            "details":      details,
             "final_score":  round(running, 2),
         })
     players.sort(key=lambda p: p["final_score"], reverse=True)
