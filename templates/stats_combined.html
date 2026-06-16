@@ -129,7 +129,6 @@
       color: var(--text-muted);
       min-width: 1.4rem; text-align: center;
     }
-    .lb-row.is-me .lb-rank { color: var(--accent); }
     .lb-row .lb-name {
       flex: 1; min-width: 0;
       display: flex; flex-direction: column;
@@ -143,28 +142,30 @@
       margin-left: auto;
       font-variant-numeric: tabular-nums;
     }
-    /* Below the header, optional stat lines wrap to a fresh row */
+    /* Below the header, optional stat lines wrap to a fresh row with a
+       consistent indent so the value-block left edges align (rank column
+       width + gap). */
     .lb-row .lb-pct,
     .lb-row .lb-streak,
     .lb-row .lb-rare {
       flex-basis: 100%;
       color: var(--text-muted);
       font-size: 0.74rem;
-      padding-top: 0.4rem;
+      padding: 0.35rem 0 0 calc(1.4rem + 0.55rem);  /* aligns under name */
+      display: flex; align-items: baseline; gap: 0;
     }
-    .lb-row .lb-pct::before    { content: 'Correct ';
-                                  color: var(--text-dim);
-                                  font-size: 0.58rem; letter-spacing: 0.08em;
-                                  text-transform: uppercase; margin-right: 0.35rem; }
-    .lb-row .lb-streak::before { content: 'Streak ';
-                                  color: var(--text-dim);
-                                  font-size: 0.58rem; letter-spacing: 0.08em;
-                                  text-transform: uppercase; margin-right: 0.35rem; }
-    .lb-row .lb-rare::before   { content: 'Rarest ';
-                                  color: var(--text-dim);
-                                  font-size: 0.58rem; letter-spacing: 0.08em;
-                                  text-transform: uppercase; margin-right: 0.35rem; }
-    .lb-rare-row { flex-wrap: wrap; row-gap: 0.2rem; }
+    .lb-row .lb-pct::before,
+    .lb-row .lb-streak::before,
+    .lb-row .lb-rare::before {
+      color: var(--text-dim);
+      font-size: 0.56rem; letter-spacing: 0.1em;
+      text-transform: uppercase; font-weight: 700;
+      flex: 0 0 4.2rem;     /* fixed-width label gutter — values align */
+    }
+    .lb-row .lb-pct::before    { content: 'Correct'; }
+    .lb-row .lb-streak::before { content: 'Streak'; }
+    .lb-row .lb-rare::before   { content: 'Rarest'; }
+    .lb-rare-row { flex-wrap: wrap; row-gap: 0.25rem; }
   }
   .lb-table th {
     text-align: left; color: var(--text-dim);
@@ -181,7 +182,10 @@
     font-variant-numeric: tabular-nums;
     vertical-align: middle;
   }
-  .lb-row.is-me td { background: rgba(200,255,87,0.06); }
+  /* Desktop row tint applied to each td (tr backgrounds don't render
+     reliably in HTML tables). Mobile uses display:block so the tr
+     itself can carry the tint without the td hop. */
+  .lb-row.is-me > td { background: rgba(200,255,87,0.06); }
   .lb-rank {
     color: var(--text-muted); font-weight: 700;
     text-align: right; width: 2.5rem;
@@ -208,7 +212,11 @@
   @media (max-width: 640px) {
     .lb-table td.lb-balance { font-size: 1.45rem; }
   }
-  .lb-pct, .lb-streak { color: var(--text-muted); font-weight: 600; text-align: center; }
+  .lb-pct, .lb-streak {
+    color: var(--text-muted); font-weight: 600;
+    text-align: center; white-space: nowrap;
+    padding-left: 0.5rem; padding-right: 0.5rem;
+  }
   .lb-streak-flame { color: var(--accent); font-weight: 700; }
 
   /* Rarest-pick cell. Picked side gets a pill background so the highlight
