@@ -328,7 +328,7 @@
             <th class="lb-balance" style="text-align:right">Balance</th>
             <th class="lb-pct" style="text-align:center">% Correct</th>
             <th class="lb-streak" style="text-align:center">Streak</th>
-            <th class="lb-rare">Rarest Pick</th>
+            <th class="lb-rare">Rarest Win</th>
           </tr>
         </thead>
         <tbody>
@@ -368,11 +368,7 @@
                     {{ aa }}
                     <img src="https://flagcdn.com/{{ rp.away_flag }}.svg" alt="" onerror="this.style.display='none'">
                   </span>
-                  <span class="{% if rp.was_correct %}lb-rare-correct{% else %}lb-rare-wrong{% endif %}"
-                        title="{% if rp.was_correct %}Pick won{% else %}Pick lost{% endif %}">
-                    {% if rp.was_correct %}✓{% else %}✗{% endif %}
-                  </span>
-                  <span class="lb-rare-pct">{{ rp.field_pct|round|int }}%</span>
+                  <span class="lb-rare-pct" title="Share of the pool that picked the same side">{{ rp.field_pct|round|int }}%</span>
                 </div>
               {% else %}
                 <span class="lb-rare-empty">—</span>

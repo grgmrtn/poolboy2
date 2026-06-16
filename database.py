@@ -904,9 +904,10 @@ def get_user_current_streak(user_id, pool_id):
 
 def get_user_rarest_pick(user_id, pool_id):
     """
-    Find this user's pick that had the lowest field-share on a completed
-    fixture. Returns a dict {fixture, pick, was_correct, field_pct} or
-    None if the user has no picks on completed fixtures yet.
+    Find this user's rarest CORRECT pick — i.e. a winning prediction
+    where the smallest share of the pool also picked the same side.
+    Returns {fixture, pick, was_correct=True, field_pct} or None if the
+    user has no correct picks on completed fixtures yet.
     """
     conn = get_db()
     rows = conn.execute("""
@@ -926,6 +927,7 @@ def get_user_rarest_pick(user_id, pool_id):
         FROM picks p JOIN fixtures f ON f.id = p.fixture_id
         WHERE p.user_id=? AND p.pool_id=?
           AND f.result IS NOT NULL AND f.result <> ''
+          AND p.predicted_result = f.result    -- correct picks only
         ORDER BY field_pct ASC, f.kick_off DESC
         LIMIT 1
     """, (pool_id, user_id, pool_id)).fetchone()
