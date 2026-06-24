@@ -781,10 +781,17 @@
             // abbr, score, away abbr — stacked so the tick is narrow enough
             // for mobile. Wider windows fall back to just the match number.
             // 11 visible labels = baseline + 10 matches.
+            //
+            // NB: Chart.js v4 category scale passes the tick INDEX (not the
+            // label string) as `value`. We resolve the actual label via
+            // getLabelForValue so paging/sizing surface the correct match.
             callback(value) {
-              const i = Number(value);
+              const label = (this.getLabelForValue
+                ? this.getLabelForValue(value)
+                : value);
+              const i = Number(label);
               const f = fixtures[i];
-              if (!f || i === 0) return value;
+              if (!f || i === 0) return label;
               const visible = (this.chart && this.chart.data.labels)
                 ? this.chart.data.labels.length : 0;
               if (visible <= 11 && f.home_score != null && f.away_score != null) {

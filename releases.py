@@ -15,6 +15,45 @@ migration, no schema change.
 
 RELEASES = [
     {
+        "date":  "2026-06-24",
+        "emoji": "💬",
+        "title": "Live-match chat",
+        "changes": [
+            "Per-fixture chat panel under each LIVE match — send, vote, see who's saying what",
+            "Opens 15 min before kickoff (same window as the live banner) and closes 4 hours after",
+            "Thumbs up / down on every message — net votes scale the message size (±10% per vote, capped 0.5×–2×)",
+            "@firstname mentions light up lime when they match you",
+            "Author can delete their own message via the inline trash icon; admins can delete any",
+            "Multiple live games: red dot on a tab when new messages arrive while you're on a different one",
+            "Tapping the active tab now collapses the whole banner, so a two-tab bar is dismissable",
+            "Bet lists per side scroll independently so big pools don't squash the chat below",
+        ],
+    },
+    {
+        "date":  "2026-06-24",
+        "emoji": "📈",
+        "title": "Stats chart rebuild — paging, filters, round dividers",
+        "changes": [
+            "Pagination: 10 / 20 / 40 / All matches per page with prev / next arrows; the label shows the visible match range (e.g. 81–90)",
+            "Each player line has its own checkbox — pick a few players to compare; show-all / hide-all bulk buttons",
+            "Your selection of who's visible is remembered per pool, per browser",
+            "Faint round dividers (MD1, R32, …) mark the start of each phase",
+            "10-match view shows the home / score / away under each match number; wider views fall back to the bare match number",
+            "Y-axis Balance label removed to reclaim mobile width",
+        ],
+    },
+    {
+        "date":  "2026-06-24",
+        "emoji": "✅",
+        "title": "Completed table grouped by round + per-round Hide picks",
+        "changes": [
+            "Winning team name now highlighted in lime (draws get a lime centre score) instead of a trailing checkmark",
+            "Completed rows are grouped by round with a collapsible subheader for each — only the latest round is expanded on load",
+            "The global Hide Completed Picks toggle moved into each round's heading; hide just the rounds you're done with",
+            "Per-round hide choice persists per browser",
+        ],
+    },
+    {
         "date":  "2026-06-12",
         "emoji": "📡",
         "title": "Happening Now banner (mobile)",
