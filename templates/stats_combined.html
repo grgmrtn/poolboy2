@@ -271,31 +271,132 @@
     border-radius: var(--radius-lg);
     padding: 1.25rem 1.25rem 1rem;
   }
+  .chart-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
   .chart-title {
     font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
-    color: var(--text-dim); margin-bottom: 1rem;
+    color: var(--text-dim); margin: 0;
+  }
+  .chart-controls {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    flex-wrap: wrap; justify-content: flex-end;
+  }
+  .chart-size {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .chart-size button {
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.32rem 0.55rem;
+    font-family: var(--mono);
+    font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    cursor: pointer; line-height: 1;
+    transition: color 0.15s, background 0.15s;
+  }
+  .chart-size button:first-child { border-left: 0; }
+  .chart-size button:hover { color: var(--text); }
+  .chart-size button.active {
+    background: rgba(200,255,87,0.10);
+    color: var(--accent);
+  }
+  .chart-paging {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+  }
+  .chart-page-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 4px;
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; line-height: 1;
+    font-size: 0.95rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .chart-page-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-hi); }
+  .chart-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .chart-page-label {
+    min-width: 4.2rem; text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .chart-wrap { position: relative; height: 420px; }
   @media (max-width: 600px) { .chart-wrap { height: 280px; } }
 
-  .legend-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 0.3rem 1rem;
+  .legend-bulk {
+    display: flex; gap: 0.4rem;
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
   }
+  .legend-bulk-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 4px;
+    padding: 0.3rem 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .legend-bulk-btn:hover { color: var(--text); border-color: var(--border-hi); }
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.3rem 1rem;
+    margin-top: 0.6rem;
+  }
   .legend-item {
-    display: flex; align-items: center; gap: 0.4rem;
+    display: flex; align-items: center; gap: 0.45rem;
     font-size: 0.75rem; cursor: pointer;
     color: var(--text-muted);
     padding: 0.15rem 0;
+    user-select: none;
   }
   .legend-item:hover { color: var(--text); }
   .legend-item.is-me { color: var(--text); font-weight: 700; }
-  .legend-item.dimmed { opacity: 0.35; }
+  .legend-item.dimmed { opacity: 0.4; }
+  .legend-check {
+    appearance: none; -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border: 1.5px solid var(--text-dim);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer; flex-shrink: 0;
+    position: relative; margin: 0;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .legend-check:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .legend-check:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 0px;
+    width: 4px; height: 8px;
+    border: solid #000;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
   .legend-swatch { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .legend-name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+  }
   .legend-score {
     margin-left: auto; font-weight: 700; font-size: 0.7rem;
     color: var(--accent); white-space: nowrap;
@@ -401,8 +502,27 @@
     </div>
   {% else %}
     <div class="chart-card">
-      <div class="chart-title">Balance over matches — each player</div>
+      <div class="chart-header">
+        <div class="chart-title">Balance over matches — each player</div>
+        <div class="chart-controls" id="chart-controls" hidden>
+          <div class="chart-size" role="group" aria-label="Matches per page">
+            <button type="button" data-size="10" class="active">10</button>
+            <button type="button" data-size="20">20</button>
+            <button type="button" data-size="40">40</button>
+            <button type="button" data-size="all">All</button>
+          </div>
+          <div class="chart-paging">
+            <button type="button" class="chart-page-btn" id="chart-prev" aria-label="Previous matches">←</button>
+            <span class="chart-page-label" id="chart-page-label">1–10</span>
+            <button type="button" class="chart-page-btn" id="chart-next" aria-label="Next matches">→</button>
+          </div>
+        </div>
+      </div>
       <div class="chart-wrap"><canvas id="statsChart"></canvas></div>
+      <div class="legend-bulk">
+        <button type="button" class="legend-bulk-btn" id="legend-show-all">Show all</button>
+        <button type="button" class="legend-bulk-btn" id="legend-hide-all">Hide all</button>
+      </div>
       <div class="legend-grid" id="legend"></div>
     </div>
   {% endif %}
@@ -477,15 +597,54 @@
     "#ff57c8","#57ffff","#ff8c57","#7c57ff","#57ff7c",
   ];
 
-  // X axis: bare match numbers (0 = Start, 1..N = each match in order)
-  const labels = fixtures.map((_, i) => i === 0 ? "0" : String(i));
+  // X axis: bare match numbers (0 = Start, 1..N = each match in order).
+  // Paging keeps these full arrays as the source-of-truth; the chart shows a
+  // sliced view of them.
+  const allLabels = fixtures.map((_, i) => i === 0 ? "0" : String(i));
+  const allRounds = fixtures.map(f => f && f.round ? f.round : "");
+
+  // Plugin: draw a faint grey vertical line + round label wherever the
+  // round changes between consecutive visible fixtures (MD1→MD2, group→R32,
+  // R32→R16, etc.). Lines are positioned at the new round's first match;
+  // the label sits just to the right of the line at the top of the plot.
+  const roundDividers = {
+    id: "roundDividers",
+    afterDatasetsDraw(chart) {
+      const rounds = chart.$rounds || [];
+      if (rounds.length < 2) return;
+      const xs = chart.scales.x;
+      const ys = chart.scales.y;
+      const labels = chart.data.labels;
+      const c = chart.ctx;
+      c.save();
+      c.lineWidth = 1;
+      c.setLineDash([4, 4]);
+      c.strokeStyle = "rgba(160,160,192,0.30)";
+      c.fillStyle   = "#a0a0c0";
+      c.font = "10px 'JetBrains Mono', Menlo, Consolas, monospace";
+      c.textBaseline = "top";
+      c.textAlign = "left";
+      for (let i = 1; i < rounds.length; i++) {
+        const cur = rounds[i];
+        const prev = rounds[i - 1];
+        if (!cur || cur === prev) continue;
+        const x = xs.getPixelForValue(labels[i]);
+        c.beginPath();
+        c.moveTo(x, ys.top);
+        c.lineTo(x, ys.bottom);
+        c.stroke();
+        c.fillText(cur, x + 3, ys.top + 2);
+      }
+      c.restore();
+    },
+  };
 
   const datasets = players.map((p, i) => {
     const isMe  = p.user_id === MY_UID;
     const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
     return {
       label:           p.team_name || p.display_name,
-      data:            p.cumulative,
+      data:            p.cumulative.slice(),
       borderColor:     color,
       backgroundColor: color + "18",
       borderWidth:     isMe ? 2.5 : 1.3,
@@ -497,7 +656,9 @@
       fill:            false,
       _uid:            p.user_id,
       _final:          p.final_score,
-      _details:        p.details,
+      _all:            p.cumulative,    // full series, never mutated
+      _allDetails:     p.details || [], // full per-match detail, never mutated
+      _details:        (p.details || []).slice(),
       _team_name:      p.team_name || null,
       _real_name:      p.display_name || '',
     };
@@ -506,7 +667,8 @@
   const ctx = document.getElementById("statsChart").getContext("2d");
   const chart = new Chart(ctx, {
     type: "line",
-    data: { labels, datasets },
+    plugins: [roundDividers],
+    data: { labels: allLabels.slice(), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -611,30 +773,105 @@
     },
   });
 
-  // Legend
+  // ── Paging: show `curPageSize` matches at a time. Pages overlap by one so
+  // the last visible match of page N is the first visible point on page N+1,
+  // giving the line a continuous look when flipping. The page label shows
+  // the match-number range owned by this page (e.g. "81–90"), independent of
+  // the overlap point.
+  const totalMatches = allLabels.length - 1;  // label 0 is the "Start" point
+  let curPageSize = 10;
+  let totalPages  = Math.max(1, Math.ceil(totalMatches / curPageSize));
+  // Default to the most recent page — that's where the live action is.
+  let curPage = totalPages - 1;
+
+  const controlsEl = document.getElementById("chart-controls");
+  const prevBtn    = document.getElementById("chart-prev");
+  const nextBtn    = document.getElementById("chart-next");
+  const pageLabel  = document.getElementById("chart-page-label");
+  const sizeBtns   = document.querySelectorAll(".chart-size [data-size]");
+
+  function applyPage(p) {
+    curPage = Math.max(0, Math.min(totalPages - 1, p));
+    const start = curPage * curPageSize;
+    const end   = Math.min(start + curPageSize + 1, allLabels.length);
+    chart.data.labels = allLabels.slice(start, end);
+    chart.data.datasets.forEach(ds => {
+      ds.data     = ds._all.slice(start, end);
+      ds._details = ds._allDetails.slice(start, end);
+    });
+    chart.$rounds = allRounds.slice(start, end);
+    chart.update();
+    const first = curPage * curPageSize + 1;
+    const last  = Math.min((curPage + 1) * curPageSize, totalMatches);
+    pageLabel.textContent = first === last ? `${first}` : `${first}–${last}`;
+    prevBtn.disabled = curPage === 0;
+    nextBtn.disabled = curPage === totalPages - 1;
+  }
+
+  // Initial render: round-dividers use the full series; applyPage() below
+  // will overwrite this with a slice when paging is active.
+  chart.$rounds = allRounds.slice();
+  chart.update();
+
+  function setSize(key) {
+    // Preserve the rightmost match across resizes so the user keeps their place.
+    const prevLastMatch = Math.min((curPage + 1) * curPageSize, totalMatches);
+    curPageSize = key === "all" ? totalMatches : parseInt(key, 10);
+    totalPages  = Math.max(1, Math.ceil(totalMatches / curPageSize));
+    curPage = Math.max(0, Math.min(totalPages - 1,
+                                   Math.floor((prevLastMatch - 1) / curPageSize)));
+    applyPage(curPage);
+    sizeBtns.forEach(b => b.classList.toggle("active", b.dataset.size === key));
+  }
+
+  if (totalMatches > 10) {
+    controlsEl.hidden = false;
+    prevBtn.addEventListener("click", () => applyPage(curPage - 1));
+    nextBtn.addEventListener("click", () => applyPage(curPage + 1));
+    sizeBtns.forEach(b => b.addEventListener("click", () => setSize(b.dataset.size)));
+    applyPage(curPage);
+  }
+
+  // ── Legend: one checkbox per player; bulk show/hide buttons above.
   const legendEl = document.getElementById("legend");
-  const hidden = new Set();
+  const hidden   = new Set();
+
+  function setVisible(i, visible) {
+    if (visible) { hidden.delete(i); chart.show(i); }
+    else         { hidden.add(i);    chart.hide(i); }
+  }
+
   function rebuildLegend() {
     legendEl.innerHTML = "";
     datasets.forEach((ds, i) => {
-      const isMe = ds._uid === MY_UID;
-      const isDimmed = hidden.has(i);
-      const item = document.createElement("div");
-      item.className = `legend-item${isMe ? " is-me" : ""}${isDimmed ? " dimmed" : ""}`;
+      const isMe     = ds._uid === MY_UID;
+      const isShown  = !hidden.has(i);
+      const item = document.createElement("label");
+      item.className = `legend-item${isMe ? " is-me" : ""}${isShown ? "" : " dimmed"}`;
       item.innerHTML = `
+        <input type="checkbox" class="legend-check" ${isShown ? "checked" : ""}>
         <span class="legend-swatch" style="background:${ds.borderColor}"></span>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${ds.label}</span>
+        <span class="legend-name">${ds.label}</span>
         <span class="legend-score">$${Math.round(ds._final)}</span>
       `;
-      item.addEventListener("click", () => {
-        if (hidden.has(i)) { hidden.delete(i); chart.show(i); }
-        else { hidden.add(i); chart.hide(i); }
-        rebuildLegend();
+      const check = item.querySelector("input");
+      check.addEventListener("change", () => {
+        setVisible(i, check.checked);
+        item.classList.toggle("dimmed", !check.checked);
       });
       legendEl.appendChild(item);
     });
   }
   rebuildLegend();
+
+  document.getElementById("legend-show-all").addEventListener("click", () => {
+    datasets.forEach((_, i) => setVisible(i, true));
+    rebuildLegend();
+  });
+  document.getElementById("legend-hide-all").addEventListener("click", () => {
+    datasets.forEach((_, i) => setVisible(i, false));
+    rebuildLegend();
+  });
 })();
 </script>
 {% endblock %}

@@ -1785,7 +1785,31 @@ def get_pool_balance_per_match(pool_id, max_players=20):
     fix_id_to_col = {r["id"]: i + 1 for i, r in enumerate(fix_rows)}
     n_cols = len(fix_rows) + 1
 
-    fixtures_out = [{"id": None, "label": "Start", "date_label": "", "stage": ""}]
+    # Derive a per-fixture "round" label for the chart's round-divider lines.
+    # Group fixtures get MD1/MD2/MD3 (2 games per matchday, sorted by kick_off
+    # within each group). KO stages map to short labels.
+    _SHORT_ROUND = {
+        "Round of 32":    "R32",
+        "Round of 16":    "R16",
+        "Quarter-Finals": "QF",
+        "Semi-Finals":    "SF",
+        "Third Place":    "3rd",
+        "Final":          "Final",
+    }
+    _group_buckets = defaultdict(list)
+    round_by_fid = {}
+    for r in fix_rows:
+        stage = r["stage"] or ""
+        if stage.startswith("Group "):
+            _group_buckets[stage].append(r)
+        else:
+            round_by_fid[r["id"]] = _SHORT_ROUND.get(stage, stage)
+    for fxs in _group_buckets.values():
+        fxs.sort(key=lambda f: f["kick_off"] or "")
+        for i, fix in enumerate(fxs):
+            round_by_fid[fix["id"]] = f"MD{i // 2 + 1}"
+
+    fixtures_out = [{"id": None, "label": "Start", "date_label": "", "stage": "", "round": ""}]
     for r in fix_rows:
         ko = r["kick_off"] or ""
         try:
@@ -1801,6 +1825,7 @@ def get_pool_balance_per_match(pool_id, max_players=20):
             "label":      f"{ha} v {aa}",
             "date_label": date_label,
             "stage":      r["stage"] or "",
+            "round":      round_by_fid.get(r["id"], ""),
         })
 
     # Bucket per-user deltas. Fixture-id-matched transactions go into the
