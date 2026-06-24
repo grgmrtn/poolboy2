@@ -592,17 +592,39 @@ def pool_page(pool_id):
     # Move every completed fixture into a synthesised "Completed" stage so
     # users can hide/expand the finished games as one group. "Completed" goes
     # first (auto-collapsed) so the upcoming stages stay top-of-page. Within
-    # the bucket, sort by kick_off DESC (most recent finish first).
+    # the bucket, sort by kick_off DESC (most recent finish first). Each
+    # fixture also gets a short `round` label (MD1/R16/...) stamped on it
+    # so the Completed table can subgroup its rows by round.
+    _ROUND_SHORT = {
+        "Matchday 1": "MD1", "Matchday 2": "MD2", "Matchday 3": "MD3",
+        "Round of 32": "R32", "Round of 16": "R16",
+        "Quarter-Finals": "QF", "Semi-Finals": "SF",
+        "Third Place": "3rd", "Final": "Final",
+    }
+    # Tournament order — used to keep rounds contiguous in the Completed
+    # table even when kickoffs across rounds overlap. Lowest = latest round.
+    _ROUND_PRIORITY = {
+        "Final": 0, "3rd": 1, "SF": 2, "QF": 3,
+        "R16": 4, "R32": 5,
+        "MD3": 6, "MD2": 7, "MD1": 8,
+    }
     grouped_fixtures = {}
     completed_fixtures = []
     upcoming_by_stage = {}
     for stage_name, fixtures in grouped_fixtures_raw.items():
+        short = _ROUND_SHORT.get(stage_name, stage_name)
+        for f in fixtures:
+            f["round"] = short
         upcoming = [f for f in fixtures if not f.get("result")]
         completed_fixtures.extend(f for f in fixtures if f.get("result"))
         if upcoming:
             upcoming_by_stage[stage_name] = upcoming
     if completed_fixtures:
+        # Sort by round (tournament order, latest first), then by kick_off
+        # DESC within the round so each round subgroup stays contiguous.
+        # Two-pass works because Python's sort is stable.
         completed_fixtures.sort(key=lambda f: f.get("kick_off") or "", reverse=True)
+        completed_fixtures.sort(key=lambda f: _ROUND_PRIORITY.get(f.get("round") or "", 99))
         grouped_fixtures["Completed"] = completed_fixtures
     grouped_fixtures.update(upcoming_by_stage)
 

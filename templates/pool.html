@@ -297,6 +297,34 @@
   }
   .stage-heading.collapsed .caret { transform: rotate(-90deg); }
   .stage-heading.collapsed + .stage-section { display: none; }
+  /* Right-aligned cluster inside each stage heading: optional meta line +
+     the per-stage "Hide picks" toggle button. */
+  .stage-heading-right {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 0.6rem;
+  }
+  .stage-meta {
+    color: var(--text-dim); font-size: 0.7rem;
+    letter-spacing: 0.04em; text-transform: none;
+  }
+  .stage-hide-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.58rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0.28rem 0.55rem; border-radius: 4px;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .stage-hide-toggle:hover {
+    color: var(--text); border-color: var(--border-hi);
+  }
+  .stage-hide-toggle.is-on {
+    color: var(--accent); border-color: var(--accent);
+    background: rgba(200,255,87,0.08);
+  }
   /* Stage heading itself isn't a grid item — it lives outside .stage-section
      and renders full-width naturally. The wrapper below groups heading and
      grid so the layout works without span hacks. */
@@ -307,10 +335,11 @@
     gap: 0.65rem; margin-bottom: 1rem;
     padding: 0.45rem 0;
   }
-  /* "Hide Completed Picks" hides any fixture where the user has placed a pick,
-     regardless of whether the game has finished. Completed *games* are moved
-     server-side into a separate auto-collapsed "Completed" stage. */
-  body.hide-completed .fixture-row.has-my-pick { display: none !important; }
+  /* Per-stage "Hide picks" — each stage section now owns its own toggle
+     (in its heading), and the rule scopes the hide to that one section
+     instead of the whole page. Hides fixtures the viewer has already
+     picked so users can scan only what still needs attention. */
+  .stage-section.is-hiding-picks .fixture-row.has-my-pick { display: none !important; }
 
   /* On wider screens, render fixtures within a stage in two columns;
      iPhone falls back to single column with more breathing room. */
@@ -357,6 +386,26 @@
     border-top: 1px solid var(--border);
   }
   .ct-row:first-child { border-top: none; }
+  /* Per-round subheader inside the Completed table — full-width banner
+     that toggles every .ct-row[data-round="X"] underneath it. */
+  .ct-subheader {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    background: rgba(255,255,255,0.04);
+    border-top: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+    font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 700;
+    color: var(--text-muted);
+    transition: color 0.12s, background 0.12s;
+  }
+  .ct-subheader:hover { color: var(--text); }
+  .ct-subheader .caret {
+    display: inline-block; transition: transform 0.2s;
+    color: var(--text-dim); font-size: 0.7rem;
+  }
+  .ct-subheader.is-collapsed .caret { transform: rotate(-90deg); }
+  .ct-row.is-collapsed { display: none; }
   .ct-row.ct-head {
     background: rgba(255,255,255,0.025);
     font-size: 0.62rem;
@@ -387,8 +436,11 @@
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     min-width: 0;
   }
-  .ct-team-win { color: var(--text); }
-  .ct-team-win::after { content: ' ✓'; color: var(--accent); font-weight: 700; }
+  /* Winner highlight — replaces the old "team-name ✓" suffix. Lime+bold
+     on the winning team's name; for draws the centre score is highlighted
+     instead (see .ct-score.is-draw). */
+  .ct-team-win { color: var(--accent); font-weight: 800; }
+  .ct-score.is-draw { color: var(--accent); font-weight: 800; }
   .ct-flag {
     width: 16px; height: 11px; flex-shrink: 0;
     border-radius: 2px; object-fit: cover;
@@ -527,8 +579,8 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       min-width: 0; flex-shrink: 1;
     }
-    .ct-m-win  { color: var(--text); }
-    .ct-m-win::after { content: ' ✓'; color: var(--accent); }
+    .ct-m-win  { color: var(--accent); font-weight: 800; }
+    .ct-m-score.is-draw { color: var(--accent); font-weight: 800; }
     .ct-m-score {
       position: relative;            /* anchor for the draw-pickers tip */
       color: var(--text); font-weight: 700; flex-shrink: 0;
@@ -1676,11 +1728,8 @@
     Odds: dec
   </button>
   {% endif %}
-  <button class="stage-toggle" id="hide-completed-toggle"
-          onclick="toggleHideCompleted(this)"
-          title="Hide picks for fixtures already played">
-    Hide Completed Picks
-  </button>
+  {# Per-stage "Hide picks" toggle lives in each stage's heading below,
+     not in the global stage-nav. #}
 </nav>
 
 {# ── HAPPENING NOW banner (mobile only) ──────────────────────────────
@@ -1937,11 +1986,21 @@
                onclick="toggleStageHeading(this)">
             <span class="caret">▼</span>
             <span>{{ stage }}</span>
-            {% if is_completed_stage %}
-              <span style="margin-left:auto;color:var(--text-dim);font-size:0.7rem;letter-spacing:0.04em;text-transform:none">
-                {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }} · done
-              </span>
-            {% endif %}
+            <span class="stage-heading-right">
+              {% if is_completed_stage %}
+                <span class="stage-meta">
+                  {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }} · done
+                </span>
+              {% endif %}
+              {% if stage != 'Completed' %}
+                <button type="button" class="stage-hide-toggle"
+                        onclick="event.stopPropagation(); toggleStageHidePicks(this)"
+                        data-stage="{{ stage }}"
+                        title="Hide fixtures you've already picked in this round">
+                  Hide picks
+                </button>
+              {% endif %}
+            </span>
           </div>
 
           {# ── Synthesised "Completed" stage → compact recap table ────── #}
@@ -1961,7 +2020,22 @@
                 <span role="columnheader" class="ct-num">Paid</span>
                 <span role="columnheader" class="ct-num" title="% of field that picked the winning side">Pct</span>
               </div>
+              {# Group completed rows by round and insert a collapsible
+                 subheader at every round transition. The first fixture
+                 (sorted DESC by kick_off) is the most recent — keep that
+                 round expanded by default, collapse everything older. #}
+              {% set last_round = namespace(name='') %}
+              {% set current_round = (fixtures[0].round if fixtures else '') %}
               {% for f in fixtures %}
+                {% if f.round != last_round.name %}
+                  <div class="ct-subheader{% if f.round != current_round %} is-collapsed{% endif %}"
+                       onclick="toggleCompletedRound(this)"
+                       data-round="{{ f.round|e }}">
+                    <span class="caret">▼</span>
+                    <span>{{ f.round }}</span>
+                  </div>
+                  {% set last_round.name = f.round %}
+                {% endif %}
                 {% set ko_d   = f.kick_off_display or f.kick_off or '' %}
                 {% set ct_mo  = (ko_d[5:7]|int) if ko_d else 0 %}
                 {% set ct_dy  = (ko_d[8:10]|int) if ko_d else 0 %}
@@ -2000,7 +2074,8 @@
                 {% set ct_a_pickers = _all|selectattr('predicted_result','equalto','A')|list %}
                 {% set ct_d_pickers = _all|selectattr('predicted_result','equalto','D')|list %}
 
-                <div class="ct-row" role="row"
+                <div class="ct-row{% if f.round != current_round %} is-collapsed{% endif %}" role="row"
+                     data-round="{{ f.round|e }}"
                      data-home-flag="{{ f.home_flag_code or 'un' }}"
                      data-away-flag="{{ f.away_flag_code or 'un' }}">
                   <span role="cell" class="ct-date ct-desk">{{ ct_dy }}/{{ ct_mo }}</span>
@@ -2020,7 +2095,7 @@
                     </span>
                     {% endif %}
                   </span>
-                  <span role="cell" class="ct-score ct-desk{% if ct_d_pickers %} has-tip{% endif %}">
+                  <span role="cell" class="ct-score ct-desk{% if f.result == 'D' %} is-draw{% endif %}{% if ct_d_pickers %} has-tip{% endif %}">
                     {{ f.home_score }}–{{ f.away_score }}
                     {% if ct_d_pickers %}
                     <span class="ct-pickers-tip tip-d">
@@ -2048,7 +2123,7 @@
                       </span>
                       {% endif %}
                     </span>
-                    <span class="ct-m-score{% if ct_d_pickers %} has-tip{% endif %}">
+                    <span class="ct-m-score{% if f.result == 'D' %} is-draw{% endif %}{% if ct_d_pickers %} has-tip{% endif %}">
                       {{ f.home_score }}–{{ f.away_score }}                      {% if ct_d_pickers %}
                       <span class="ct-pickers-tip tip-d">
                         <strong>Draw · {{ ct_d_pickers|length }}</strong>
@@ -3698,29 +3773,60 @@
     } catch (e) {}
   })();
 
-  // ── Hide / show completed fixtures ────────────────────────────────────
-  function toggleHideCompleted(btn) {
-    const on = document.body.classList.toggle('hide-completed');
-    if (btn) {
-      btn.classList.toggle('active', on);
-      btn.textContent = on ? 'Show Completed Picks' : 'Hide Completed Picks';
-    }
-    try { localStorage.setItem('wc26_hide_completed', on ? '1' : '0'); } catch(e) {}
+  // ── Per-stage "Hide picks" toggle ─────────────────────────────────────
+  // Each stage section owns its own hide state; persisted per-stage in
+  // localStorage so the user's choice survives reloads.
+  const HIDE_PICKS_KEY = 'wc26_hide_picks_stages';
+  function _loadHidePicksState() {
+    try { return JSON.parse(localStorage.getItem(HIDE_PICKS_KEY) || '{}'); }
+    catch (e) { return {}; }
+  }
+  function _saveHidePicksState(obj) {
+    try { localStorage.setItem(HIDE_PICKS_KEY, JSON.stringify(obj)); } catch (e) {}
+  }
+  function toggleStageHidePicks(btn) {
+    if (!btn) return;
+    const stage = btn.dataset.stage;
+    const headingEl = btn.closest('.stage-heading');
+    const section = headingEl ? headingEl.nextElementSibling : null;
+    if (!section) return;
+    const on = section.classList.toggle('is-hiding-picks');
+    btn.classList.toggle('is-on', on);
+    btn.textContent = on ? 'Show picks' : 'Hide picks';
+    const state = _loadHidePicksState();
+    if (on) state[stage] = 1; else delete state[stage];
+    _saveHidePicksState(state);
   }
   function toggleStageHeading(el) {
     el.classList.toggle('collapsed');
   }
-  // Restore previous toggle state on page load
-  (function restoreHideCompleted() {
-    try {
-      if (localStorage.getItem('wc26_hide_completed') === '1') {
-        document.addEventListener('DOMContentLoaded', () => {
-          const t = document.getElementById('hide-completed-toggle');
-          if (t) toggleHideCompleted(t);
-        });
+  // Restore each stage's hide-picks state on load.
+  document.addEventListener('DOMContentLoaded', () => {
+    const state = _loadHidePicksState();
+    document.querySelectorAll('.stage-hide-toggle').forEach(btn => {
+      if (state[btn.dataset.stage]) {
+        const headingEl = btn.closest('.stage-heading');
+        const section = headingEl ? headingEl.nextElementSibling : null;
+        if (section) section.classList.add('is-hiding-picks');
+        btn.classList.add('is-on');
+        btn.textContent = 'Show picks';
       }
-    } catch(e) {}
-  })();
+    });
+  });
+
+  // ── Completed table: round subheader collapse ─────────────────────────
+  // Toggles every .ct-row[data-round=X] inside the same .completed-table.
+  function toggleCompletedRound(headerEl) {
+    if (!headerEl) return;
+    const round = headerEl.dataset.round;
+    if (!round) return;
+    const collapsed = headerEl.classList.toggle('is-collapsed');
+    const table = headerEl.closest('.completed-table');
+    if (!table) return;
+    table.querySelectorAll(`.ct-row[data-round="${CSS.escape(round)}"]`).forEach(row => {
+      row.classList.toggle('is-collapsed', collapsed);
+    });
+  }
 
   // ── Unified Spy modal (field + player list together) ──────────────────
   let _spyPool = null, _spyFix = null, _spyFieldBought = false;

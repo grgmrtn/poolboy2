@@ -581,8 +581,28 @@
 <script>
 (function () {
   const MY_UID   = {{ my_user_id      | tojson }};
+  const POOL_ID  = {{ pool.id         | tojson }};
   const fixtures = {{ timeline.fixtures | tojson }};
   const players  = {{ timeline.players  | tojson }};
+
+  // localStorage key for the per-pool, per-browser "which players are
+  // hidden in the chart" preference. Stores user IDs (not legend indices)
+  // so the choice survives roster changes between visits.
+  const HIDDEN_KEY = `wc26_chart_hidden_${POOL_ID}`;
+  function loadHiddenUids() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) { return new Set(); }
+  }
+  function saveHiddenUids(hiddenSet, datasets) {
+    const uids = [];
+    hiddenSet.forEach(i => {
+      const ds = datasets[i];
+      if (ds && ds._uid) uids.push(ds._uid);
+    });
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(uids)); } catch (e) {}
+  }
 
   if (!fixtures || fixtures.length <= 1 || !players.length) return;
 
@@ -603,10 +623,12 @@
   const allLabels = fixtures.map((_, i) => i === 0 ? "0" : String(i));
   const allRounds = fixtures.map(f => f && f.round ? f.round : "");
 
-  // Plugin: draw a faint grey vertical line + round label wherever the
-  // round changes between consecutive visible fixtures (MD1→MD2, group→R32,
-  // R32→R16, etc.). Lines are positioned at the new round's first match;
-  // the label sits just to the right of the line at the top of the plot.
+  // Plugin: draw faint grey vertical dividers wherever the round changes
+  // between consecutive visible fixtures (MD1→MD2, group→R32, R32→R16, …),
+  // and stamp each round's short label just to the right of its boundary
+  // line — the line itself marks the start of the new phase. The line
+  // against the y-axis (Start → first round) is suppressed so the left
+  // edge stays clean, but the label still renders.
   const roundDividers = {
     id: "roundDividers",
     afterDatasetsDraw(chart) {
@@ -629,10 +651,12 @@
         const prev = rounds[i - 1];
         if (!cur || cur === prev) continue;
         const x = xs.getPixelForValue(labels[i]);
-        c.beginPath();
-        c.moveTo(x, ys.top);
-        c.lineTo(x, ys.bottom);
-        c.stroke();
+        if (prev) {
+          c.beginPath();
+          c.moveTo(x, ys.top);
+          c.lineTo(x, ys.bottom);
+          c.stroke();
+        }
         c.fillText(cur, x + 3, ys.top + 2);
       }
       c.restore();
@@ -753,6 +777,22 @@
             maxRotation: 0,
             autoSkip: true,
             maxTicksLimit: 12,
+            // Two-line tick (match number + "HOME 1-0 AWAY") only at the
+            // 10-match page size — wider windows squash the second line
+            // into illegibility, so fall back to just the match number.
+            // 11 visible labels = baseline + 10 matches.
+            callback(value) {
+              const i = Number(value);
+              const f = fixtures[i];
+              if (!f || i === 0) return value;
+              const visible = (this.chart && this.chart.data.labels)
+                ? this.chart.data.labels.length : 0;
+              if (visible <= 11 && f.home_score != null && f.away_score != null) {
+                const parts = (f.label || "").split(" v ");
+                return [String(i), `${parts[0] || ""} ${f.home_score}-${f.away_score} ${parts[1] || ""}`];
+              }
+              return String(i);
+            },
           },
           grid: { color: "#1e1e28" },
         },
@@ -836,9 +876,21 @@
   const legendEl = document.getElementById("legend");
   const hidden   = new Set();
 
+  // Restore the user's previous per-pool show/hide choices from
+  // localStorage. Datasets are matched by user_id (not index) so a player
+  // joining/leaving the pool between visits doesn't shuffle the hides.
+  const _storedHiddenUids = loadHiddenUids();
+  datasets.forEach((ds, i) => {
+    if (ds._uid && _storedHiddenUids.has(ds._uid)) {
+      hidden.add(i);
+      chart.hide(i);
+    }
+  });
+
   function setVisible(i, visible) {
     if (visible) { hidden.delete(i); chart.show(i); }
     else         { hidden.add(i);    chart.hide(i); }
+    saveHiddenUids(hidden, datasets);
   }
 
   function rebuildLegend() {
