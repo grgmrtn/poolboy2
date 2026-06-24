@@ -710,15 +710,23 @@
       color: rgba(10,10,15,0.35);
       font-style: italic; font-weight: 500;
     }
-    /* Cap each picks-by-side column at ~5 visible rows + internal
-       scroll, freeing vertical space for the chat panel underneath. */
+    /* Cap each picks-by-side column at ~6 visible rows + an obvious
+       internal scroll, so the chat panel underneath has room while still
+       letting users reach every name. */
     .ln-bets-list {
-      max-height: 7.5rem; overflow-y: auto;
+      max-height: 8.5rem; overflow-y: auto;
       scrollbar-width: thin;
+      scrollbar-color: rgba(10,10,15,0.35) rgba(10,10,15,0.06);
     }
-    .ln-bets-list::-webkit-scrollbar { width: 4px; }
+    .ln-bets-list::-webkit-scrollbar { width: 6px; }
+    .ln-bets-list::-webkit-scrollbar-track {
+      background: rgba(10,10,15,0.04); border-radius: 3px;
+    }
     .ln-bets-list::-webkit-scrollbar-thumb {
-      background: rgba(10,10,15,0.25); border-radius: 2px;
+      background: rgba(10,10,15,0.32); border-radius: 3px;
+    }
+    .ln-bets-list::-webkit-scrollbar-thumb:hover {
+      background: rgba(10,10,15,0.52);
     }
 
     /* ── Collapsible BETS / CHAT sections ─────────────────── */
@@ -891,6 +899,7 @@
       display: flex; flex-direction: column; gap: 0.15rem;
     }
     .ln-bet {
+      flex: 0 0 auto;   /* keep each row at its natural height — never compress */
       font-size: 0.7rem; font-weight: 600;
       color: rgba(10,10,15,0.78);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2823,6 +2832,15 @@
   function selectLnTab(tabBtn, ev) {
     if (!tabBtn) return;
     if (ev) ev.stopPropagation();             // never bubble to bar's toggle
+    const b = document.getElementById('live-now-banner');
+    const wasExpanded = !!(b && b.classList.contains('is-expanded'));
+    // Tapping the already-active tab while expanded = collapse the banner.
+    // With two tabs the active tab covers most of the bar, so without this
+    // the only dismiss path is the tiny chevron.
+    if (wasExpanded && tabBtn.classList.contains('active')) {
+      if (b) b.classList.remove('is-expanded');
+      return;
+    }
     const fid = tabBtn.dataset.fixtureId;
     document.querySelectorAll('#ln-tabs .ln-tab').forEach(t => t.classList.remove('active'));
     tabBtn.classList.add('active');
@@ -2830,8 +2848,7 @@
       p.classList.toggle('active', p.dataset.fixtureId === fid);
     });
     // Collapsed → tab tap also opens. Open → tab tap just switches.
-    const b = document.getElementById('live-now-banner');
-    if (b && !b.classList.contains('is-expanded')) b.classList.add('is-expanded');
+    if (b && !wasExpanded) b.classList.add('is-expanded');
   }
   // Refresh banner data every 30s. Pauses when tab is hidden so we don't
   // burn battery on a background phone. Updates score numbers + minute +
@@ -3106,7 +3123,7 @@
         ${sender.bet ? `<span class="ln-chat-bet">${escHtmlChat(sender.bet)}</span>` : ''}
       </span>
       <span class="ln-chat-body" style="font-size: ${chatScale(score)}em">${body}</span>
-      ${isMe ? `<button type="button" class="ln-chat-del"
+      ${isMe || isAdmin ? `<button type="button" class="ln-chat-del"
                   onclick="event.stopPropagation(); deleteChat('${msg.id}', this)"
                   title="Delete" aria-label="Delete">${trashSvg}</button>` : ''}
     `;
@@ -3250,16 +3267,27 @@
     chatTimer = null;
   }
 
+  // Force-collapse every chat section under the sticky bar. Called on any
+  // bar interaction so the chat stays out of the way until the user
+  // explicitly re-opens it via its own header.
+  function collapseAllChatSections() {
+    document.querySelectorAll('#live-now-banner .ln-section--chat').forEach(s => {
+      s.classList.add('ln-section--collapsed');
+    });
+  }
+
   // When the banner is opened OR a tab switched, refresh + start polling.
   const _origToggleLiveNow = toggleLiveNow;
   toggleLiveNow = function () {
     _origToggleLiveNow();
+    collapseAllChatSections();
     setTimeout(() => { refreshActiveChat(); }, 0);
     startChatPolling();
   };
   const _origSelectLnTab = selectLnTab;
   selectLnTab = function (btn, ev) {
     _origSelectLnTab(btn, ev);
+    collapseAllChatSections();
     // The just-activated tab's chat is now visible to the user, so its
     // unread badge can clear immediately — don't wait for the next poll.
     if (btn && btn.dataset && btn.dataset.fixtureId) {

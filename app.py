@@ -959,19 +959,39 @@ def _chat_message_json(row):
 
 
 def _fixture_live_state(fixture_id):
-    """Return (is_live, live_minute). Banner allows posting during
-    IN_PLAY / PAUSED only."""
+    """Return (is_live, live_minute). Chat is considered live whenever the
+    live-now banner would show the fixture: ESPN-flagged IN_PLAY/PAUSED,
+    OR inside the pre-kickoff lock window (LOCK_MINUTES before kickoff)
+    through 4 h after kickoff. Mirrors `_build_live_now_data`'s gate so
+    users can chat in the build-up too."""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
     conn = db.get_db()
     row = conn.execute(
-        "SELECT live_status, live_minute FROM fixtures WHERE id=?",
+        "SELECT live_status, live_minute, kick_off FROM fixtures WHERE id=?",
         (fixture_id,)
     ).fetchone()
     conn.close()
     if not row:
         return False, None
     r = dict(row)
-    is_live = (r.get("live_status") or "") in ("IN_PLAY", "PAUSED")
-    return is_live, r.get("live_minute")
+    if (r.get("live_status") or "") in ("IN_PLAY", "PAUSED"):
+        return True, r.get("live_minute")
+    ko = r.get("kick_off") or ""
+    try:
+        ko_dt = _dt.fromisoformat(ko[:19].rstrip("Z"))
+        if ko_dt.tzinfo is None:
+            ko_dt = ko_dt.replace(tzinfo=_tz.utc)
+    except Exception:
+        return False, None
+    now = _dt.now(_tz.utc)
+    if (ko_dt - _td(minutes=LOCK_MINUTES)) <= now < ko_dt + _td(hours=4):
+        # Pre-kickoff: no minute. After kickoff with no ESPN flag yet:
+        # use the kickoff-derived estimate (matches live-now's fallback).
+        if now < ko_dt:
+            return True, None
+        delta_min = int((now - ko_dt).total_seconds() // 60)
+        return True, max(0, min(120, delta_min))
+    return False, None
 
 
 def _fixture_is_live(fixture_id):
@@ -1050,16 +1070,17 @@ def vote_chat_message(pool_id, fixture_id, message_id):
 
 @app.route("/pool/<pool_id>/chat/<message_id>", methods=["DELETE"])
 @login_required
-def delete_own_chat_message(pool_id, message_id):
-    """Sender-initiated delete. Only the original author can remove their
-    own message; admin moderation goes through /admin/chat/<id>."""
+def delete_chat_message(pool_id, message_id):
+    """Inline delete. The original author can always remove their own
+    message; admins can remove any message in any pool they can see."""
     user = current_user()
-    if not db.is_pool_member(user["id"], pool_id):
+    is_admin = bool(user.get("is_admin"))
+    if not is_admin and not db.is_pool_member(user["id"], pool_id):
         return jsonify({"error": "not a member"}), 403
     msg = db.get_chat_message(message_id)
     if not msg:
         return jsonify({"error": "not found"}), 404
-    if msg["user_id"] != user["id"]:
+    if msg["user_id"] != user["id"] and not is_admin:
         return jsonify({"error": "forbidden"}), 403
     db.soft_delete_chat_message(message_id)
     return jsonify({"ok": True})
