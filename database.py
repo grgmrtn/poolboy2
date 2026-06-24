@@ -242,6 +242,40 @@ def init_db():
         )
     """)
 
+    # Live-match chat — one row per posted message, soft-deleted on
+    # fixture FINISH so history is preserved but not surfaced again.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id          TEXT PRIMARY KEY,
+            pool_id     TEXT NOT NULL REFERENCES pools(id),
+            fixture_id  TEXT NOT NULL REFERENCES fixtures(id),
+            user_id     TEXT NOT NULL REFERENCES users(id),
+            body        TEXT NOT NULL,
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            deleted_at  TEXT
+        )
+    """)
+    c.execute("""
+        CREATE INDEX IF NOT EXISTS idx_chat_pool_fix_created
+            ON chat_messages(pool_id, fixture_id, created_at)
+    """)
+    # Per-message thumbs up/down votes. One row per (message, voter); the
+    # only effect is to scale the message font size in the UI. Counts are
+    # never shown to users.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_votes (
+            message_id  TEXT NOT NULL,
+            user_id     TEXT NOT NULL,
+            vote        INTEGER NOT NULL,
+            updated_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (message_id, user_id)
+        )
+    """)
+    c.execute("""
+        CREATE INDEX IF NOT EXISTS idx_chat_votes_msg
+            ON chat_votes(message_id)
+    """)
+
     # Migrations: add columns to existing tables that pre-date this schema version.
     if _USE_POSTGRES:
         for sql in [
@@ -271,6 +305,8 @@ def init_db():
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_updated_at TEXT",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS live_minute INTEGER",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS city TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_banned INTEGER DEFAULT 0",
+            "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS posted_minute INTEGER",
         ]:
             c.execute(sql)
     else:
@@ -301,6 +337,8 @@ def init_db():
             ("fixtures",       "live_updated_at TEXT"),
             ("fixtures",       "live_minute INTEGER"),
             ("fixtures",       "city TEXT"),
+            ("users",          "chat_banned INTEGER DEFAULT 0"),
+            ("chat_messages",  "posted_minute INTEGER"),
         ]
         for table, col_def in migrations:
             try:
@@ -1476,6 +1514,10 @@ def process_fixture_result(fixture_id):
 
     conn.commit()
     conn.close()
+    # Soft-delete all chat messages for this fixture so future loads of
+    # the live banner (or admin moderation views) skip them. Preserves
+    # history in the DB for auditing.
+    soft_delete_fixture_chat(fixture_id)
     return processed
 
 
@@ -2106,3 +2148,183 @@ def calculate_scores_for_fixture(fixture_id):
     conn.commit()
     conn.close()
     return scored
+
+
+# ── Live-match chat ────────────────────────────────────────────────────────
+
+def add_chat_message(message_id, user_id, pool_id, fixture_id, body,
+                     posted_minute=None):
+    """Insert one chat message. Returns the inserted row (joined with the
+    sender's display name + team_name) ready for JSON serialisation.
+    posted_minute is the live game minute at the moment the message was
+    posted — stamped so the UI can show "23'" rather than relative wall
+    time that goes stale instantly."""
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO chat_messages (id, pool_id, fixture_id, user_id, body, posted_minute) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (message_id, pool_id, fixture_id, user_id, body, posted_minute)
+    )
+    conn.commit()
+    row = conn.execute("""
+        SELECT cm.id, cm.user_id, cm.pool_id, cm.fixture_id,
+               cm.body, cm.created_at, cm.posted_minute,
+               u.display_name, u.team_name, u.email,
+               p.predicted_result, p.bet_amount,
+               0 AS score, 0 AS my_vote
+        FROM chat_messages cm
+        JOIN users u ON u.id = cm.user_id
+        LEFT JOIN picks p ON p.user_id = cm.user_id
+                          AND p.pool_id = cm.pool_id
+                          AND p.fixture_id = cm.fixture_id
+        WHERE cm.id = ?
+    """, (message_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_chat_messages_since(pool_id, fixture_id, since_iso=None, limit=100,
+                            viewer_id=None):
+    """Return chat messages for a (pool, fixture) created after since_iso
+    (or all if None). Excludes soft-deleted rows. Each row carries
+    `score` (net up-vs-down sum, never shown to users — purely drives
+    sizing) and `my_vote` (-1/0/+1) for the viewer."""
+    conn = get_db()
+    base = """
+        SELECT cm.id, cm.user_id, cm.body, cm.created_at, cm.posted_minute,
+               u.display_name, u.team_name, u.email,
+               p.predicted_result, p.bet_amount,
+               COALESCE((SELECT SUM(vote) FROM chat_votes WHERE message_id=cm.id), 0) AS score,
+               COALESCE((SELECT vote FROM chat_votes WHERE message_id=cm.id AND user_id=?), 0) AS my_vote
+        FROM chat_messages cm
+        JOIN users u ON u.id = cm.user_id
+        LEFT JOIN picks p ON p.user_id = cm.user_id
+                          AND p.pool_id = cm.pool_id
+                          AND p.fixture_id = cm.fixture_id
+        WHERE cm.pool_id=? AND cm.fixture_id=?
+          AND cm.deleted_at IS NULL
+    """
+    args = [viewer_id or "", pool_id, fixture_id]
+    if since_iso:
+        base += " AND cm.created_at > ?"; args.append(since_iso)
+    base += " ORDER BY cm.created_at ASC LIMIT ?"
+    args.append(limit)
+    rows = conn.execute(base, tuple(args)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_chat_vote_states(pool_id, fixture_id, viewer_id, limit=200):
+    """Return a {message_id: {score, my_vote}} map for the most recent N
+    non-deleted messages in this fixture. The chat poller calls this each
+    tick so size + button state on *existing* rendered messages stays in
+    sync when other users vote."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT cm.id AS id,
+               COALESCE((SELECT SUM(vote) FROM chat_votes WHERE message_id=cm.id), 0) AS score,
+               COALESCE((SELECT vote FROM chat_votes WHERE message_id=cm.id AND user_id=?), 0) AS my_vote
+        FROM chat_messages cm
+        WHERE cm.pool_id=? AND cm.fixture_id=? AND cm.deleted_at IS NULL
+        ORDER BY cm.created_at DESC
+        LIMIT ?
+    """, (viewer_id or "", pool_id, fixture_id, limit)).fetchall()
+    conn.close()
+    return {r["id"]: {"score": int(r["score"]), "my_vote": int(r["my_vote"])} for r in rows}
+
+
+def get_chat_message(message_id):
+    """Tiny lookup — used by the vote endpoint to refuse self-votes."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id, user_id FROM chat_messages WHERE id=? AND deleted_at IS NULL",
+        (message_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def cast_chat_vote(message_id, user_id, vote):
+    """vote is +1, -1, or 0.
+    - 0 (or repeat of the existing vote) → delete the user's row.
+    - ±1 with no prior row → INSERT.
+    - ±1 flipping a prior row → UPDATE.
+    Returns {my_vote, score}."""
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT vote FROM chat_votes WHERE message_id=? AND user_id=?",
+        (message_id, user_id)
+    ).fetchone()
+    if vote == 0 or (existing and int(existing["vote"]) == int(vote)):
+        conn.execute("DELETE FROM chat_votes WHERE message_id=? AND user_id=?",
+                     (message_id, user_id))
+        my_vote = 0
+    elif existing:
+        conn.execute(
+            "UPDATE chat_votes SET vote=?, updated_at=CURRENT_TIMESTAMP "
+            "WHERE message_id=? AND user_id=?",
+            (vote, message_id, user_id)
+        )
+        my_vote = vote
+    else:
+        conn.execute(
+            "INSERT INTO chat_votes(message_id, user_id, vote) VALUES(?, ?, ?)",
+            (message_id, user_id, vote)
+        )
+        my_vote = vote
+    row = conn.execute(
+        "SELECT COALESCE(SUM(vote), 0) AS s FROM chat_votes WHERE message_id=?",
+        (message_id,)
+    ).fetchone()
+    conn.commit()
+    conn.close()
+    return {"my_vote": int(my_vote), "score": int(dict(row)["s"])}
+
+
+def soft_delete_chat_message(message_id):
+    """Admin moderation — mark one message deleted. Already-deleted
+    rows are no-ops."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE chat_messages SET deleted_at = CURRENT_TIMESTAMP "
+        "WHERE id=? AND deleted_at IS NULL",
+        (message_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def soft_delete_fixture_chat(fixture_id):
+    """Called from process_fixture_result when a fixture FINISHES.
+    Hides all that fixture's chat from future GETs without erasing
+    history."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE chat_messages SET deleted_at = CURRENT_TIMESTAMP "
+        "WHERE fixture_id=? AND deleted_at IS NULL",
+        (fixture_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_user_chat_banned(user_id, banned):
+    """Admin-only chat ban toggle. Banned users can still read but POST
+    is rejected at the route layer."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET chat_banned=? WHERE id=?",
+        (1 if banned else 0, user_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_user_chat_banned(user_id):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COALESCE(chat_banned, 0) AS b FROM users WHERE id=?",
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    return bool(row and row["b"])

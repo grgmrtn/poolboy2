@@ -932,6 +932,156 @@ def live_now_json(pool_id):
     return jsonify({"live": live, "my_email": user["email"]})
 
 
+# ── Live-match chat ─────────────────────────────────────────────────────
+
+CHAT_MAX_LEN = 280
+
+
+def _chat_message_json(row):
+    """Shape a chat row for the wire. `score` is a number used to compute
+    font-size only — never rendered as a count. `my_vote` is the viewer's
+    own thumb state (-1/0/+1)."""
+    r = dict(row)
+    return {
+        "id":           r.get("id"),
+        "user_id":      r.get("user_id"),
+        "display_name": r.get("display_name"),
+        "team_name":    r.get("team_name"),
+        "email":        r.get("email"),
+        "body":         r.get("body"),
+        "created_at":   r.get("created_at"),
+        "minute":       r.get("posted_minute"),
+        "pick":         r.get("predicted_result"),
+        "bet_amount":   r.get("bet_amount"),
+        "score":        int(r.get("score") or 0),
+        "my_vote":      int(r.get("my_vote") or 0),
+    }
+
+
+def _fixture_live_state(fixture_id):
+    """Return (is_live, live_minute). Banner allows posting during
+    IN_PLAY / PAUSED only."""
+    conn = db.get_db()
+    row = conn.execute(
+        "SELECT live_status, live_minute FROM fixtures WHERE id=?",
+        (fixture_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return False, None
+    r = dict(row)
+    is_live = (r.get("live_status") or "") in ("IN_PLAY", "PAUSED")
+    return is_live, r.get("live_minute")
+
+
+def _fixture_is_live(fixture_id):
+    return _fixture_live_state(fixture_id)[0]
+
+
+@app.route("/pool/<pool_id>/chat/<fixture_id>", methods=["POST"])
+@login_required
+def post_chat_message(pool_id, fixture_id):
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"error": "not a member"}), 403
+    if db.is_user_chat_banned(user["id"]):
+        return jsonify({"error": "chat banned"}), 403
+    is_live, live_min = _fixture_live_state(fixture_id)
+    if not is_live:
+        return jsonify({"error": "match not live"}), 403
+
+    data = request.get_json(silent=True) or {}
+    body = (data.get("message") or "").strip()
+    if not body:
+        return jsonify({"error": "empty message"}), 400
+    if len(body) > CHAT_MAX_LEN:
+        return jsonify({"error": f"max {CHAT_MAX_LEN} chars"}), 400
+
+    msg_id = str(uuid.uuid4())
+    row = db.add_chat_message(msg_id, user["id"], pool_id, fixture_id, body,
+                              posted_minute=live_min)
+    return jsonify({"message": _chat_message_json(row)}), 201
+
+
+@app.route("/pool/<pool_id>/chat/<fixture_id>")
+@login_required
+def get_chat_messages(pool_id, fixture_id):
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"error": "not a member"}), 403
+    since = request.args.get("since") or None
+    rows = db.get_chat_messages_since(pool_id, fixture_id, since_iso=since,
+                                      limit=100, viewer_id=user["id"])
+    # Always return the current vote state for the last N messages so the
+    # client can keep already-rendered messages' size + button state in
+    # sync when other users vote between polls.
+    votes = db.get_chat_vote_states(pool_id, fixture_id, user["id"], limit=200)
+    return jsonify({
+        "messages":     [_chat_message_json(r) for r in rows],
+        "votes":        votes,
+        "my_email":     user["email"],
+        "fixture_live": _fixture_is_live(fixture_id),
+    })
+
+
+@app.route("/pool/<pool_id>/chat/<fixture_id>/vote/<message_id>", methods=["POST"])
+@login_required
+def vote_chat_message(pool_id, fixture_id, message_id):
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"error": "not a member"}), 403
+    if db.is_user_chat_banned(user["id"]):
+        return jsonify({"error": "chat banned"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        vote = int(data.get("vote", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "bad vote"}), 400
+    if vote not in (-1, 0, 1):
+        return jsonify({"error": "bad vote"}), 400
+    msg = db.get_chat_message(message_id)
+    if not msg:
+        return jsonify({"error": "no such message"}), 404
+    if msg["user_id"] == user["id"]:
+        return jsonify({"error": "cannot vote on own message"}), 403
+    result = db.cast_chat_vote(message_id, user["id"], vote)
+    return jsonify(result)
+
+
+@app.route("/pool/<pool_id>/chat/<message_id>", methods=["DELETE"])
+@login_required
+def delete_own_chat_message(pool_id, message_id):
+    """Sender-initiated delete. Only the original author can remove their
+    own message; admin moderation goes through /admin/chat/<id>."""
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        return jsonify({"error": "not a member"}), 403
+    msg = db.get_chat_message(message_id)
+    if not msg:
+        return jsonify({"error": "not found"}), 404
+    if msg["user_id"] != user["id"]:
+        return jsonify({"error": "forbidden"}), 403
+    db.soft_delete_chat_message(message_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/admin/chat/<message_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_chat(message_id):
+    db.soft_delete_chat_message(message_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/admin/user/<user_id>/chat-ban", methods=["POST"])
+@admin_required
+def admin_toggle_chat_ban(user_id):
+    """Toggle chat ban. Body: {banned: true|false}."""
+    data = request.get_json(silent=True) or {}
+    banned = bool(data.get("banned"))
+    db.set_user_chat_banned(user_id, banned)
+    return jsonify({"ok": True, "banned": banned})
+
+
 @app.route("/pool/<pool_id>/group/<letter>")
 @login_required
 def group_page(pool_id, letter):

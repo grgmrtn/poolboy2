@@ -592,6 +592,14 @@
       font-family: var(--mono); font-size: 0.74rem; font-weight: 700;
       cursor: pointer;
       border-bottom: 2px solid transparent;
+      position: relative;
+    }
+    .ln-tab.has-unread::after {
+      content: '';
+      position: absolute; top: 0.45rem; right: 0.35rem;
+      width: 0.45rem; height: 0.45rem; border-radius: 50%;
+      background: #ff3b30;
+      box-shadow: 0 0 0 1.5px var(--accent);
     }
     .ln-tab + .ln-tab { border-left: 1px solid rgba(0,0,0,0.12); }
     .ln-tab.active { border-bottom-color: #0a0a0f; }
@@ -701,6 +709,168 @@
     .ln-bet-empty {
       color: rgba(10,10,15,0.35);
       font-style: italic; font-weight: 500;
+    }
+    /* Cap each picks-by-side column at ~5 visible rows + internal
+       scroll, freeing vertical space for the chat panel underneath. */
+    .ln-bets-list {
+      max-height: 7.5rem; overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .ln-bets-list::-webkit-scrollbar { width: 4px; }
+    .ln-bets-list::-webkit-scrollbar-thumb {
+      background: rgba(10,10,15,0.25); border-radius: 2px;
+    }
+
+    /* ── Collapsible BETS / CHAT sections ─────────────────── */
+    .ln-section {
+      margin-top: 0.9rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(0,0,0,0.14);
+    }
+    .ln-section-head {
+      display: flex; align-items: center; gap: 0.4rem;
+      width: 100%; padding: 0;
+      background: transparent; border: 0; cursor: pointer;
+      color: #0a0a0f; font-family: var(--mono);
+      margin-bottom: 0.5rem;
+    }
+    .ln-section-caret {
+      display: inline-block;
+      transition: transform 0.15s ease;
+      font-size: 0.7rem; line-height: 1;
+      width: 0.7rem;
+    }
+    .ln-section--collapsed .ln-section-caret { transform: rotate(-90deg); }
+    .ln-section-title {
+      font-size: 0.66rem; letter-spacing: 0.14em; font-weight: 800;
+    }
+    .ln-section--collapsed .ln-section-body { display: none; }
+    /* BETS section: its body wraps the existing .ln-bets grid, so neutralise
+       the legacy top-border / margin we baked into .ln-bets. */
+    .ln-section--bets .ln-bets {
+      margin-top: 0; padding-top: 0; border-top: 0;
+    }
+    .ln-chat-count {
+      font-size: 0.58rem; color: rgba(10,10,15,0.55); font-weight: 600;
+      margin-left: auto;
+    }
+    .ln-chat-list {
+      background: rgba(10,10,15,0.06);
+      border: 1px solid rgba(0,0,0,0.10);
+      border-radius: 6px;
+      height: 160px; overflow-y: auto;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.74rem; line-height: 1.45;
+      display: flex; flex-direction: column; gap: 0.45rem;
+    }
+    .ln-chat-list::-webkit-scrollbar { width: 5px; }
+    .ln-chat-list::-webkit-scrollbar-thumb {
+      background: rgba(10,10,15,0.25); border-radius: 2px;
+    }
+    .ln-chat-loading,
+    .ln-chat-empty {
+      color: rgba(10,10,15,0.45); font-style: italic; font-size: 0.72rem;
+    }
+    /* Inline row layout: [votes] [name] [bet] [body...] [delete]. Saves
+       vertical space — each message is one wrappable line. */
+    .ln-chat-msg {
+      display: flex; align-items: baseline; gap: 0.4rem;
+      flex-wrap: nowrap;
+      font-size: 0.74rem; line-height: 1.35;
+    }
+    /* Thin-outline chip wrapping the votes + identity (time, name, bet)
+       so the row-leader reads as separate chrome from the message body. */
+    .ln-chat-msg .ln-chat-leader {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.18rem 0.4rem;
+      border: 1px solid rgba(10,10,15,0.18);
+      border-radius: 4px;
+    }
+    .ln-chat-msg .ln-chat-votes {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; gap: 0.18rem;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.6rem; color: rgba(10,10,15,0.45);
+    }
+    .ln-chat-msg .ln-when-min { font-variant-numeric: tabular-nums; }
+    .ln-chat-msg .ln-vote {
+      background: transparent; border: 0; padding: 0 0.12rem;
+      color: rgba(10,10,15,0.45);
+      font-family: var(--mono); font-size: 0.7rem;
+      line-height: 1; cursor: pointer;
+      transition: color 0.12s ease, transform 0.12s ease;
+    }
+    .ln-chat-msg .ln-vote:hover { color: rgba(10,10,15,0.85); }
+    .ln-chat-msg .ln-vote.is-on { color: #0a0a0f; font-weight: 800; transform: scale(1.15); }
+    .ln-chat-msg .ln-vote-up.is-on   { color: #0a8a3a; }
+    .ln-chat-msg .ln-vote-down.is-on { color: var(--red); }
+    /* Own messages: votes visible but inert + dimmed so the row reads with
+       the same leader column as everyone else's. */
+    .ln-chat-msg .ln-chat-votes.is-self .ln-vote {
+      opacity: 0.35; cursor: default; pointer-events: none;
+    }
+    .ln-chat-msg .ln-chat-name {
+      flex: 0 0 auto;
+      font-weight: 800; color: #0a0a0f;
+    }
+    .ln-chat-msg .ln-chat-bet {
+      flex: 0 0 auto;
+      font-weight: 800; color: rgba(10,10,15,0.45);
+      font-size: 0.62rem; letter-spacing: 0.02em;
+    }
+    .ln-chat-msg .ln-chat-body {
+      flex: 1 1 auto; min-width: 0;
+      color: #0a0a0f; font-weight: 400;
+      word-wrap: break-word; overflow-wrap: anywhere;
+    }
+    .ln-chat-mention {
+      background: rgba(10,10,15,0.10);
+      padding: 0 0.18rem; border-radius: 3px;
+      font-weight: 700;
+    }
+    .ln-chat-mention.is-you { background: #0a0a0f; color: var(--accent); }
+    /* Trash icon, only rendered on the sender's own messages. */
+    .ln-chat-msg .ln-chat-del {
+      flex: 0 0 auto; margin-left: auto;
+      background: transparent; border: 0;
+      padding: 0 0.1rem; line-height: 0;
+      color: rgba(10,10,15,0.4); cursor: pointer;
+      transition: color 0.12s ease;
+    }
+    .ln-chat-msg .ln-chat-del:hover { color: var(--red); }
+    .ln-chat-msg .ln-chat-del svg { display: block; }
+
+    .ln-chat-form {
+      display: flex; gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .ln-chat-input {
+      flex: 1; min-width: 0;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid rgba(0,0,0,0.18);
+      border-radius: 5px;
+      background: #fff;
+      font-family: var(--mono); font-size: 0.78rem;
+      color: #0a0a0f;
+    }
+    .ln-chat-input:focus { outline: none; border-color: #0a0a0f; }
+    .ln-chat-send {
+      flex-shrink: 0;
+      background: #0a0a0f; color: var(--accent);
+      border: 0; border-radius: 5px;
+      padding: 0 0.95rem;
+      font-family: var(--mono); font-size: 0.7rem; font-weight: 800;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      cursor: pointer;
+    }
+    .ln-chat-send:disabled { opacity: 0.55; cursor: not-allowed; }
+    .ln-chat-banned, .ln-chat-locked {
+      padding: 0.5rem 0.6rem;
+      font-size: 0.72rem; font-style: italic;
+      color: rgba(10,10,15,0.55);
+      background: rgba(10,10,15,0.08); border-radius: 5px;
+      margin-top: 0.5rem;
     }
     .ln-bets-col { min-width: 0; }
     .ln-bets-head {
@@ -1541,7 +1711,10 @@
       {% set home_abbr = ABBR.get(lf.home_team) or (lf.home_team or '?')[:3].upper() %}
       {% set away_abbr = ABBR.get(lf.away_team) or (lf.away_team or '?')[:3].upper() %}
       <div class="ln-panel{% if loop.first %} active{% endif %}"
-           data-fixture-id="{{ lf.id }}">
+           data-fixture-id="{{ lf.id }}"
+           data-home-abbr="{{ home_abbr }}"
+           data-away-abbr="{{ away_abbr }}"
+           data-is-ko="{{ '1' if lf.is_ko else '0' }}">
 
         <div class="ln-meta">
           {% if lf.stage and lf.stage.startswith('Group ') %}
@@ -1583,6 +1756,13 @@
            empty (existing KO bet UI doesn't expose D). KO fixtures show
            the bet amount; group fixtures show just the name. Current
            user appears as bold "You". #}
+        <div class="ln-section ln-section--bets" data-fixture-id="{{ lf.id }}">
+          <button type="button" class="ln-section-head"
+                  onclick="event.stopPropagation(); toggleLnSection(this)">
+            <span class="ln-section-caret">▾</span>
+            <span class="ln-section-title">BETS</span>
+          </button>
+          <div class="ln-section-body">
         <div class="ln-bets" data-fixture-id="{{ lf.id }}">
           {% for side, label in [('H', home_abbr), ('D', 'Draw'), ('A', away_abbr)] %}
             <div class="ln-bets-col ln-bets-{{ side|lower }}">
@@ -1610,6 +1790,33 @@
               </ul>
             </div>
           {% endfor %}
+        </div>
+          </div>{# /ln-section-body BETS #}
+        </div>{# /ln-section--bets #}
+
+        <!-- ── Live chat (clears on FINISHED) ──────────────────────── -->
+        <div class="ln-section ln-section--chat ln-chat"
+             data-fixture-id="{{ lf.id }}" data-pool-id="{{ pool.id }}">
+          <button type="button" class="ln-section-head"
+                  onclick="event.stopPropagation(); toggleLnSection(this)">
+            <span class="ln-section-caret">▾</span>
+            <span class="ln-section-title">CHAT</span>
+            <span class="ln-chat-count" data-role="count"></span>
+          </button>
+          <div class="ln-section-body">
+            <div class="ln-chat-list" data-role="list">
+              <div class="ln-chat-loading">Loading…</div>
+            </div>
+            <form class="ln-chat-form"
+                  onsubmit="event.preventDefault(); sendChat(this)"
+                  onclick="event.stopPropagation()">
+              <input type="text" class="ln-chat-input" name="message"
+                     maxlength="280" placeholder="Say something…"
+                     autocomplete="off" required
+                     onclick="event.stopPropagation()">
+              <button type="submit" class="ln-chat-send">Send</button>
+            </form>
+          </div>
         </div>
 
       </div>
@@ -2542,6 +2749,7 @@
   const WALK_KEY = `wc26_walk_v2_${POOL_ID}`;
   const INTRO_KEY = `wc26_pool_intro_dismissed_${POOL_ID}`;
   const A2HS_KEY  = `wc26_a2hs_dismissed`;
+  const IS_ADMIN  = {{ current_user.is_admin | tojson }};
 
   // ── Pool-intro banner: dismiss → swap for compact "How it works" pill ──
   function dismissPoolIntro() {
@@ -2683,9 +2891,383 @@
     liveNowTimer = null;
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopLiveNowPolling();
-    else { refreshLiveNow(); startLiveNowPolling(); }
+    if (document.hidden) { stopLiveNowPolling(); stopChatPolling(); }
+    else { refreshLiveNow(); startLiveNowPolling(); refreshActiveChat(); startChatPolling(); }
   });
+
+  // ── Live-match chat ────────────────────────────────────────────────
+  // Per-fixture chat state: { lastSeenISO, seenIds (Set), poolId, fixtureId }
+  const CHAT_STATE = new Map();    // fixtureId → state
+  let chatTimer = null;
+
+  function pollableChatPanels() {
+    // Poll chat for every fixture panel under an expanded banner — even
+    // inactive tabs — so the per-tab unread dot can light up before the
+    // user switches to that tab.
+    const banner = document.getElementById('live-now-banner');
+    if (!banner || !banner.classList.contains('is-expanded')) return [];
+    return [...banner.querySelectorAll('.ln-panel .ln-chat')];
+  }
+
+  // Show a red dot on a tab when that fixture has unread chat messages.
+  function setTabUnreadDot(fixtureId, unread) {
+    const tab = document.querySelector(
+      `#live-now-banner .ln-tab[data-fixture-id="${fixtureId}"]`);
+    if (!tab) return;
+    tab.classList.toggle('has-unread', !!unread);
+  }
+
+  // True when the user is currently looking at this fixture's chat
+  // (panel is active AND CHAT section is not collapsed).
+  function chatIsVisible(chatPanel) {
+    const lnPanel = chatPanel.closest('.ln-panel');
+    if (!lnPanel || !lnPanel.classList.contains('active')) return false;
+    return !chatPanel.classList.contains('ln-section--collapsed');
+  }
+
+  function clearUnreadForFixture(fixtureId) {
+    const st = CHAT_STATE.get(fixtureId);
+    if (st) st.unread = 0;
+    setTabUnreadDot(fixtureId, false);
+  }
+
+  // Collapse/expand a BETS or CHAT section. Clears unread when the user
+  // expands a CHAT section.
+  window.toggleLnSection = function (btn) {
+    const sec = btn.closest('.ln-section');
+    if (!sec) return;
+    sec.classList.toggle('ln-section--collapsed');
+    if (sec.classList.contains('ln-section--chat')
+        && !sec.classList.contains('ln-section--collapsed')) {
+      const fid = sec.dataset.fixtureId;
+      if (fid) clearUnreadForFixture(fid);
+    }
+  };
+
+  function escHtmlChat(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // @mention highlight — purely cosmetic. Bold + black-on-lime if it
+  // matches your own first name.
+  function highlightMentions(escaped, myFirstName) {
+    return escaped.replace(/(^|\W)@(\w+)/g, (full, lead, name) => {
+      const youCls = (myFirstName && name.toLowerCase() === myFirstName.toLowerCase())
+        ? ' is-you' : '';
+      return `${lead}<span class="ln-chat-mention${youCls}">@${escHtmlChat(name)}</span>`;
+    });
+  }
+
+  function formatChatSenderId(msg, panelEl) {
+    // Returns {name, bet} so the caller can style them separately.
+    // name = first name only; bet = "$25 on POL" (KO) or "POL" (group), '' if none.
+    const first = (msg.display_name || '').split(' ')[0] || '?';
+    if (!msg.pick) return { name: first, bet: '' };
+    const ha   = panelEl ? (panelEl.dataset.homeAbbr || 'H') : 'H';
+    const aa   = panelEl ? (panelEl.dataset.awayAbbr || 'A') : 'A';
+    const isKo = panelEl ? panelEl.dataset.isKo === '1' : false;
+    const side = msg.pick === 'H' ? ha
+               : msg.pick === 'A' ? aa
+               : 'Draw';
+    const bet  = (isKo && msg.bet_amount)
+      ? `$${Math.round(msg.bet_amount)} on ${side}`
+      : side;
+    return { name: first, bet };
+  }
+
+  function formatGameMinute(minute) {
+    if (minute == null) return '';
+    if (minute <= 0)   return "0'";
+    if (minute >= 90)  return "90'+";
+    return `${minute}'`;
+  }
+
+  // 24h local-time stamp (e.g. "14:45") for the chat row leader. SQLite
+  // stores created_at as UTC without a 'Z' suffix; tag it so the browser
+  // parses correctly before rendering in the viewer's local TZ.
+  function formatClockTime(iso) {
+    if (!iso) return '';
+    let d;
+    try { d = new Date(iso.endsWith('Z') ? iso : iso + 'Z'); } catch (e) { return ''; }
+    if (isNaN(d.getTime())) return '';
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  // Net score → font-size multiplier. Each net thumb shifts size 10%,
+  // clamped so a flame-wave can't blow out the panel or shrink to nothing.
+  function chatScale(score) {
+    const s = Number(score) || 0;
+    return Math.max(0.5, Math.min(2.0, 1 + 0.1 * s));
+  }
+
+  // Update an already-rendered message's size + button state from a fresh
+  // vote payload. Called both by the poller (for everyone else's votes)
+  // and the vote click handler (for the optimistic local update).
+  function applyVoteStateToDom(messageId, score, myVote) {
+    const el = document.querySelector(
+      `.ln-chat-msg[data-id="${CSS.escape(messageId)}"]`);
+    if (!el) return;
+    const bodyEl = el.querySelector('.ln-chat-body');
+    if (bodyEl) bodyEl.style.fontSize = `${chatScale(score)}em`;
+    el.dataset.score = String(score);
+    el.dataset.myVote = String(myVote);
+    const up   = el.querySelector('.ln-vote-up');
+    const down = el.querySelector('.ln-vote-down');
+    if (up)   up.classList.toggle('is-on', myVote === 1);
+    if (down) down.classList.toggle('is-on', myVote === -1);
+  }
+
+  window.voteChat = async function (messageId, dir, btn) {
+    const panel = btn && btn.closest('.ln-chat');
+    if (!panel) return;
+    const fid = panel.dataset.fixtureId;
+    const pid = panel.dataset.poolId;
+    // Optimistic toggle so the click feels instant. Reconcile from response.
+    const el = btn.closest('.ln-chat-msg');
+    const prev = el ? Number(el.dataset.myVote || 0) : 0;
+    const optimistic = (prev === dir) ? 0 : dir;
+    const scoreNow   = Number(el ? el.dataset.score : 0) || 0;
+    const optScore   = scoreNow + (optimistic - prev);
+    if (el) applyVoteStateToDom(messageId, optScore, optimistic);
+    try {
+      const r = await fetch(`/pool/${pid}/chat/${fid}/vote/${messageId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ vote: optimistic }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        // Roll back optimistic toggle.
+        if (el) applyVoteStateToDom(messageId, scoreNow, prev);
+        return;
+      }
+      applyVoteStateToDom(messageId, data.score, data.my_vote);
+    } catch (e) {
+      if (el) applyVoteStateToDom(messageId, scoreNow, prev);
+    }
+  };
+
+  function relativeTime(iso) {
+    if (!iso) return '';
+    let d;
+    try { d = new Date(iso.endsWith('Z') ? iso : iso + 'Z'); } catch (e) { return ''; }
+    const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (s < 60)   return `${s}s`;
+    if (s < 3600) return `${Math.floor(s/60)}m`;
+    return `${Math.floor(s/3600)}h`;
+  }
+
+  function renderChatMessage(panel, msg, myEmail, isAdmin) {
+    const list = panel.querySelector('[data-role="list"]');
+    if (!list) return;
+    list.querySelectorAll('.ln-chat-loading, .ln-chat-empty').forEach(n => n.remove());
+    const isMe = msg.email === myEmail;
+    const myFirst = (CHAT_STATE.get(panel.dataset.fixtureId) || {}).myFirstName;
+    const panelEl = panel.closest('.ln-panel') || panel;
+    const sender  = formatChatSenderId(msg, panelEl);
+    const body    = highlightMentions(escHtmlChat(msg.body || ''), myFirst);
+    const when    = escHtmlChat(formatClockTime(msg.created_at));
+    const score  = Number(msg.score)   || 0;
+    const myVote = Number(msg.my_vote) || 0;
+    const div = document.createElement('div');
+    div.className = `ln-chat-msg${isMe ? ' is-me' : ''}`;
+    div.dataset.id     = msg.id;
+    div.dataset.email  = msg.email || '';
+    div.dataset.score  = String(score);
+    div.dataset.myVote = String(myVote);
+    // Vote cluster ▲ minute ▼ leads every message so the rows align on a
+    // consistent leader column. On the sender's own messages the buttons
+    // render greyed/inert (CSS .is-self handles the styling; server also
+    // blocks self-votes).
+    const upClick   = isMe ? '' : `onclick="event.stopPropagation(); voteChat('${msg.id}', 1, this)"`;
+    const downClick = isMe ? '' : `onclick="event.stopPropagation(); voteChat('${msg.id}', -1, this)"`;
+    const trashSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+        aria-hidden="true">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        <path d="M10 11v6"/><path d="M14 11v6"/></svg>`;
+    div.innerHTML = `
+      <span class="ln-chat-leader">
+        <span class="ln-chat-votes${isMe ? ' is-self' : ''}">
+          <button type="button"
+                  class="ln-vote ln-vote-up${myVote === 1 ? ' is-on' : ''}"
+                  ${upClick}
+                  aria-label="upvote"${isMe ? ' tabindex="-1"' : ''}>▲</button>
+          ${when ? `<span class="ln-when-min">${when}</span>` : ''}
+          <button type="button"
+                  class="ln-vote ln-vote-down${myVote === -1 ? ' is-on' : ''}"
+                  ${downClick}
+                  aria-label="downvote"${isMe ? ' tabindex="-1"' : ''}>▼</button>
+        </span>
+        <span class="ln-chat-name">${escHtmlChat(sender.name)}</span>
+        ${sender.bet ? `<span class="ln-chat-bet">${escHtmlChat(sender.bet)}</span>` : ''}
+      </span>
+      <span class="ln-chat-body" style="font-size: ${chatScale(score)}em">${body}</span>
+      ${isMe ? `<button type="button" class="ln-chat-del"
+                  onclick="event.stopPropagation(); deleteChat('${msg.id}', this)"
+                  title="Delete" aria-label="Delete">${trashSvg}</button>` : ''}
+    `;
+    list.appendChild(div);
+  }
+
+  async function refreshActiveChat() {
+    const panels = pollableChatPanels();
+    for (const panel of panels) {
+      const fid = panel.dataset.fixtureId;
+      const pid = panel.dataset.poolId;
+      if (!fid || !pid) continue;
+      const state = CHAT_STATE.get(fid)
+        || { lastSeenISO: null, seenIds: new Set(), unread: 0 };
+      CHAT_STATE.set(fid, state);
+      try {
+        const qs = state.lastSeenISO ? `?since=${encodeURIComponent(state.lastSeenISO)}` : '';
+        const r = await fetch(`/pool/${pid}/chat/${fid}${qs}`, { credentials: 'same-origin' });
+        if (!r.ok) continue;
+        const data = await r.json();
+        if (!state.myEmail)     state.myEmail = data.my_email;
+        if (!state.myFirstName) state.myFirstName = (state.myEmail || '').split('@')[0];
+        const list = panel.querySelector('[data-role="list"]');
+        if (list) {
+          const loading = list.querySelector('.ln-chat-loading');
+          if (loading) loading.remove();
+        }
+        const newMsgs = (data.messages || []).filter(m => !state.seenIds.has(m.id));
+        const visible = chatIsVisible(panel);
+        let newFromOthers = 0;
+        for (const m of newMsgs) {
+          state.seenIds.add(m.id);
+          renderChatMessage(panel, m, data.my_email, IS_ADMIN);
+          if (m.email !== state.myEmail) newFromOthers++;
+        }
+        // Refresh size + button state on already-rendered messages so
+        // other users' votes propagate without re-fetching message bodies.
+        if (data.votes) {
+          for (const [mid, v] of Object.entries(data.votes)) {
+            applyVoteStateToDom(mid, v.score, v.my_vote);
+          }
+        }
+        if (newMsgs.length) {
+          state.lastSeenISO = newMsgs[newMsgs.length - 1].created_at;
+          if (visible && list) list.scrollTop = list.scrollHeight;
+        }
+        // Unread bookkeeping: only count messages from others arriving
+        // while the user isn't currently viewing this chat.
+        if (visible) {
+          state.unread = 0;
+          setTabUnreadDot(fid, false);
+        } else if (newFromOthers > 0) {
+          state.unread = (state.unread || 0) + newFromOthers;
+          setTabUnreadDot(fid, true);
+        }
+        // Update count chip in the section head.
+        const countEl = panel.querySelector('[data-role="count"]');
+        if (countEl) countEl.textContent = state.seenIds.size
+          ? `${state.seenIds.size} ${state.seenIds.size === 1 ? 'msg' : 'msgs'}`
+          : '';
+        // Empty state only when truly zero AND nothing already rendered.
+        if (state.seenIds.size === 0 && list
+            && !list.querySelector('.ln-chat-msg')
+            && !list.querySelector('.ln-chat-empty')) {
+          list.innerHTML = `<div class="ln-chat-empty">No messages yet — be the first.</div>`;
+        }
+      } catch (e) { /* swallow transient */ }
+    }
+  }
+
+  async function sendChat(form) {
+    const panel = form.closest('.ln-chat');
+    if (!panel) return;
+    const input = form.querySelector('.ln-chat-input');
+    const msg = (input.value || '').trim();
+    if (!msg) return;
+    const btn = form.querySelector('.ln-chat-send');
+    btn.disabled = true;
+    try {
+      const fid = panel.dataset.fixtureId;
+      const pid = panel.dataset.poolId;
+      const r = await fetch(`/pool/${pid}/chat/${fid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        alert(data.error || 'Could not send.');
+        return;
+      }
+      input.value = '';
+      // Optimistic render — next poll's dedupe will skip the dupe via seenIds.
+      const state = CHAT_STATE.get(fid) || { seenIds: new Set() };
+      if (data.message && !state.seenIds.has(data.message.id)) {
+        state.seenIds.add(data.message.id);
+        state.lastSeenISO = data.message.created_at;
+        renderChatMessage(panel, data.message, state.myEmail || data.message.email, IS_ADMIN);
+        const list = panel.querySelector('[data-role="list"]');
+        if (list) list.scrollTop = list.scrollHeight;
+      }
+    } catch (e) {
+      alert('Network error — try again.');
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  async function deleteChat(messageId, btn) {
+    if (!confirm('Delete this message?')) return;
+    const panel = btn.closest('.ln-chat');
+    const pid = panel ? panel.dataset.poolId : null;
+    if (!pid) { alert('Delete failed.'); return; }
+    try {
+      const r = await fetch(`/pool/${pid}/chat/${messageId}`, {
+        method: 'DELETE', credentials: 'same-origin',
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        alert(data.error || 'Delete failed.');
+        return;
+      }
+      const msgEl = btn.closest('.ln-chat-msg');
+      if (msgEl) {
+        const fid = panel.dataset.fixtureId;
+        const state = CHAT_STATE.get(fid);
+        if (state) state.seenIds.delete(messageId);
+        msgEl.remove();
+      }
+    } catch (e) { alert('Network error.'); }
+  }
+
+  function startChatPolling() {
+    if (chatTimer) return;
+    chatTimer = setInterval(refreshActiveChat, 5_000);
+  }
+  function stopChatPolling() {
+    if (chatTimer) clearInterval(chatTimer);
+    chatTimer = null;
+  }
+
+  // When the banner is opened OR a tab switched, refresh + start polling.
+  const _origToggleLiveNow = toggleLiveNow;
+  toggleLiveNow = function () {
+    _origToggleLiveNow();
+    setTimeout(() => { refreshActiveChat(); }, 0);
+    startChatPolling();
+  };
+  const _origSelectLnTab = selectLnTab;
+  selectLnTab = function (btn, ev) {
+    _origSelectLnTab(btn, ev);
+    // The just-activated tab's chat is now visible to the user, so its
+    // unread badge can clear immediately — don't wait for the next poll.
+    if (btn && btn.dataset && btn.dataset.fixtureId) {
+      clearUnreadForFixture(btn.dataset.fixtureId);
+    }
+    setTimeout(() => { refreshActiveChat(); }, 0);
+    startChatPolling();
+  };
 
   // ── What's-new modal ────────────────────────────────────────────────
   const WN_KEY = 'wc26_last_seen_release';
@@ -2856,6 +3438,7 @@
     maybeShowWhatsNewDot();
     syncLiveBannerHides();
     startLiveNowPolling();
+    startChatPolling();
   });
 
   // ── Stage nav: highlight active section on scroll ──────────────────────
