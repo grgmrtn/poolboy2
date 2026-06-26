@@ -114,6 +114,31 @@
       transition: color 0.15s;
     }
     .nav-link:hover { color: var(--text); text-decoration: none; }
+    /* Segmented action group — admin / refresh / logout. The pieces share
+       a single outline; only the outer corners are rounded so they read
+       as one connected control. */
+    .nav-actions {
+      display: inline-flex; align-items: stretch;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .nav-action {
+      color: var(--text-muted);
+      width: 2rem; height: 2rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-left: 1px solid var(--border);
+      font-family: var(--mono); font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-action:first-child { border-left: 0; }
+    .nav-action:hover {
+      color: var(--text); text-decoration: none;
+      background: rgba(255,255,255,0.05);
+    }
+    .nav-action svg { display: block; }
+    /* Legacy single-button hook used elsewhere (login page, etc.). */
     .nav-logout {
       color: var(--text-muted);
       border: 1px solid var(--border);
@@ -431,36 +456,38 @@
     </div>
     <div class="navbar-right">
       <span class="navbar-user">{{ current_user.display_name }}</span>
-      {% if current_user.is_admin %}
-        <a href="{{ url_for('admin_page') }}" class="nav-link">admin</a>
-      {% endif %}
-      {# Force-refresh: clears any stale build stamp + reloads with a
-         unique query string so Safari can't serve the cached HTML. #}
-      <a href="#" class="nav-logout" title="Force refresh (clears stale cache)"
-         aria-label="Refresh"
-         onclick="event.preventDefault();
-                  try { localStorage.removeItem('wc26_app_build'); } catch(e) {}
-                  var u = new URL(window.location.href);
-                  u.searchParams.set('_r', Date.now());
-                  window.location.replace(u.toString());">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
-          <polyline points="23 4 23 10 17 10"/>
-          <polyline points="1 20 1 14 7 14"/>
-          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
-          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
-        </svg>
-      </a>
-      <a href="{{ url_for('logout') }}" class="nav-logout" title="Log out" aria-label="Log out">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-      </a>
+      <div class="nav-actions">
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('admin_page') }}" class="nav-action" title="Admin" aria-label="Admin">A</a>
+        {% endif %}
+        {# Force-refresh: clears any stale build stamp + reloads with a
+           unique query string so Safari can't serve the cached HTML. #}
+        <a href="#" class="nav-action" title="Force refresh (clears stale cache)"
+           aria-label="Refresh"
+           onclick="event.preventDefault();
+                    try { localStorage.removeItem('wc26_app_build'); } catch(e) {}
+                    var u = new URL(window.location.href);
+                    u.searchParams.set('_r', Date.now());
+                    window.location.replace(u.toString());">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+            <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+          </svg>
+        </a>
+        <a href="{{ url_for('logout') }}" class="nav-action" title="Log out" aria-label="Log out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </a>
+      </div>
     </div>
   </nav>
   {% endif %}
