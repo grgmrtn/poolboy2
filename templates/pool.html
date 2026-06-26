@@ -1633,6 +1633,7 @@
   .ko-spy-side-h { justify-content: flex-start; padding-left: 0.6rem; color: var(--text); }
   .ko-spy-side-a { justify-content: flex-end;   padding-right: 0.6rem; color: var(--text); }
   .ko-spy-count { color: var(--text-muted); font-weight: 600; font-size: 0.65rem; }
+  .ko-spy-sep   { color: var(--text-dim); margin: 0 0.15rem; }
   .ko-spy-sum   { color: var(--lilac); font-weight: 800; }
   /* Pre-spy placeholder: "$•••" — three filled dots after the dollar sign
      so the row reads as redacted. The user only knows the side has bets. */
@@ -1659,6 +1660,9 @@
   }
   .ko-spy-center.is-buy:hover { color: var(--text); border-color: var(--lilac); background: rgba(255,122,26,0.08); }
   .ko-spy-eye   { font-size: 0.85rem; line-height: 1; }
+  /* SPY label between the eye icon and the price — same neon orange as
+     every bet-amount in the UI, so the button reads as a money action. */
+  .ko-spy-label { color: var(--lilac); font-weight: 800; letter-spacing: 0.1em; }
   .ko-spy-price { color: var(--lilac); font-weight: 800; font-variant-numeric: tabular-nums; }
   .ko-spy-center.is-spied {
     cursor: default;
@@ -1858,6 +1862,16 @@
   }
   .ko-sum-cell-bet .ko-sum-amt { color: var(--lilac); }
   .ko-sum-cell-win .ko-sum-amt { color: var(--text-muted); }
+  /* Plain-language placeholder shown until the corresponding value is set.
+     Same vertical alignment as .ko-sum-amt so the cell width and row
+     height don't change when the user fills in a number. */
+  .ko-sum-placeholder {
+    font-size: 0.7rem; font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+    align-self: center;
+  }
   .ko-sum-lbl {
     font-size: 0.5rem; font-weight: 800; letter-spacing: 0.12em;
     color: var(--text-dim); text-transform: uppercase;
@@ -3212,7 +3226,8 @@
                          id="ko-spy-bar-{{ f.id }}">
                       <span class="ko-spy-side ko-spy-side-h">
                         {% if _spy_revealed and _spy_totals %}
-                          <span class="ko-spy-count">{{ _spy_totals.H.count }}pl.</span>
+                          <span class="ko-spy-count">{{ _spy_totals.H.count }} {{ 'player' if _spy_totals.H.count == 1 else 'players' }}</span>
+                          <span class="ko-spy-sep">·</span>
                           <span class="ko-spy-sum">${{ "%.0f"|format(_spy_totals.H.wagered or 0) }}</span>
                         {% else %}
                           <span class="ko-spy-hidden">$<span class="ko-spy-dots">●●●</span></span>
@@ -3227,12 +3242,14 @@
                                 data-base-cost="{{ '%.0f'|format(ko_spy_cost) }}"
                                 onclick="openFieldSpyFromKoBet(this)">
                           <span class="ko-spy-eye">👁</span>
+                          <span class="ko-spy-label">SPY</span>
                           <span class="ko-spy-price">${{ '%.0f'|format(ko_spy_cost) }}</span>
                         </button>
                       {% endif %}
                       <span class="ko-spy-side ko-spy-side-a">
                         {% if _spy_revealed and _spy_totals %}
-                          <span class="ko-spy-count">{{ _spy_totals.A.count }}pl.</span>
+                          <span class="ko-spy-count">{{ _spy_totals.A.count }} {{ 'player' if _spy_totals.A.count == 1 else 'players' }}</span>
+                          <span class="ko-spy-sep">·</span>
                           <span class="ko-spy-sum">${{ "%.0f"|format(_spy_totals.A.wagered or 0) }}</span>
                         {% else %}
                           <span class="ko-spy-hidden">$<span class="ko-spy-dots">●●●</span></span>
@@ -5033,11 +5050,12 @@
   // ── Knockout bet UI ────────────────────────────────────────────────────
   const koSelections = {};  // fixtureId → 'H' | 'A' | 'D'
 
-  // On load: if the server rendered a bet form pre-selected (user already
-  // has a pick), mirror that into koSelections so the formula summary
-  // shows up immediately without requiring a click.
+  // On load: walk every KO bet row. If the server pre-selected a pick,
+  // mirror it into koSelections. Either way call updateKoPotential so the
+  // formula summary renders its plain-language placeholders (or filled
+  // values for an existing bet) without waiting for a user interaction.
   document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.ko-bet-row.has-pick').forEach(row => {
+    document.querySelectorAll('.ko-bet-row').forEach(row => {
       const fid = row.id.replace('ko-form-', '');
       const sel = row.querySelector('.ko-opt.selected-H, .ko-opt.selected-A, .ko-opt.selected-D');
       if (sel && sel.dataset.choice) {
@@ -5102,26 +5120,10 @@
     const raw = (amtEl.value || '').trim();
     const amt = parseFloat(raw);
     const choice = koSelections[fixtureId];
-    if (!choice && (!amt || amt <= 0)) {
-      sumEl.className = 'ko-bet-summary is-empty';
-      sumEl.textContent = 'Pick a side and enter a bet';
-      return;
-    }
-    if (!choice) {
-      sumEl.className = 'ko-bet-summary is-empty';
-      sumEl.textContent = 'Pick a side';
-      return;
-    }
-    const abbr = (choice === 'H' ? sumEl.dataset.homeAbbr
-                : choice === 'A' ? sumEl.dataset.awayAbbr
-                : 'Draw') || (choice === 'H' ? 'HOME' : 'AWAY');
-    const mult = koMultFor(fixtureId, choice);
-    if (!amt || amt <= 0) {
-      sumEl.className = 'ko-bet-summary is-empty';
-      sumEl.textContent = `${abbr} — enter a bet`;
-      return;
-    }
-    const payout = amt * mult;
+    const mult   = choice ? koMultFor(fixtureId, choice) : null;
+    const hasAmt = !!amt && amt > 0;
+    const payout = (hasAmt && mult) ? amt * mult : null;
+
     // Sync the submit button label so the user knows whether they have
     // unsaved changes. "Placed" = current state matches the server-saved
     // pick + bet; "Update" = something has changed since last save.
@@ -5129,29 +5131,40 @@
     if (submitBtn) {
       const savedBet  = parseFloat(amtEl.dataset.originalBet || '0');
       const savedPick = submitBtn.dataset.savedPick || '';
-      const dirty = Math.abs(amt - savedBet) > 0.005 || choice !== savedPick;
-      submitBtn.textContent = dirty
-        ? 'Update'
-        : (savedPick ? 'Placed' : 'Bet');
-      submitBtn.classList.toggle('is-placed', !dirty && !!savedPick);
+      const dirty = (choice !== savedPick) || Math.abs((amt || 0) - savedBet) > 0.005;
+      const isPlaced = !dirty && !!savedPick;
+      submitBtn.textContent = dirty ? 'Update' : (savedPick ? 'Placed' : 'Bet');
+      submitBtn.classList.toggle('is-placed', isPlaced);
     }
-    // Each number stacks as amount-on-top + small caps label below so the
-    // formula reads BET × ODDS = TO WIN even without prior context. The
-    // chosen-team chip was dropped so the whole formula fits one line.
-    sumEl.className = `ko-bet-summary is-${choice}`;
+
+    // Each cell renders independently: word placeholder when its piece of
+    // data isn't ready, real number once it is. Reads as a plain-language
+    // formula at first ("YOUR BET × TEAM ODDS = AMOUNT TO WIN") and fills
+    // in word-by-word as the user picks a side and types an amount.
+    sumEl.className = `ko-bet-summary${choice ? ' is-' + choice : ''}`;
+    const betCell = hasAmt
+      ? `<span class="ko-sum-amt">$${amt.toFixed(0)}</span>`
+      : `<span class="ko-sum-placeholder">YOUR BET</span>`;
+    const oddsCell = mult
+      ? `<span class="ko-sum-amt">${(+mult).toString()}</span>`
+      : `<span class="ko-sum-placeholder">TEAM ODDS</span>`;
+    const winCell = payout !== null
+      ? `<span class="ko-sum-amt">$${payout.toFixed(0)}</span>`
+      : `<span class="ko-sum-placeholder">AMOUNT TO WIN</span>`;
+
     sumEl.innerHTML =
       `<span class="ko-sum-cell ko-sum-cell-bet">` +
-        `<span class="ko-sum-amt">$${amt.toFixed(0)}</span>` +
+        betCell +
         `<span class="ko-sum-lbl">BET</span>` +
       `</span>` +
       `<span class="ko-sum-op">×</span>` +
       `<span class="ko-sum-cell">` +
-        `<span class="ko-sum-amt">${(+mult).toString()}</span>` +
+        oddsCell +
         `<span class="ko-sum-lbl">ODDS</span>` +
       `</span>` +
       `<span class="ko-sum-op">=</span>` +
       `<span class="ko-sum-cell ko-sum-cell-win">` +
-        `<span class="ko-sum-amt">$${payout.toFixed(0)}</span>` +
+        winCell +
         `<span class="ko-sum-lbl">TO WIN</span>` +
       `</span>`;
   }
@@ -5185,7 +5198,8 @@
     }
     function write(els, count, sum) {
       if (!els) return;
-      if (els.countEl) els.countEl.textContent = `${Math.max(0, count)}pl.`;
+      const c = Math.max(0, count);
+      if (els.countEl) els.countEl.textContent = `${c} ${c === 1 ? 'player' : 'players'}`;
       if (els.sumEl)   els.sumEl.textContent   = `$${Math.max(0, Math.round(sum))}`;
     }
 
