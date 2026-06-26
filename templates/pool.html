@@ -5140,33 +5140,27 @@
     // Each cell renders independently: word placeholder when its piece of
     // data isn't ready, real number once it is. Reads as a plain-language
     // formula at first ("YOUR BET × TEAM ODDS = AMOUNT TO WIN") and fills
-    // in word-by-word as the user picks a side and types an amount.
+    // in word-by-word as the user picks a side and types an amount. The
+    // small caps label below the number is suppressed while the cell is
+    // in placeholder mode — otherwise the row would read "YOUR BET / BET".
     sumEl.className = `ko-bet-summary${choice ? ' is-' + choice : ''}`;
-    const betCell = hasAmt
-      ? `<span class="ko-sum-amt">$${amt.toFixed(0)}</span>`
-      : `<span class="ko-sum-placeholder">YOUR BET</span>`;
-    const oddsCell = mult
-      ? `<span class="ko-sum-amt">${(+mult).toString()}</span>`
-      : `<span class="ko-sum-placeholder">TEAM ODDS</span>`;
-    const winCell = payout !== null
-      ? `<span class="ko-sum-amt">$${payout.toFixed(0)}</span>`
-      : `<span class="ko-sum-placeholder">AMOUNT TO WIN</span>`;
-
+    function cell(klass, hasValue, valueHtml, placeholderText, labelText) {
+      const inner = hasValue
+        ? `<span class="ko-sum-amt">${valueHtml}</span>` +
+          `<span class="ko-sum-lbl">${labelText}</span>`
+        : `<span class="ko-sum-placeholder">${placeholderText}</span>`;
+      return `<span class="ko-sum-cell ${klass}">${inner}</span>`;
+    }
     sumEl.innerHTML =
-      `<span class="ko-sum-cell ko-sum-cell-bet">` +
-        betCell +
-        `<span class="ko-sum-lbl">BET</span>` +
-      `</span>` +
+      cell('ko-sum-cell-bet', hasAmt, `$${(amt || 0).toFixed(0)}`,
+           'YOUR BET', 'BET') +
       `<span class="ko-sum-op">×</span>` +
-      `<span class="ko-sum-cell">` +
-        oddsCell +
-        `<span class="ko-sum-lbl">ODDS</span>` +
-      `</span>` +
+      cell('', !!mult, mult ? (+mult).toString() : '',
+           'TEAM ODDS', 'ODDS') +
       `<span class="ko-sum-op">=</span>` +
-      `<span class="ko-sum-cell ko-sum-cell-win">` +
-        winCell +
-        `<span class="ko-sum-lbl">TO WIN</span>` +
-      `</span>`;
+      cell('ko-sum-cell-win', payout !== null,
+           payout !== null ? `$${payout.toFixed(0)}` : '',
+           'AMOUNT TO WIN', 'TO WIN');
   }
 
   // Adjust the spy bar's displayed per-side counts + sums to reflect the
