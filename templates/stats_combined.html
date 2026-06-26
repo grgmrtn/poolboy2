@@ -44,23 +44,38 @@
   }
   .sc-tab:hover { color: var(--text); }
   .sc-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  /* Push toggle pill to right end */
-  .sc-detail-toggle {
+
+  /* Stat picker — sits at the right end of the sc-nav. Each pill shows
+     just an icon until the user selects it, then the label slides in
+     too. Click again to deselect. */
+  .sc-stat-picker {
     margin-left: auto;
-    display: inline-flex; align-items: center; gap: 0.3rem;
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    align-self: center;
+    flex-shrink: 0;
+  }
+  .sc-stat-btn {
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 0.3rem 0.75rem;
-    color: var(--text-muted); font-family: var(--mono);
-    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+    padding: 0.3rem 0.55rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
     cursor: pointer;
-    align-self: center;
-    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 0.25rem;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
-  .sc-detail-toggle:hover { color: var(--text); border-color: var(--border-hi); }
-  .sc-detail-toggle.is-on { color: var(--accent); border-color: var(--accent); }
+  .sc-stat-btn:hover { color: var(--text); border-color: var(--border-hi); }
+  .sc-stat-btn.is-active {
+    color: var(--accent); border-color: var(--accent);
+    background: rgba(200,255,87,0.08);
+  }
+  .sc-stat-icon { font-size: 0.9rem; line-height: 1; }
+  /* Label is hidden until the button becomes active — gives the picker
+     a compact resting state and surfaces the title on selection. */
+  .sc-stat-btn .sc-stat-label { display: none; }
+  .sc-stat-btn.is-active .sc-stat-label { display: inline; }
 
   /* ── Leaderboard, completed-table style ───────────────────────────────
      Single-row-per-player CSS grid. Detail-mode adds 5 more columns; the
@@ -95,12 +110,19 @@
   }
   .lb-row:first-child { border-top: 0; }
   .lb-row.lb-head {
-    background: rgba(255,255,255,0.04);
+    background: rgba(20,20,28,0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-size: 0.56rem; letter-spacing: 0.1em; font-weight: 800;
     color: var(--text-dim); text-transform: uppercase;
     padding: 0.5rem 0.85rem;
     border-bottom: 1px solid var(--border);
     border-top: 0;
+    /* Sticks under the navbar (56px) + sticky sc-nav (~44px) so the column
+       labels stay visible while scrolling through a long leaderboard. */
+    position: sticky;
+    top: calc(56px + 44px + env(safe-area-inset-top, 0));
+    z-index: 4;
   }
   .lb-row.is-me { background: rgba(200,255,87,0.06); }
   .lb-rank {
@@ -131,37 +153,63 @@
     color: var(--accent); font-weight: 800; font-size: 0.95rem;
     text-align: right; letter-spacing: -0.01em;
   }
-  /* Detail cells — hidden by default, revealed when body.show-detail is on. */
+  /* Detail cells — hidden by default. Each body.show-stat-* class reveals
+     exactly one stat column (or pair, for Streak which also shows Correct).
+     Only one is active at a time; toggling the same button twice clears. */
   .lb-pct, .lb-streak, .lb-rare, .lb-risk, .lb-win,
   .lb-head .lb-pct-h, .lb-head .lb-streak-h, .lb-head .lb-rare-h,
   .lb-head .lb-risk-h, .lb-head .lb-win-h {
     display: none;
   }
-  body.show-detail .lb-row {
-    /* 8 columns; matchup cells get 1fr each to share the remaining width
-       evenly. Streak got a wider track so the flame + number breathe. */
+  /* Streak picker reveals BOTH Correct and Streak (they're a pair). */
+  body.show-stat-streak .lb-row {
     grid-template-columns:
-      1.8rem            /* rank */
-      minmax(5rem, 1.5fr) /* player */
-      3.8rem            /* total */
-      3.4rem            /* % correct */
-      3.6rem            /* streak */
-      minmax(0, 1fr)    /* rarest */
-      minmax(0, 1fr)    /* riskiest */
-      minmax(0, 1fr);   /* largest win */
+      2rem              /* rank */
+      minmax(0, 1.4fr)  /* player */
+      4.2rem            /* total */
+      3.4rem            /* correct */
+      3.6rem;           /* streak */
   }
-  body.show-detail .lb-pct,
-  body.show-detail .lb-streak,
-  body.show-detail .lb-rare,
-  body.show-detail .lb-risk,
-  body.show-detail .lb-win,
-  body.show-detail .lb-head .lb-pct-h,
-  body.show-detail .lb-head .lb-streak-h,
-  body.show-detail .lb-head .lb-rare-h,
-  body.show-detail .lb-head .lb-risk-h,
-  body.show-detail .lb-head .lb-win-h {
-    display: block;
+  body.show-stat-streak .lb-pct,
+  body.show-stat-streak .lb-streak,
+  body.show-stat-streak .lb-head .lb-pct-h,
+  body.show-stat-streak .lb-head .lb-streak-h { display: block; }
+
+  body.show-stat-risk .lb-row {
+    grid-template-columns:
+      2rem
+      minmax(0, 1.4fr)
+      4.2rem
+      minmax(7rem, 1.2fr); /* riskiest */
   }
+  body.show-stat-risk .lb-risk,
+  body.show-stat-risk .lb-head .lb-risk-h { display: block; }
+
+  body.show-stat-large .lb-row {
+    grid-template-columns:
+      2rem
+      minmax(0, 1.4fr)
+      4.2rem
+      minmax(7rem, 1.2fr); /* largest win */
+  }
+  body.show-stat-large .lb-win,
+  body.show-stat-large .lb-head .lb-win-h { display: block; }
+
+  body.show-stat-rare .lb-row {
+    grid-template-columns:
+      2rem
+      minmax(0, 1.4fr)
+      4.2rem
+      minmax(7rem, 1.2fr); /* rarest win */
+  }
+  body.show-stat-rare .lb-rare,
+  body.show-stat-rare .lb-head .lb-rare-h { display: block; }
+
+  /* Drop the always-min-width when only one extra column shows. */
+  body.show-stat-risk .lb-table,
+  body.show-stat-large .lb-table,
+  body.show-stat-rare .lb-table { min-width: 0; }
+  body.show-stat-streak .lb-table { min-width: 0; }
   .lb-pct {
     color: var(--text-muted); font-weight: 600;
     text-align: right; white-space: nowrap;
@@ -203,9 +251,6 @@
   }
   .lb-mcell-sub.is-orange { color: var(--lilac); font-weight: 800; }
   .lb-mcell-sub.is-lime   { color: var(--accent); font-weight: 800; }
-  /* Detail mode is a lot of columns — let it horizontally scroll on mobile
-     rather than wrap, so each row stays one line. */
-  body.show-detail .lb-table { min-width: 760px; }
 
   /* Chart card */
   .chart-card {
@@ -367,10 +412,30 @@
             onclick="scrollSc(this)">Leader</button>
     <button type="button" class="sc-tab" data-target="chart-section"
             onclick="scrollSc(this)">Chart</button>
-    <button type="button" id="sc-detail-toggle" class="sc-detail-toggle"
-            onclick="toggleDetailedStats()">
-      <span id="sc-detail-toggle-label">Show detailed</span>
-    </button>
+    {# Stat picker — one stat at a time. Each button is just an icon
+       until selected, at which point the title appears alongside it. #}
+    <div class="sc-stat-picker" role="group" aria-label="Stat to show">
+      <button type="button" class="sc-stat-btn" data-stat="streak"
+              onclick="selectStat('streak')" title="Streak + Correct">
+        <span class="sc-stat-icon">🔥</span>
+        <span class="sc-stat-label">Streak</span>
+      </button>
+      <button type="button" class="sc-stat-btn" data-stat="risk"
+              onclick="selectStat('risk')" title="Riskiest bet">
+        <span class="sc-stat-icon">🤠</span>
+        <span class="sc-stat-label">Riskiest</span>
+      </button>
+      <button type="button" class="sc-stat-btn" data-stat="large"
+              onclick="selectStat('large')" title="Largest win">
+        <span class="sc-stat-icon">⚒</span>
+        <span class="sc-stat-label">Largest</span>
+      </button>
+      <button type="button" class="sc-stat-btn" data-stat="rare"
+              onclick="selectStat('rare')" title="Rarest win">
+        <span class="sc-stat-icon">💎</span>
+        <span class="sc-stat-label">Rarest</span>
+      </button>
+    </div>
   </div>
 
   {# Macro for the 2-line matchup cell used by Rarest / Riskiest / Largest
@@ -504,22 +569,30 @@
 </div>
 
 <script>
-  // ── Detailed-stats show/hide toggle ────────────────────────────────
-  const DETAIL_KEY = 'wc26_stats_show_detail';
-  function toggleDetailedStats() {
-    const on = !document.body.classList.contains('show-detail');
-    document.body.classList.toggle('show-detail', on);
-    const btn = document.getElementById('sc-detail-toggle');
-    const lbl = document.getElementById('sc-detail-toggle-label');
-    if (btn) btn.classList.toggle('is-on', on);
-    if (lbl) lbl.textContent = on ? 'Hide detailed stats' : 'Show detailed stats';
-    try { localStorage.setItem(DETAIL_KEY, on ? '1' : '0'); } catch (e) {}
+  // ── Stat picker: one extra column at a time ─────────────────────────
+  // Clicking the same pill twice deselects (default 3-column view).
+  // Selection persists per browser via localStorage.
+  const STAT_KEY  = 'wc26_stats_selected';
+  const STAT_LIST = ['streak', 'risk', 'large', 'rare'];
+  function selectStat(name) {
+    const body  = document.body;
+    const wasOn = body.classList.contains('show-stat-' + name);
+    STAT_LIST.forEach(s => body.classList.remove('show-stat-' + s));
+    document.querySelectorAll('.sc-stat-btn').forEach(b => b.classList.remove('is-active'));
+    if (!wasOn) {
+      body.classList.add('show-stat-' + name);
+      const btn = document.querySelector(`.sc-stat-btn[data-stat="${name}"]`);
+      if (btn) btn.classList.add('is-active');
+      try { localStorage.setItem(STAT_KEY, name); } catch (e) {}
+    } else {
+      try { localStorage.removeItem(STAT_KEY); } catch (e) {}
+    }
   }
-  // Restore the user's previous choice on load
+  // Restore the user's last selection on load.
   (function () {
-    try {
-      if (localStorage.getItem(DETAIL_KEY) === '1') toggleDetailedStats();
-    } catch (e) {}
+    let saved = null;
+    try { saved = localStorage.getItem(STAT_KEY); } catch (e) {}
+    if (saved && STAT_LIST.includes(saved)) selectStat(saved);
   })();
 
   // ── Stats/Chart tabs: scroll to section + activate ────────────────
