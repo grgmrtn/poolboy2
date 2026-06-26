@@ -33,6 +33,16 @@ import live_now_helper
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-in-production")
 
+# Build stamp baked into every page (see base.html). Railway sets this via
+# RAILWAY_GIT_COMMIT_SHA on each deploy; local dev uses the start time so a
+# restart bumps it. Drives the client-side force-reload guard that recovers
+# users stuck on a stale cached page after we push.
+APP_BUILD_STAMP = (
+    os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+    or os.environ.get("GIT_COMMIT")
+    or datetime.utcnow().strftime("dev-%Y%m%d%H%M%S")
+)
+
 # Keep users signed in across visits for 90 days (vs the default browser-session
 # cookie that vanishes on quit). Set on the session via session.permanent=True
 # at login. Matches what most consumer apps do — no SSO needed.
@@ -177,7 +187,30 @@ def current_user():
 
 @app.context_processor
 def inject_user():
-    return {"current_user": current_user()}
+    return {
+        "current_user":     current_user(),
+        "app_build_stamp":  APP_BUILD_STAMP,
+    }
+
+
+@app.after_request
+def _no_html_cache(resp):
+    """Prevent Safari (and Chrome on some configs) from caching dynamic
+    HTML / JSON. Users were getting stuck on weeks-old pool pages — team
+    selection worked but the new bet input wouldn't because their cached
+    JS was still running the pre-decimal-bets version.
+
+    Static assets (flag SVGs, Chart.js CDN) aren't touched here — they
+    live on third-party hosts. Future on-server static files (e.g. PWA
+    icons) should be cached aggressively; gate this rule on response
+    content-type so it only applies to HTML / JSON.
+    """
+    ct = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+    if ct in ("text/html", "application/json"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
 
 
 # Country team-name → 3-letter abbreviation lookup. Lives here (vs. each

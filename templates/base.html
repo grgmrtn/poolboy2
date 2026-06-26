@@ -356,6 +356,33 @@
   </style>
 
   {% block extra_head %}{% endblock %}
+
+  {# Build stamp + force-reload guard. Server bakes a stamp into the page;
+     the client compares against localStorage. If the stamp changes (i.e.,
+     a new deploy) and the page somehow loaded from a stale cache, force
+     a hard reload to pick up the latest. Belt-and-suspenders alongside
+     the no-cache headers in app.py. #}
+  <meta name="app-build" content="{{ app_build_stamp }}">
+  <script>
+  (function () {
+    try {
+      var current = "{{ app_build_stamp }}";
+      var key = "wc26_app_build";
+      var seen = localStorage.getItem(key);
+      if (!seen) {
+        localStorage.setItem(key, current);
+      } else if (seen !== current) {
+        localStorage.setItem(key, current);
+        // Reload bypassing any HTTP cache. window.location.reload(true)
+        // is deprecated in newer browsers — set the URL with a cache
+        // buster as the portable fallback.
+        var url = new URL(window.location.href);
+        url.searchParams.set("_b", current);
+        window.location.replace(url.toString());
+      }
+    } catch (e) { /* private mode without storage — silently skip */ }
+  })();
+  </script>
 </head>
 <body>
 
