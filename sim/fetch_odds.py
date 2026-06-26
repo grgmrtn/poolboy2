@@ -115,17 +115,22 @@ def ensure_odds_locked_at_column(conn):
 
 def find_db_fixture(conn, home, away, ko_dt):
     """Match an API event to a fixture. Names compared case-insensitively;
-    kick_off must be within MATCH_KO_HOURS of the API time."""
+    kick_off must be within MATCH_KO_HOURS of the API time.
+
+    Returns (row_dict, debug) where debug is None on success or a short
+    reason string on failure ('no_team_match' / 'ko_drift'). Useful for
+    --verbose diagnostics so we can see exactly why a no_match happened."""
     rows = conn.execute(
-        "SELECT id, kick_off, odds_locked_at, home_odds, away_odds "
+        "SELECT id, kick_off, odds_locked_at, home_odds, away_odds, "
+        "       home_team, away_team "
         "  FROM fixtures "
         " WHERE LOWER(home_team) = LOWER(?) AND LOWER(away_team) = LOWER(?)",
         (home, away),
     ).fetchall()
     if not rows:
-        return None
+        return None, "no_team_match"
     if not ko_dt or len(rows) == 1:
-        return dict(rows[0])
+        return dict(rows[0]), None
     # Multiple matches with the same teams — pick the one closest in time.
     best = None
     best_diff = None
@@ -137,14 +142,34 @@ def find_db_fixture(conn, home, away, ko_dt):
         if best_diff is None or diff < best_diff:
             best, best_diff = r, diff
     if best and best_diff and best_diff <= MATCH_KO_HOURS * 3600:
-        return dict(best)
-    return None
+        return dict(best), None
+    return None, "ko_drift"
+
+
+def candidate_db_fixtures(conn, home, away):
+    """For --verbose no-match diagnostics: return any DB rows whose home
+    OR away team name contains either of the API team names (case-
+    insensitive). Helps spot near-misses caused by name normalisation
+    differences (e.g. 'USA' vs 'United States')."""
+    rows = conn.execute(
+        "SELECT id, home_team, away_team, kick_off "
+        "  FROM fixtures "
+        " WHERE LOWER(home_team) LIKE LOWER(?) OR LOWER(home_team) LIKE LOWER(?) "
+        "    OR LOWER(away_team) LIKE LOWER(?) OR LOWER(away_team) LIKE LOWER(?) "
+        " ORDER BY kick_off",
+        (f"%{home}%", f"%{away}%", f"%{home}%", f"%{away}%"),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true",
                     help="Preview changes without committing.")
+    ap.add_argument("--verbose", action="store_true",
+                    help="Print every API event and (for no-match cases) "
+                         "the nearest DB candidates so name/time drift "
+                         "between providers can be diagnosed.")
     args = ap.parse_args()
 
     api_key = os.environ.get("THE_ODDS_API_KEY")
@@ -169,16 +194,33 @@ def main():
         away = (ev.get("away_team") or "").strip()
         ko_dt = _parse_iso(ev.get("commence_time"))
         if not home or not away or not ko_dt:
+            if args.verbose:
+                print(f"  NO_MATCH  malformed event: home={home!r} away={away!r} ko={ev.get('commence_time')!r}")
             skipped_no_match += 1
             continue
 
         ho, ao = extract_pinnacle_h2h(ev)
         if ho is None or ao is None:
+            if args.verbose:
+                print(f"  NO_PRICE  {home} vs {away}  (Pinnacle hasn't posted yet)")
             skipped_no_price += 1
             continue
 
-        row = find_db_fixture(conn, home, away, ko_dt)
+        row, why = find_db_fixture(conn, home, away, ko_dt)
         if not row:
+            if args.verbose:
+                cands = candidate_db_fixtures(conn, home, away)[:5]
+                cand_lines = [
+                    f"      {c['kick_off'] or '<no-ko>':<22}  {c['home_team']} vs {c['away_team']}"
+                    for c in cands
+                ]
+                print(f"  NO_MATCH  {ko_dt.isoformat()}  {home} vs {away}  "
+                      f"reason={why}")
+                if cands:
+                    print("    nearest DB candidates (any name overlap):")
+                    print("\n".join(cand_lines))
+                else:
+                    print("    nothing in fixtures table contains either team name")
             skipped_no_match += 1
             continue
 
