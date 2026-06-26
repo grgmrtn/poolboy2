@@ -1326,6 +1326,18 @@
     border-radius: 10px; overflow: hidden;
     transition: border-color 0.15s, box-shadow 0.4s;
   }
+  /* Belt-and-suspenders: if a .match-container ever ends up with no
+     element children (no pill, no reveal-grid) we still want the grey
+     border gone. Template-side gate already prevents the container from
+     rendering in that state — this is a CSS fallback for any branch we
+     might miss. */
+  .match-container:not(:has(> .match-pill)):not(:has(> .reveal-grid)) {
+    display: none;
+  }
+  /* And for browsers without :has() (older Safari < 15.4), also hide
+     containers whose only children are whitespace text nodes. */
+  .match-container:empty { display: none; }
+
   /* ── Match pill ──────────────────────────────────────────────────── */
   .match-pill {
     display: flex; flex-direction: column;
@@ -1862,16 +1874,16 @@
   }
   .ko-sum-cell-bet .ko-sum-amt { color: var(--lilac); }
   .ko-sum-cell-win .ko-sum-amt { color: var(--text-muted); }
-  /* Plain-language placeholder shown until the corresponding value is set.
-     Same vertical alignment as .ko-sum-amt so the cell width and row
-     height don't change when the user fills in a number. */
-  .ko-sum-placeholder {
-    font-size: 0.7rem; font-weight: 800;
-    letter-spacing: 0.08em; text-transform: uppercase;
+  /* Placeholder mode reuses the .ko-sum-amt geometry so cell width and
+     row height stay constant when the user types a number into the cell.
+     Only the colour changes — the small caps label underneath stays
+     visible in both states (BET / ODDS / TO WIN). */
+  .ko-sum-amt.is-placeholder {
     color: var(--text-dim);
-    white-space: nowrap;
-    align-self: center;
+    letter-spacing: 0.04em;
   }
+  .ko-sum-cell-bet .ko-sum-amt.is-placeholder,
+  .ko-sum-cell-win .ko-sum-amt.is-placeholder { color: var(--text-dim); }
   .ko-sum-lbl {
     font-size: 0.5rem; font-weight: 800; letter-spacing: 0.12em;
     color: var(--text-dim); text-transform: uppercase;
@@ -2438,19 +2450,20 @@
   <div class="pool-stats-bar">
     <div class="ps-hero">
       <div class="ps-segs">
+        {# Same ceiling-round as the navbar — see base.html. #}
         <div class="ps-seg ps-seg-avail">
           <div class="ps-seg-value" data-nav-amt="tobet"
-               data-value="{{ my_balance | round(0) }}">${{ "%.0f"|format(my_balance) }}</div>
+               data-value="{{ my_balance | round(0, 'ceil') | int }}">${{ my_balance | round(0, 'ceil') | int }}</div>
           <div class="ps-seg-label">AVAIL</div>
         </div>
         <div class="ps-seg ps-seg-placed">
           <div class="ps-seg-value" data-nav-amt="placed"
-               data-value="{{ my_total_bet | round(0) }}">${{ "%.0f"|format(my_total_bet) }}</div>
+               data-value="{{ my_total_bet | round(0, 'ceil') | int }}">${{ my_total_bet | round(0, 'ceil') | int }}</div>
           <div class="ps-seg-label">PLACED</div>
         </div>
         <div class="ps-seg ps-seg-total">
           <div class="ps-seg-value" data-nav-amt="total"
-               data-value="{{ (my_balance + my_total_bet) | round(0) }}">${{ "%.0f"|format(my_balance + my_total_bet) }}</div>
+               data-value="{{ (my_balance + my_total_bet) | round(0, 'ceil') | int }}">${{ (my_balance + my_total_bet) | round(0, 'ceil') | int }}</div>
           <div class="ps-seg-label">TOTAL</div>
         </div>
         <div class="ps-seg ps-seg-rank">
@@ -2509,9 +2522,11 @@
                 <img class="psp-flag" src="https://flagcdn.com/{{ b.away_flag }}.svg" alt="" loading="lazy">
                 {{ b.away_abbr }}
               </span>
-              <span role="cell" class="psp-bet">${{ '%.0f'|format(b.bet) }}</span>
-              {# TO WIN = bet + winnings (full payout if correct). #}
-              <span role="cell" class="psp-payout">{% if b.mult %}${{ '%.0f'|format(b.payout) }}{% else %}—{% endif %}</span>
+              {# Bet stake shows the exact amount the user typed (incl. cents
+                 if they used decimals); TO WIN rounds UP so users never see
+                 less than their potential payout. #}
+              <span role="cell" class="psp-bet">${% if b.bet == b.bet|int %}{{ b.bet|int }}{% else %}{{ '%.2f'|format(b.bet) }}{% endif %}</span>
+              <span role="cell" class="psp-payout">{% if b.mult %}${{ b.payout | round(0, 'ceil') | int }}{% else %}—{% endif %}</span>
             </a>
           {% endfor %}
         </div>
@@ -3191,7 +3206,7 @@
                       <div class="ko-bet-center{% if my_pick %} is-{{ my_pick }}{% endif %}"
                            id="ko-center-{{ f.id }}">
                         <span class="ko-bet-prefix">$</span>
-                        <input type="text" inputmode="decimal" pattern="[0-9]*"
+                        <input type="text" inputmode="decimal" pattern="[0-9]*\.?[0-9]*"
                                class="ko-bet-amt" id="ko-amt-{{ f.id }}"
                                placeholder="0" maxlength="6"
                                value="{% if my_bet %}{{ '%.0f'|format(my_bet) }}{% endif %}"
@@ -4406,8 +4421,23 @@
         : 'stage-' + tab.dataset.stage;
       const target = document.getElementById(targetId);
       if (!target) return;
-      const offset = 56 + 42;
-      const top = target.getBoundingClientRect().top + window.scrollY - offset - 8;
+      // The heading sits ABOVE .stage-section in the DOM but visually
+      // belongs with the round. Scrolling to the section landed the user
+      // below the heading. Prefer the heading when one exists so the
+      // round title is the first thing flush under the sticky bars.
+      const heading = target.previousElementSibling
+                       && target.previousElementSibling.classList.contains('stage-heading')
+                       ? target.previousElementSibling
+                       : target;
+      // Measure live so we don't drift if the stage-nav reflows. Includes
+      // a small breathing-room buffer (12px) so the heading isn't kissing
+      // the sticky bar's underline.
+      const mainNav  = document.querySelector('.navbar');
+      const stageNav = document.querySelector('.stage-nav');
+      const navH     = mainNav  ? mainNav.getBoundingClientRect().height  : 56;
+      const stageH   = stageNav ? stageNav.getBoundingClientRect().height : 42;
+      const top = heading.getBoundingClientRect().top + window.scrollY
+                  - navH - stageH - 12;
       window.scrollTo({ top, behavior: 'smooth' });
     });
   });
@@ -5137,30 +5167,36 @@
       submitBtn.classList.toggle('is-placed', isPlaced);
     }
 
-    // Each cell renders independently: word placeholder when its piece of
-    // data isn't ready, real number once it is. Reads as a plain-language
-    // formula at first ("YOUR BET × TEAM ODDS = AMOUNT TO WIN") and fills
-    // in word-by-word as the user picks a side and types an amount. The
-    // small caps label below the number is suppressed while the cell is
-    // in placeholder mode — otherwise the row would read "YOUR BET / BET".
+    // Each cell renders the same shape regardless of state: a big
+    // top-line (number or placeholder word) above a small caps label.
+    // Empty: "YOUR / BET", "TEAM / ODDS", "AMOUNT / TO WIN".
+    // Filled: "$50 / BET",   "1.75 / ODDS", "$87 / TO WIN".
     sumEl.className = `ko-bet-summary${choice ? ' is-' + choice : ''}`;
-    function cell(klass, hasValue, valueHtml, placeholderText, labelText) {
-      const inner = hasValue
-        ? `<span class="ko-sum-amt">${valueHtml}</span>` +
-          `<span class="ko-sum-lbl">${labelText}</span>`
-        : `<span class="ko-sum-placeholder">${placeholderText}</span>`;
-      return `<span class="ko-sum-cell ${klass}">${inner}</span>`;
+    function cell(klass, hasValue, valueHtml, placeholderTop, labelText) {
+      const topClass = hasValue ? 'ko-sum-amt' : 'ko-sum-amt is-placeholder';
+      const top = hasValue ? valueHtml : placeholderTop;
+      return `<span class="ko-sum-cell ${klass}">` +
+               `<span class="${topClass}">${top}</span>` +
+               `<span class="ko-sum-lbl">${labelText}</span>` +
+             `</span>`;
     }
+    // Bet amount keeps the decimal the user typed so they see exactly
+    // what their input means (e.g. "$10.50"). Odds multiply at full
+    // precision; the TO WIN displayed value rounds UP to the nearest
+    // dollar so users always see what they could net, never less.
+    const betText = hasAmt
+      ? (Number.isInteger(amt) ? `$${amt}` : `$${amt.toFixed(2)}`)
+      : '';
     sumEl.innerHTML =
-      cell('ko-sum-cell-bet', hasAmt, `$${(amt || 0).toFixed(0)}`,
-           'YOUR BET', 'BET') +
+      cell('ko-sum-cell-bet', hasAmt, betText,
+           'YOUR', 'BET') +
       `<span class="ko-sum-op">×</span>` +
       cell('', !!mult, mult ? (+mult).toString() : '',
-           'TEAM ODDS', 'ODDS') +
+           'TEAM', 'ODDS') +
       `<span class="ko-sum-op">=</span>` +
       cell('ko-sum-cell-win', payout !== null,
-           payout !== null ? `$${payout.toFixed(0)}` : '',
-           'AMOUNT TO WIN', 'TO WIN');
+           payout !== null ? `$${Math.ceil(payout)}` : '',
+           'AMOUNT', 'TO WIN');
   }
 
   // Adjust the spy bar's displayed per-side counts + sums to reflect the

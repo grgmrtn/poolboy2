@@ -371,22 +371,26 @@
       <a href="{{ url_for('leaderboard_page', pool_id=current_user.nav_pool_id) }}"
          class="nav-rank" style="text-decoration:none"
          title="View leaderboard">
+        {# Decimal bets are allowed, but the navbar always rounds UP so
+           users see the headline integer their money rolls up to (e.g.
+           $54.30 PLACED → "$55"). data-value carries the exact ceiling
+           so animateValue can interpolate without re-rounding. #}
         <span class="nav-seg nav-seg-tobet">
           <span class="nav-seg-value" data-nav-amt="tobet"
-                data-value="{{ current_user.nav_balance | round(0) }}"
-                >${{ "%.0f"|format(current_user.nav_balance) }}</span>
+                data-value="{{ current_user.nav_balance | round(0, 'ceil') | int }}"
+                >${{ current_user.nav_balance | round(0, 'ceil') | int }}</span>
           <span class="nav-seg-label">AVAIL</span>
         </span>
         <span class="nav-seg nav-seg-placed">
           <span class="nav-seg-value" data-nav-amt="placed"
-                data-value="{{ current_user.nav_total_bet | round(0) }}"
-                >${{ "%.0f"|format(current_user.nav_total_bet) }}</span>
+                data-value="{{ current_user.nav_total_bet | round(0, 'ceil') | int }}"
+                >${{ current_user.nav_total_bet | round(0, 'ceil') | int }}</span>
           <span class="nav-seg-label">PLACED</span>
         </span>
         <span class="nav-seg nav-seg-total">
           <span class="nav-seg-value" data-nav-amt="total"
-                data-value="{{ current_user.nav_grand_total | round(0) }}"
-                >${{ "%.0f"|format(current_user.nav_grand_total) }}</span>
+                data-value="{{ current_user.nav_grand_total | round(0, 'ceil') | int }}"
+                >${{ current_user.nav_grand_total | round(0, 'ceil') | int }}</span>
           <span class="nav-seg-label">TOTAL</span>
         </span>
         {% if current_user.nav_rank_label %}
@@ -441,17 +445,22 @@
       if (!el) return;
       from = Number(from) || 0;
       to   = Number(to)   || 0;
+      // Decimal bets are allowed but the navbar always reports the
+      // headline integer, rounded UP — never below the actual amount.
+      const ceilTo = Math.ceil(to);
       if (Math.abs(from - to) < 0.5) {
-        el.textContent = `$${Math.round(to)}`;
+        el.textContent = `$${ceilTo}`;
         return;
       }
       const start = performance.now();
       function step(now) {
         const t = Math.min(1, (now - start) / durationMs);
         const cur = from + (to - from) * easeOutCubic(t);
-        el.textContent = `$${Math.round(cur)}`;
+        // In-flight frames round half-up so the digits don't jitter mid-roll;
+        // the final frame snaps to the ceiling.
+        el.textContent = t < 1 ? `$${Math.round(cur)}` : `$${ceilTo}`;
         if (t < 1) requestAnimationFrame(step);
-        else el.dataset.value = String(to);
+        else el.dataset.value = String(ceilTo);
       }
       el.classList.remove('is-bumping');
       // Reflow to restart the CSS animation
