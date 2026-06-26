@@ -622,19 +622,47 @@ def create_pool(pool_id, name, description, is_public=1,
 
 def get_pool_leaderboard(pool_id):
     """
-    Return all members of a pool ranked by current balance, highest first.
-    Each row: user_id, display_name, team_name, email, balance, joined_at.
+    Return all members of a pool ranked by TOTAL worth (free balance plus
+    any open KO bets that haven't settled yet), highest first. Each row:
+    user_id, display_name, team_name, email, balance (= total), free_balance,
+    open_bets, joined_at.
+
+    'balance' is the field other code reads — kept as the total so existing
+    callers (chart, navbar rank, etc.) see consistent numbers without
+    accidentally double-counting a wagered ante.
     """
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT u.id AS user_id, u.display_name, u.team_name, u.email,
-               COALESCE(pm.balance, 100.0) AS balance,
+               COALESCE(pm.balance, 100.0) AS free_balance,
+               COALESCE((
+                 SELECT SUM(p.bet_amount)
+                   FROM picks p
+                   JOIN fixtures f ON f.id = p.fixture_id
+                  WHERE p.user_id = u.id
+                    AND p.pool_id = pm.pool_id
+                    AND p.bet_amount IS NOT NULL
+                    AND (f.result IS NULL OR f.result = '')
+                    AND f.stage IN ({placeholders})
+               ), 0) AS open_bets,
+               (COALESCE(pm.balance, 100.0) +
+                COALESCE((
+                  SELECT SUM(p.bet_amount)
+                    FROM picks p
+                    JOIN fixtures f ON f.id = p.fixture_id
+                   WHERE p.user_id = u.id
+                     AND p.pool_id = pm.pool_id
+                     AND p.bet_amount IS NOT NULL
+                     AND (f.result IS NULL OR f.result = '')
+                     AND f.stage IN ({placeholders})
+                ), 0)) AS balance,
                pm.joined_at
         FROM pool_members pm
         JOIN users u ON u.id = pm.user_id
         WHERE pm.pool_id = ?
         ORDER BY balance DESC, pm.joined_at ASC
-    """, (pool_id,)).fetchall()
+    """, (*_KNOCKOUT_STAGES, *_KNOCKOUT_STAGES, pool_id)).fetchall()
     conn.close()
     return rows
 
@@ -1021,6 +1049,108 @@ def row_present(row):
     return row is not None
 
 
+def get_user_riskiest_bet(user_id, pool_id):
+    """Return the user's biggest single KO ante in this pool — across
+    every KO pick they've made, settled or not. Used as a 'riskiest bet'
+    stat in the leaderboard detailed view.
+
+    Returns {amount, home_team, away_team, home_flag, away_flag, pick,
+    home_score, away_score, result, mult, payout} or None when the user
+    has no KO bets. Includes the actual payout (or None if unresolved)
+    so the row can render the outcome inline.
+    """
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
+    conn = get_db()
+    row = conn.execute(
+        f"""SELECT p.bet_amount AS amount,
+                   f.home_team, f.away_team, f.home_flag_code, f.away_flag_code,
+                   p.predicted_result AS pick,
+                   f.home_score, f.away_score, f.result,
+                   f.home_odds, f.away_odds
+              FROM picks p
+              JOIN fixtures f ON f.id = p.fixture_id
+             WHERE p.user_id = ?
+               AND p.pool_id = ?
+               AND p.bet_amount IS NOT NULL
+               AND p.bet_amount > 0
+               AND f.stage IN ({placeholders})
+             ORDER BY p.bet_amount DESC
+             LIMIT 1""",
+        (user_id, pool_id, *_KNOCKOUT_STAGES),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    r = dict(row)
+    mult = (r["home_odds"] if r["pick"] == "H" else
+            r["away_odds"] if r["pick"] == "A" else None)
+    won  = r["result"] and r["pick"] == r["result"]
+    payout = float(r["amount"]) * mult if (won and mult) else (0.0 if r["result"] else None)
+    return {
+        "amount":     float(r["amount"]),
+        "home_team":  r["home_team"],
+        "away_team":  r["away_team"],
+        "home_flag":  r["home_flag_code"] or "un",
+        "away_flag":  r["away_flag_code"] or "un",
+        "pick":       r["pick"],
+        "home_score": r["home_score"],
+        "away_score": r["away_score"],
+        "result":     r["result"],
+        "mult":       float(mult) if mult else None,
+        "payout":     payout,
+    }
+
+
+def get_user_largest_win(user_id, pool_id):
+    """Return the user's biggest single payout in this pool — KO winners
+    only since group-stage wins are flat. Used as a 'largest win' stat
+    in the leaderboard detailed view.
+
+    Returns {amount, bet_amount, home_team, away_team, home_flag,
+    away_flag, pick, home_score, away_score, mult} or None when the user
+    has no winning KO bets.
+    """
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
+    conn = get_db()
+    row = conn.execute(
+        f"""SELECT t.amount,
+                   f.home_team, f.away_team, f.home_flag_code, f.away_flag_code,
+                   p.predicted_result AS pick, p.bet_amount,
+                   f.home_score, f.away_score, f.home_odds, f.away_odds
+              FROM transactions t
+              JOIN fixtures f ON f.id = t.fixture_id
+              JOIN picks p     ON p.fixture_id = t.fixture_id
+                              AND p.user_id    = t.user_id
+                              AND p.pool_id    = t.pool_id
+             WHERE t.user_id = ?
+               AND t.pool_id = ?
+               AND t.type    = 'payout'
+               AND t.amount  > 0
+               AND f.stage IN ({placeholders})
+             ORDER BY t.amount DESC
+             LIMIT 1""",
+        (user_id, pool_id, *_KNOCKOUT_STAGES),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    r = dict(row)
+    mult = (r["home_odds"] if r["pick"] == "H" else
+            r["away_odds"] if r["pick"] == "A" else None)
+    return {
+        "amount":     float(r["amount"]),
+        "bet_amount": float(r["bet_amount"] or 0),
+        "home_team":  r["home_team"],
+        "away_team":  r["away_team"],
+        "home_flag":  r["home_flag_code"] or "un",
+        "away_flag":  r["away_flag_code"] or "un",
+        "pick":       r["pick"],
+        "home_score": r["home_score"],
+        "away_score": r["away_score"],
+        "mult":       float(mult) if mult else None,
+    }
+
+
 def get_user_pick_accuracy(user_id, pool_id):
     """
     Return {"correct": int, "total": int} for a user's picks on completed
@@ -1329,15 +1459,28 @@ def get_top_n_player_emails(pool_id, n=5, tie_cap=2):
 def get_member_rank(user_id, pool_id):
     """
     Return (rank, total_members) for the user in this pool's leaderboard,
-    sorted by balance DESC. Rank is 1-based. Ties resolve by joined_at.
+    sorted by TOTAL worth (free balance + open KO bets) DESC. Rank is
+    1-based. Ties resolve by joined_at.
     """
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
     conn = get_db()
-    rows = conn.execute(
-        "SELECT user_id, COALESCE(balance, 100.0) AS bal "
-        "FROM pool_members WHERE pool_id=? "
-        "ORDER BY bal DESC, joined_at ASC",
-        (pool_id,)
-    ).fetchall()
+    rows = conn.execute(f"""
+        SELECT pm.user_id,
+               COALESCE(pm.balance, 100.0) +
+               COALESCE((
+                 SELECT SUM(p.bet_amount)
+                   FROM picks p
+                   JOIN fixtures f ON f.id = p.fixture_id
+                  WHERE p.user_id = pm.user_id
+                    AND p.pool_id = pm.pool_id
+                    AND p.bet_amount IS NOT NULL
+                    AND (f.result IS NULL OR f.result = '')
+                    AND f.stage IN ({placeholders})
+               ), 0) AS total_worth
+          FROM pool_members pm
+         WHERE pm.pool_id = ?
+         ORDER BY total_worth DESC, pm.joined_at ASC
+    """, (*_KNOCKOUT_STAGES, pool_id)).fetchall()
     conn.close()
     total = len(rows)
     for i, r in enumerate(rows):

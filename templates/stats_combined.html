@@ -62,163 +62,114 @@
   .sc-detail-toggle:hover { color: var(--text); border-color: var(--border-hi); }
   .sc-detail-toggle.is-on { color: var(--accent); border-color: var(--accent); }
 
-  /* By default the detail columns are HIDDEN; the toggle adds .show-detail
-     to body to reveal them. Always-shown columns: rank, name, balance.
-     !important is needed because the mobile @media block sets
-     `display: flex` on all .lb-table td (higher specificity than a bare
-     class selector). */
-  .lb-pct, .lb-streak, .lb-rare,
-  th.lb-pct, th.lb-streak, th.lb-rare {
-    display: none !important;
-  }
-  body.show-detail .lb-pct,
-  body.show-detail .lb-streak,
-  body.show-detail .lb-rare,
-  body.show-detail th.lb-pct,
-  body.show-detail th.lb-streak,
-  body.show-detail th.lb-rare {
-    display: table-cell !important;
-  }
-  @media (max-width: 640px) {
-    body.show-detail .lb-pct,
-    body.show-detail .lb-streak,
-    body.show-detail .lb-rare {
-      display: flex !important;
-    }
-  }
-
-  /* ── Leaderboard table ────────────────────────────────────────────── */
+  /* ── Leaderboard, completed-table style ───────────────────────────────
+     Single-row-per-player CSS grid layout — same aesthetic as the
+     Completed table on the pool page. The 'detail' cells stay in the DOM
+     and the toggle just hides/shows them via display, so the column
+     widths recompute cleanly without re-rendering. */
   .lb-wrap {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     overflow: hidden;
     margin-bottom: 1.75rem;
+    font-variant-numeric: tabular-nums;
   }
   .lb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .lb-table {
-    width: 100%; border-collapse: collapse;
-    font-size: 0.85rem;
-    min-width: 720px;          /* triggers horizontal scroll on desktop ≥640px */
+    display: flex; flex-direction: column;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    min-width: 0;
   }
-  @media (max-width: 640px) {
-    /* Mobile layout: each row is a horizontal flex with rank | name+real
-       (stacked) | balance, then optional stat lines below. Clean strips —
-       no per-cell boxes. */
-    .lb-table, .lb-table tbody, .lb-table tr {
-      display: block; min-width: 0;
-    }
-    .lb-table td { display: block; min-width: 0; }    /* no width:100% */
-    .lb-table thead { display: none; }
-    .lb-table tr.lb-row {
-      padding: 0.85rem 0.95rem;
-      border-top: 0;
-      display: flex !important;
-      flex-wrap: wrap; align-items: center;
-      gap: 0.55rem;
-    }
-    .lb-row.is-me { background: rgba(200,255,87,0.06); }
-    .lb-row td {
-      padding: 0; border: 0; background: transparent;
-      font-size: 0.78rem; line-height: 1.3;
-      width: auto;
-      flex: 0 0 auto;
-    }
-    .lb-row .lb-rank {
-      font-size: 0.78rem; font-weight: 800;
-      color: var(--text-muted);
-      min-width: 1.4rem; text-align: center;
-    }
-    .lb-row .lb-name {
-      flex: 1; min-width: 0;
-      display: flex; flex-direction: column;
-      gap: 0; align-items: flex-start;
-      font-weight: 700;
-    }
-    .lb-row .lb-name .lb-real {
-      color: var(--text-muted); font-size: 0.7rem; font-weight: 500;
-    }
-    .lb-row .lb-balance {
-      margin-left: auto;
-      font-variant-numeric: tabular-nums;
-    }
-    /* Below the header, optional stat lines wrap to a fresh row with a
-       consistent indent so the value-block left edges align (rank column
-       width + gap). */
-    .lb-row .lb-pct,
-    .lb-row .lb-streak,
-    .lb-row .lb-rare {
-      flex-basis: 100%;
-      color: var(--text-muted);
-      font-size: 0.74rem;
-      padding: 0.35rem 0 0 calc(1.4rem + 0.55rem);  /* aligns under name */
-      display: flex; align-items: center; gap: 0;    /* center, not baseline */
-      min-height: 1.5rem;
-    }
-    .lb-row .lb-pct::before,
-    .lb-row .lb-streak::before,
-    .lb-row .lb-rare::before {
-      color: var(--text-dim);
-      font-size: 0.56rem; letter-spacing: 0.1em;
-      text-transform: uppercase; font-weight: 700;
-      flex: 0 0 4.2rem;     /* fixed-width label gutter — values align */
-    }
-    .lb-row .lb-pct::before    { content: 'Correct'; }
-    .lb-row .lb-streak::before { content: 'Streak'; }
-    .lb-row .lb-rare::before   { content: 'Rarest'; }
-    .lb-rare-row { flex-wrap: wrap; row-gap: 0.25rem; }
+  /* Default (undetailed) grid: rank | player | total — three tight columns.
+     Detailed-mode rule below extends with hidden cells. */
+  .lb-row {
+    display: grid;
+    grid-template-columns:
+      2.2rem            /* rank */
+      minmax(0, 1fr)    /* player */
+      4.6rem;           /* total */
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.55rem 0.95rem;
+    border-top: 1px solid var(--border);
   }
-  .lb-table th {
-    text-align: left; color: var(--text-dim);
-    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.7rem 0.85rem;
+  .lb-row:first-child { border-top: 0; }
+  .lb-row.lb-head {
+    background: rgba(255,255,255,0.04);
+    font-size: 0.6rem; letter-spacing: 0.1em; font-weight: 800;
+    color: var(--text-dim); text-transform: uppercase;
+    padding: 0.55rem 0.95rem;
     border-bottom: 1px solid var(--border);
-    background: rgba(255,255,255,0.02);
-    white-space: nowrap;
-  }
-  .lb-table td {
-    padding: 0.7rem 0.85rem;
     border-top: 0;
-    font-variant-numeric: tabular-nums;
-    vertical-align: middle;
   }
-  /* Desktop row tint applied to each td (tr backgrounds don't render
-     reliably in HTML tables). Mobile uses display:block so the tr
-     itself can carry the tint without the td hop. */
-  .lb-row.is-me > td { background: rgba(200,255,87,0.06); }
+  .lb-row.is-me { background: rgba(200,255,87,0.06); }
   .lb-rank {
     color: var(--text-muted); font-weight: 700;
-    text-align: right; width: 2.5rem;
+    text-align: right;
   }
   .lb-row.is-me .lb-rank { color: var(--accent); }
   .lb-name {
-    color: var(--text); font-weight: 600;
-    min-width: 110px;
-    /* Team name top, real-name underneath — always stacked, never inline */
-    display: flex; flex-direction: column; align-items: flex-start;
-    gap: 0.05rem;
+    color: var(--text); font-weight: 700;
+    display: inline-flex; align-items: baseline; gap: 0.5rem;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    min-width: 0;
   }
-  .lb-real {
-    color: var(--text-muted); font-size: 0.72rem; font-weight: 500;
+  .lb-name .lb-real {
+    color: var(--text-muted); font-size: 0.7rem; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; min-width: 0;
   }
-  /* Bumped substantially over the surrounding row text so the balance
-     reads as the primary metric per player. */
-  .lb-table td.lb-balance {
+  .lb-balance {
     color: var(--accent); font-weight: 800;
-    font-size: 1.55rem; line-height: 1.1;
-    text-align: right; letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
+    text-align: right; letter-spacing: -0.01em;
   }
-  @media (max-width: 640px) {
-    .lb-table td.lb-balance { font-size: 1.45rem; }
+  /* Detail cells — hidden by default, revealed when body.show-detail is on.
+     The grid template gets re-applied so the extra columns get tracks. */
+  .lb-pct, .lb-streak, .lb-rare, .lb-risk, .lb-win,
+  .lb-head .lb-pct-h, .lb-head .lb-streak-h, .lb-head .lb-rare-h,
+  .lb-head .lb-risk-h, .lb-head .lb-win-h {
+    display: none;
   }
-  .lb-pct, .lb-streak {
+  body.show-detail .lb-row {
+    grid-template-columns:
+      2rem              /* rank */
+      minmax(0, 1.4fr)  /* player */
+      4.6rem            /* total */
+      3.6rem            /* % correct */
+      2.6rem            /* streak */
+      minmax(0, 1.2fr)  /* rarest win */
+      4.4rem            /* riskiest */
+      4.4rem;           /* largest win */
+  }
+  body.show-detail .lb-pct,
+  body.show-detail .lb-streak,
+  body.show-detail .lb-rare,
+  body.show-detail .lb-risk,
+  body.show-detail .lb-win,
+  body.show-detail .lb-head .lb-pct-h,
+  body.show-detail .lb-head .lb-streak-h,
+  body.show-detail .lb-head .lb-rare-h,
+  body.show-detail .lb-head .lb-risk-h,
+  body.show-detail .lb-head .lb-win-h {
+    display: block;
+  }
+  .lb-pct {
     color: var(--text-muted); font-weight: 600;
-    text-align: center; white-space: nowrap;
-    padding-left: 0.5rem; padding-right: 0.5rem;
+    text-align: right; white-space: nowrap;
   }
-  .lb-streak-flame { color: var(--accent); font-weight: 700; }
+  .lb-pct .lb-pct-pct { color: var(--text-dim); font-size: 0.82em; margin-left: 0.2rem; }
+  .lb-streak { color: var(--text-muted); font-weight: 700; text-align: right; }
+  .lb-streak-flame { color: var(--accent); font-weight: 800; }
+  .lb-risk, .lb-win {
+    color: var(--text-muted); font-weight: 700;
+    text-align: right; white-space: nowrap;
+  }
+  .lb-risk-amt { color: var(--lilac); font-weight: 800; }
+  .lb-win-amt  { color: var(--accent); font-weight: 800; }
+  /* Detail mode is a lot of columns — let it horizontally scroll on mobile
+     rather than wrap, so each row stays one line. */
+  body.show-detail .lb-table { min-width: 720px; }
 
   /* Rarest-pick cell. Picked side gets a pill background so the highlight
      is unambiguous (no more confusion between picked + bold-but-not-picked).
@@ -430,67 +381,76 @@
     </button>
   </div>
 
-  <!-- ── Leaderboard table ─────────────────────────────────────────── -->
+  <!-- ── Leaderboard table ───────────────────────────────────────────
+       Single-row-per-player CSS grid. Always-shown: rank, player, total.
+       Detail-mode adds: % Correct, Streak, Rarest Win, Riskiest, Largest
+       Win (toggle pinned to the body.show-detail class). -->
   <div class="lb-wrap" id="lb-section">
     <div class="lb-scroll">
-      <table class="lb-table">
-        <thead>
-          <tr>
-            <th class="lb-rank">#</th>
-            <th>Player</th>
-            <th class="lb-balance" style="text-align:right">Balance</th>
-            <th class="lb-pct" style="text-align:center">% Correct</th>
-            <th class="lb-streak" style="text-align:center">Streak</th>
-            <th class="lb-rare">Rarest Win</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in leaderboard %}
-          <tr class="lb-row{% if row.email == current_user.email %} is-me{% endif %}">
-            <td class="lb-rank">{{ loop.index }}</td>
-            <td class="lb-name">
-              {% if row.team_name %}{{ row.team_name }}
-                <span class="lb-real">{{ row.display_name }}</span>
-              {% else %}{{ row.display_name }}{% endif %}
-            </td>
-            <td class="lb-balance">${{ "%.0f"|format(row.balance) }}</td>
-            <td class="lb-pct">
-              {% if row.pct is not none %}
-                {{ row.correct }}/{{ row.total }} <span style="color:var(--text-dim)">({{ row.pct|int }}%)</span>
-              {% else %}—{% endif %}
-            </td>
-            <td class="lb-streak">
-              {% if row.streak and row.streak >= 3 %}
-                <span class="lb-streak-flame">🔥 {{ row.streak }}</span>
-              {% elif row.streak %}
-                {{ row.streak }}
-              {% else %}—{% endif %}
-            </td>
-            <td class="lb-rare">
-              {% if row.rare_pick %}
-                {% set rp = row.rare_pick %}
-                {% set ha = TEAM_ABBR.get(rp.home_team) or (rp.home_team or '?')[:3].upper() %}
-                {% set aa = TEAM_ABBR.get(rp.away_team) or (rp.away_team or '?')[:3].upper() %}
-                <div class="lb-rare-row">
-                  <span class="lb-rare-side{% if rp.my_pick == 'H' %} picked{% endif %}">
-                    <img src="https://flagcdn.com/{{ rp.home_flag }}.svg" alt="" onerror="this.style.display='none'">
-                    {{ ha }}
-                  </span>
-                  <span class="lb-rare-score{% if rp.my_pick == 'D' %} picked{% endif %}">{{ rp.home_score }}–{{ rp.away_score }}</span>
-                  <span class="lb-rare-side{% if rp.my_pick == 'A' %} picked{% endif %}">
-                    {{ aa }}
-                    <img src="https://flagcdn.com/{{ rp.away_flag }}.svg" alt="" onerror="this.style.display='none'">
-                  </span>
-                  <span class="lb-rare-pct" title="Share of the pool that picked the same side">{{ rp.field_pct|round|int }}%</span>
-                </div>
-              {% else %}
-                <span class="lb-rare-empty">—</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="lb-table" role="table" aria-label="Pool leaderboard">
+        <div class="lb-row lb-head" role="row">
+          <span role="columnheader" class="lb-rank">#</span>
+          <span role="columnheader">Player</span>
+          <span role="columnheader" class="lb-balance">Total</span>
+          <span role="columnheader" class="lb-pct lb-pct-h">% Correct</span>
+          <span role="columnheader" class="lb-streak lb-streak-h">Streak</span>
+          <span role="columnheader" class="lb-rare lb-rare-h">Rarest Win</span>
+          <span role="columnheader" class="lb-risk lb-risk-h">Riskiest</span>
+          <span role="columnheader" class="lb-win lb-win-h">Largest Win</span>
+        </div>
+        {% for row in leaderboard %}
+        <div class="lb-row{% if row.email == current_user.email %} is-me{% endif %}" role="row">
+          <span role="cell" class="lb-rank">{{ loop.index }}</span>
+          <span role="cell" class="lb-name">
+            {% if row.team_name %}{{ row.team_name }}<span class="lb-real">{{ row.display_name }}</span>
+            {% else %}{{ row.display_name }}{% endif %}
+          </span>
+          <span role="cell" class="lb-balance">${{ row.balance | round(0, 'ceil') | int }}</span>
+          <span role="cell" class="lb-pct">
+            {% if row.pct is not none %}
+              {{ row.correct }}/{{ row.total }}<span class="lb-pct-pct">({{ row.pct|int }}%)</span>
+            {% else %}—{% endif %}
+          </span>
+          <span role="cell" class="lb-streak">
+            {% if row.streak and row.streak >= 3 %}
+              <span class="lb-streak-flame">🔥 {{ row.streak }}</span>
+            {% elif row.streak %}
+              {{ row.streak }}
+            {% else %}—{% endif %}
+          </span>
+          <span role="cell" class="lb-rare">
+            {% if row.rare_pick %}
+              {% set rp = row.rare_pick %}
+              {% set ha = TEAM_ABBR.get(rp.home_team) or (rp.home_team or '?')[:3].upper() %}
+              {% set aa = TEAM_ABBR.get(rp.away_team) or (rp.away_team or '?')[:3].upper() %}
+              <span class="lb-rare-row">
+                <span class="lb-rare-side{% if rp.my_pick == 'H' %} picked{% endif %}">
+                  <img src="https://flagcdn.com/{{ rp.home_flag }}.svg" alt="" onerror="this.style.display='none'">
+                  {{ ha }}
+                </span>
+                <span class="lb-rare-score{% if rp.my_pick == 'D' %} picked{% endif %}">{{ rp.home_score }}–{{ rp.away_score }}</span>
+                <span class="lb-rare-side{% if rp.my_pick == 'A' %} picked{% endif %}">
+                  {{ aa }}
+                  <img src="https://flagcdn.com/{{ rp.away_flag }}.svg" alt="" onerror="this.style.display='none'">
+                </span>
+              </span>
+            {% else %}
+              <span class="lb-rare-empty">—</span>
+            {% endif %}
+          </span>
+          <span role="cell" class="lb-risk">
+            {% if row.riskiest_bet %}
+              <span class="lb-risk-amt">${{ row.riskiest_bet.amount | round(0, 'ceil') | int }}</span>
+            {% else %}—{% endif %}
+          </span>
+          <span role="cell" class="lb-win">
+            {% if row.largest_win %}
+              <span class="lb-win-amt">${{ row.largest_win.amount | round(0, 'ceil') | int }}</span>
+            {% else %}—{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 

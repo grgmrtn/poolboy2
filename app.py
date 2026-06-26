@@ -1349,17 +1349,21 @@ def _render_combined_stats(pool_id):
     enriched = []
     for row in leaderboard:
         uid = row["user_id"]
-        acc    = db.get_user_pick_accuracy(uid, pool_id)
-        streak = db.get_user_current_streak(uid, pool_id)
-        rare   = db.get_user_rarest_pick(uid, pool_id)
-        pct    = round((acc["correct"] * 100 / acc["total"]), 0) if acc["total"] else None
+        acc      = db.get_user_pick_accuracy(uid, pool_id)
+        streak   = db.get_user_current_streak(uid, pool_id)
+        rare     = db.get_user_rarest_pick(uid, pool_id)
+        riskiest = db.get_user_riskiest_bet(uid, pool_id)
+        largest  = db.get_user_largest_win(uid, pool_id)
+        pct      = round((acc["correct"] * 100 / acc["total"]), 0) if acc["total"] else None
         enriched.append({
             **dict(row),
-            "correct":   acc["correct"],
-            "total":     acc["total"],
-            "pct":       pct,
-            "streak":    streak,
-            "rare_pick": rare,
+            "correct":      acc["correct"],
+            "total":        acc["total"],
+            "pct":          pct,
+            "streak":       streak,
+            "rare_pick":    rare,
+            "riskiest_bet": riskiest,
+            "largest_win":  largest,
         })
 
     # Balance per scored match (one column per match).
