@@ -113,20 +113,50 @@ def ensure_odds_locked_at_column(conn):
         print(f"warn: could not ensure odds_locked_at column: {e}")
 
 
+# The Odds API and football-data.org use slightly different country/team
+# strings. Pinnacle's name is the key, football-data's name is the value.
+# Each Pinnacle name is also tried verbatim before any alias lookup.
+TEAM_ALIASES = {
+    "USA":                    "United States",
+    "Bosnia & Herzegovina":   "Bosnia-Herzegovina",
+    "Cape Verde":             "Cape Verde Islands",
+    "DR Congo":               "Congo DR",
+    "Korea Republic":         "South Korea",
+    "Korea DPR":              "North Korea",
+    "Türkiye":                "Turkey",
+}
+
+
+def _name_variants(name):
+    """Return the Pinnacle name followed by any football-data alias."""
+    variants = [name]
+    if name in TEAM_ALIASES:
+        variants.append(TEAM_ALIASES[name])
+    return variants
+
+
 def find_db_fixture(conn, home, away, ko_dt):
-    """Match an API event to a fixture. Names compared case-insensitively;
-    kick_off must be within MATCH_KO_HOURS of the API time.
+    """Match an API event to a fixture. Tries each home/away name and its
+    football-data alias; kick_off must be within MATCH_KO_HOURS of the API
+    time.
 
     Returns (row_dict, debug) where debug is None on success or a short
     reason string on failure ('no_team_match' / 'ko_drift'). Useful for
     --verbose diagnostics so we can see exactly why a no_match happened."""
-    rows = conn.execute(
-        "SELECT id, kick_off, odds_locked_at, home_odds, away_odds, "
-        "       home_team, away_team "
-        "  FROM fixtures "
-        " WHERE LOWER(home_team) = LOWER(?) AND LOWER(away_team) = LOWER(?)",
-        (home, away),
-    ).fetchall()
+    rows = []
+    for h in _name_variants(home):
+        for a in _name_variants(away):
+            rows = conn.execute(
+                "SELECT id, kick_off, odds_locked_at, home_odds, away_odds, "
+                "       home_team, away_team "
+                "  FROM fixtures "
+                " WHERE LOWER(home_team) = LOWER(?) AND LOWER(away_team) = LOWER(?)",
+                (h, a),
+            ).fetchall()
+            if rows:
+                break
+        if rows:
+            break
     if not rows:
         return None, "no_team_match"
     if not ko_dt or len(rows) == 1:
