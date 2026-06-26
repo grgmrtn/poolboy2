@@ -1970,16 +1970,21 @@ def get_pool_balance_per_match(pool_id, max_players=20):
     ).fetchone()
     start_balance = float((sc and sc["starting_balance"]) or 100)
 
+    # Any fixture that has been settled (has a result) AND at least one
+    # pool member made a pick on it. KO losses don't write a payout
+    # transaction but they still move total worth, so we can't filter by
+    # tx alone — we look at picks JOIN fixtures-with-result.
     fix_rows = conn.execute("""
         SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team, f.stage
-        FROM transactions t
-        JOIN fixtures f ON f.id = t.fixture_id
-        WHERE t.pool_id = ? AND t.type = 'payout'
-        ORDER BY f.kick_off, f.id
+          FROM picks p
+          JOIN fixtures f ON f.id = p.fixture_id
+         WHERE p.pool_id = ?
+           AND f.result IS NOT NULL AND f.result <> ''
+         ORDER BY f.kick_off, f.id
     """, (pool_id,)).fetchall()
 
     tx_rows = conn.execute("""
-        SELECT user_id, fixture_id, amount, created_at FROM transactions
+        SELECT user_id, fixture_id, amount, type, created_at FROM transactions
         WHERE pool_id = ?
     """, (pool_id,)).fetchall()
 
@@ -2055,20 +2060,70 @@ def get_pool_balance_per_match(pool_id, max_players=20):
             "away_score": as_,
         })
 
-    # Bucket per-user deltas. Fixture-id-matched transactions go into the
-    # matching column; non-fixture txns get bucketed by created_at (anchored
-    # to the first fixture whose kick_off >= created_at).
+    # Bucket per-user deltas. The chart shows TOTAL WORTH (free balance +
+    # open bets) — total only changes at settlement, never at bet-time —
+    # so we skip the bet+adjustment pair on KO ante moves and subtract
+    # the wagered amount from each KO payout (since the payout includes
+    # the original ante coming back, which was already part of total
+    # worth before settlement).
     from datetime import datetime as _dt, timezone as _tz
     kickoffs = []
     for r in fix_rows:
         ts = _parse_ts(r["kick_off"]) or _dt(2099, 1, 1, tzinfo=_tz.utc)
         kickoffs.append(ts)
 
+    # Full per-fixture stage map (covers EVERY fixture, settled or not).
+    # The fix_rows-derived map above only includes settled rows, which
+    # means bet/adjustment txs on still-open KO fixtures would otherwise
+    # slip through the skip and drop the chart line at bet-time.
+    is_ko_by_fixture = {
+        r["id"]: is_knockout_stage(r["stage"] or "")
+        for r in conn.execute("SELECT id, stage FROM fixtures").fetchall()
+    }
+
+    # Pull each user's KO bet_amount so we can a) net it out of payouts
+    # and b) synthesize a -bet delta for KO losses (which have no tx).
+    ko_bet_by_user_fixture = {}
+    for r in conn.execute(f"""
+        SELECT p.user_id, p.fixture_id, p.bet_amount,
+               f.result, p.predicted_result
+          FROM picks p JOIN fixtures f ON f.id = p.fixture_id
+         WHERE p.pool_id = ?
+           AND p.bet_amount IS NOT NULL
+           AND f.stage IN ({",".join("?" * len(_KNOCKOUT_STAGES))})
+    """, (pool_id, *_KNOCKOUT_STAGES)).fetchall():
+        ko_bet_by_user_fixture[(r["user_id"], r["fixture_id"])] = {
+            "bet":     float(r["bet_amount"] or 0),
+            "result":  r["result"],
+            "pick":    r["predicted_result"],
+        }
+
     deltas = defaultdict(lambda: defaultdict(float))
+    settled_ko_wins = set()    # (uid, fid) — track which KO bets had a payout tx
+
     for tx in tx_rows:
         uid = tx["user_id"]
         amt = float(tx["amount"])
         fid = tx["fixture_id"]
+        is_ko_fix = is_ko_by_fixture.get(fid, False) if fid else False
+        try:
+            ttype = tx["type"]
+        except (KeyError, IndexError):
+            ttype = None
+
+        # KO bet ante (negative tx) and its refund (adjustment, positive tx)
+        # do NOT change total worth — skip them outright.
+        if is_ko_fix:
+            if ttype == "bet" or ttype == "adjustment":
+                continue
+            if ttype == "payout" and amt > 0:
+                # Payout = bet × mult. Net change in total worth = payout - bet
+                # (the bet portion was already part of total worth before).
+                kp = ko_bet_by_user_fixture.get((uid, fid))
+                if kp:
+                    amt -= kp["bet"]
+                settled_ko_wins.add((uid, fid))
+
         col = fix_id_to_col.get(fid) if fid else None
         if col is None:
             ts = _parse_ts(tx["created_at"])
@@ -2081,6 +2136,21 @@ def get_pool_balance_per_match(pool_id, max_players=20):
                         col = i + 1
                         break
         deltas[uid][col] += amt
+
+    # KO LOSSES leave no transaction at settlement, but the user's total
+    # worth drops by the ante. Synthesize a -bet delta for any settled KO
+    # pick that didn't land in settled_ko_wins above.
+    for (uid, fid), kp in ko_bet_by_user_fixture.items():
+        if not kp["result"]:
+            continue   # not settled yet
+        if (uid, fid) in settled_ko_wins:
+            continue   # already counted via payout tx
+        if kp["pick"] == kp["result"]:
+            continue   # win, but somehow no payout — leave to existing path
+        col = fix_id_to_col.get(fid)
+        if col is None:
+            continue   # fixture has no settlement column in this view
+        deltas[uid][col] -= kp["bet"]
 
     # Pull per-user per-fixture picks + bets so the chart tooltip can
     # show what a player did on that specific match.
