@@ -796,6 +796,25 @@ def pool_page(pool_id):
         if stage_name != "Completed" and fixs and all(f.get("result") for f in fixs)
     }
 
+    # Plus: collapse every stage strictly later than the soonest
+    # not-yet-resolved one — so only the "current" round (and earlier
+    # stale rounds, if any) stays open. Determined by earliest kick_off
+    # among unresolved fixtures in each stage.
+    _earliest_open_ko = {}
+    for stage_name, fixs in grouped_fixtures.items():
+        if stage_name == "Completed":
+            continue
+        kos = [f.get("kick_off") for f in fixs if not f.get("result") and f.get("kick_off")]
+        if kos:
+            _earliest_open_ko[stage_name] = min(kos)
+    if _earliest_open_ko:
+        _current_ko = min(_earliest_open_ko.values())
+        future_collapsed_stages = {
+            s for s, ko in _earliest_open_ko.items() if ko > _current_ko
+        }
+    else:
+        future_collapsed_stages = set()
+
     # payouts_by_fixture[fixture_id][user_email] = amount — used to show each
     # revealed player's +$X / -$X on completed fixtures.
     conn = db.get_db()
@@ -894,6 +913,7 @@ def pool_page(pool_id):
         top_player_emails=top_player_emails,
         payouts_by_fixture=payouts_by_fixture,
         fully_complete_stages=fully_complete_stages,
+        future_collapsed_stages=future_collapsed_stages,
         field_spy_cost_by_fixture=field_spy_cost_by_fixture,
         ko_pot_by_fixture=pots,
         my_rank_label=my_rank_label,

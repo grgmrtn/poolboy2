@@ -1303,14 +1303,6 @@
     border-radius: 10px; overflow: hidden;
     transition: border-color 0.15s, box-shadow 0.4s;
   }
-  /* For upcoming KO fixtures the .match-pill is empty (no pick-row, no
-     count-row); when no reveal-grid is rendered the container would
-     otherwise show as an empty grey-bordered card. Hide it entirely in
-     that case so the spy bar + picker pill below read as the whole row. */
-  .match-container.is-ko-empty:not(:has(.reveal-grid)) {
-    display: none;
-  }
-
   /* ── Match pill ──────────────────────────────────────────────────── */
   .match-pill {
     display: flex; flex-direction: column;
@@ -2590,7 +2582,9 @@
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
 
           {% set is_completed_stage = stage == 'Completed' or stage in fully_complete_stages %}
-          <div class="stage-heading {% if is_completed_stage %}collapsed{% endif %}"
+          {% set is_future_stage = stage in future_collapsed_stages %}
+          {% set start_collapsed = is_completed_stage or is_future_stage %}
+          <div class="stage-heading {% if start_collapsed %}collapsed{% endif %}"
                onclick="toggleStageHeading(this)">
             <span class="caret">▼</span>
             <span>{{ stage }}</span>
@@ -2598,6 +2592,10 @@
               {% if is_completed_stage %}
                 <span class="stage-meta">
                   {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }} · done
+                </span>
+              {% elif is_future_stage %}
+                <span class="stage-meta">
+                  {{ fixtures|length }} {{ 'game' if fixtures|length == 1 else 'games' }} · upcoming
                 </span>
               {% endif %}
               {% if stage != 'Completed' %}
@@ -2851,12 +2849,33 @@
                 <!-- Pill column -->
                 <div class="fixture-col">
 
+                  {# Decide upfront whether the match-container card is
+                     worth rendering at all. For upcoming KO fixtures the
+                     match-pill is intentionally empty (no pickrow, no
+                     count-row), so the container only earns its grey
+                     border when there's a reveal-grid below it. Computing
+                     has_any_visible_other up here means we can skip the
+                     whole card cleanly when neither contributes. #}
+                  {% set _container_has_pill = not _hide_pickrow_for_ko %}
+                  {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
+                  {% set has_any_visible_other = namespace(val=false) %}
+                  {% for o in others %}
+                    {% if o.email != current_user.email and o.visible %}
+                      {% set has_any_visible_other.val = true %}
+                    {% endif %}
+                  {% endfor %}
+                  {% set _container_has_reveal = field_revealed and has_any_visible_other.val %}
+                  {% set _render_match_container = _container_has_pill or _container_has_reveal %}
+
                   <!-- Match pill (top) + reveal grid (bottom) unified into one card -->
                   <div class="match-row">
-                    <div class="match-container{% if _hide_pickrow_for_ko %} is-ko-empty{% endif %}">
+                    {% if _render_match_container %}
+                    <div class="match-container">
+                    {% endif %}
                     {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
                     {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
 
+                    {% if _container_has_pill %}
                     <div class="{{ pill_cls }}"
                          data-home-flag="{{ f.home_flag_code or 'un' }}"
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
@@ -2945,16 +2964,10 @@
                         </div>
                       {% endif %}
                     </div><!-- /.match-pill -->
+                    {% endif %}{# /_container_has_pill #}
 
                   {# ── Reveal grid: counts + names aligned with H/D/A sides ── #}
-                  {% set field_revealed = is_completed or is_started or (f.id in aggregate_spy_set) %}
                   {% set t = field_totals.get(f.id) if field_revealed else None %}
-                  {% set has_any_visible_other = namespace(val=false) %}
-                  {% for o in others %}
-                    {% if o.email != current_user.email and o.visible %}
-                      {% set has_any_visible_other.val = true %}
-                    {% endif %}
-                  {% endfor %}
                   {# After a fixture has locked or finished, every pick is auto-revealed.
                      Showing all N names would clutter the grid, so we display top-5
                      player names by current balance (tie-cap of 2 per balance bucket)
@@ -2997,7 +3010,9 @@
                     <div class="reveal-col reveal-away">{{ side_render('A') }}</div>
                   </div>
                   {% endif %}
+                    {% if _render_match_container %}
                     </div><!-- /.match-container -->
+                    {% endif %}
                     {% if not is_completed %}
                       <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
                     {% endif %}
@@ -4388,14 +4403,20 @@
       el.textContent = 'Odds locked';
       return;
     }
-    const hrs = diff / 3.6e6;
-    if (hrs < 1) {
+    if (diff < 60 * 60 * 1000) {
       el.className = 'meta-odds is-locking';
-      el.textContent = `Odds locking in ${Math.max(1, Math.round(diff / 60000))}m`;
-    } else {
-      el.className = 'meta-odds is-live';
-      el.textContent = `Odds live · ${Math.round(hrs)}h to lock`;
+      el.textContent = `Locks in ${Math.max(1, Math.round(diff / 60000))}m`;
+      return;
     }
+    // Same Xd Xh / Xh Xm pattern as the picks countdown.
+    const totalSec = Math.floor(diff / 1000);
+    const days     = Math.floor(totalSec / 86400);
+    const hours    = Math.floor((totalSec %  86400) / 3600);
+    const minutes  = Math.floor((totalSec %   3600) /   60);
+    el.className = 'meta-odds is-live';
+    el.textContent = days > 0
+      ? `Locks in ${days}d ${hours}h`
+      : `Locks in ${hours}h ${minutes}m`;
   }
 
   // ── Countdown timers ───────────────────────────────────────────────────
@@ -4429,20 +4450,17 @@
         revealFixturePicks(fixtureId, poolId);
         return;
       }
-      // Pick the two largest non-zero units so the countdown stays compact
-      // regardless of how far away the fixture is. We refresh every 60s when
-      // the lock is hours+ away (saves render churn), every 1s in the final
-      // minute (per-second urgency).
+      // Compact two-unit countdown. Always flattens to days+hours when at
+      // least a day remains (no separate weeks unit) for consistency with
+      // the odds-lock counter. Refreshes every 60s far out, every 1s in
+      // the final minute (per-second urgency).
       const totalSec  = Math.floor(remaining / 1000);
-      const weeks     = Math.floor(totalSec / 604800);
-      const days      = Math.floor((totalSec %  604800) / 86400);
-      const hours     = Math.floor((totalSec %   86400) /  3600);
-      const minutes   = Math.floor((totalSec %    3600) /    60);
-      const seconds   =  totalSec %      60;
+      const days      = Math.floor(totalSec / 86400);
+      const hours     = Math.floor((totalSec %  86400) / 3600);
+      const minutes   = Math.floor((totalSec %   3600) /   60);
+      const seconds   =  totalSec %     60;
       let label;
-      if (weeks > 0) {
-        label = `${weeks}w ${days}d lock`;
-      } else if (days > 0) {
+      if (days > 0) {
         label = `${days}d ${hours}h lock`;
       } else if (hours > 0) {
         label = `${hours}h ${minutes}m lock`;
