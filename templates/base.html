@@ -95,7 +95,7 @@
     .navbar-brand {
       color: var(--text);
       font-weight: 700;
-      font-size: 0.95rem;                  /* +0.10rem */
+      font-size: 0.82rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
@@ -115,37 +115,70 @@
     }
     .nav-link:hover { color: var(--text); text-decoration: none; }
     .nav-logout {
-      color: var(--text-muted);            /* was text-dim — now meets AA contrast */
-      font-size: 0.78rem;                  /* +0.06rem */
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      color: var(--text-muted);
       border: 1px solid var(--border);
-      padding: 0.3rem 0.7rem;
-      border-radius: var(--radius);
+      width: 2rem; height: 2rem;
+      border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
       transition: all 0.15s;
     }
     .nav-logout:hover { color: var(--text); border-color: var(--border-hi); text-decoration: none; }
+    .nav-logout svg { display: block; }
 
-    /* ── Nav rank/balance pill ────────────────────────────────────────── */
+    /* ── Nav pill: 3 segments x 2 rows ──────────────────────────────────
+       [$300 / TOTAL] [$200 / BET] [14th / RANK]
+       Each segment stacks an amount and a tiny uppercase label below.
+       Colours by role: balance lime, bet lilac, rank neutral white. */
+    :root { --lilac: #ff7a1a; }  /* neon orange — used for every bet amount in the UI */
     .nav-rank {
       display: inline-flex;
-      align-items: baseline;
-      gap: 0.55rem;
-      padding: 0.35rem 0.85rem;
-      border-radius: 999px;
-      background: rgba(200,255,87,0.10);
-      border: 1px solid rgba(200,255,87,0.32);
+      align-items: stretch;
+      gap: 0;
+      padding: 0;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
       color: var(--text);
-      font-weight: 700;
-      letter-spacing: 0.04em;
       white-space: nowrap;
+      overflow: hidden;
     }
-    .nav-rank .nav-balance { color: var(--accent); font-size: 1rem; }
-    .nav-rank .nav-rank-fraction {
-      color: var(--text-muted); font-weight: 500;
-      font-size: 0.78rem;
+    .nav-rank:hover { border-color: var(--border-hi); }
+    .nav-seg {
+      display: inline-flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0.3rem 0.85rem;
+      line-height: 1;
+      font-family: var(--mono);
+      border-right: 1px solid var(--border);
     }
-    .nav-rank-fraction .nav-rank-pos { color: var(--text); font-weight: 700; }
+    .nav-seg:last-child { border-right: 0; }
+    .nav-seg-value {
+      font-size: 1.05rem; font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+    }
+    .nav-seg-label {
+      font-size: 0.5rem; font-weight: 700; letter-spacing: 0.12em;
+      margin-top: 0.18rem;
+      color: var(--text-dim);
+    }
+    .nav-seg-tobet  .nav-seg-value { color: var(--accent); }
+    .nav-seg-placed .nav-seg-value { color: var(--lilac); }
+    .nav-seg-total  .nav-seg-value { color: #ffffff; }
+    .nav-seg-rank   .nav-seg-value { color: #ffffff; }
+    /* Slot-machine animation: when a bet moves money between TO BET and
+       PLACED, the affected numbers roll up or down through the integer
+       range to draw the eye to the change. Implemented JS-side via
+       requestAnimationFrame; CSS just adds a brief glow on the bumped
+       segment so the animation reads as a state change. */
+    .nav-seg-value.is-bumping {
+      animation: navBumpGlow 0.6s ease-out;
+    }
+    @keyframes navBumpGlow {
+      0%   { text-shadow: 0 0 0 transparent; }
+      35%  { text-shadow: 0 0 12px currentColor; }
+      100% { text-shadow: 0 0 0 transparent; }
+    }
     /* Centre the pill on mid+ screens; on narrow iPhone we let it float left */
     @media (min-width: 701px) {
       .navbar { display: grid; grid-template-columns: 1fr auto 1fr; }
@@ -153,9 +186,14 @@
       .nav-center { display: flex; justify-content: center; }
     }
     @media (max-width: 700px) {
-      .nav-rank { font-size: 0.85rem; padding: 0.3rem 0.7rem; }
-      .nav-rank .nav-balance { font-size: 0.92rem; }
-      .nav-rank .nav-rank-fraction { font-size: 0.7rem; }
+      .nav-seg { padding: 0.25rem 0.6rem; }
+      .nav-seg-value { font-size: 0.92rem; }
+      .nav-seg-label { font-size: 0.46rem; margin-top: 0.14rem; }
+    }
+    @media (max-width: 380px) {
+      .nav-seg { padding: 0.22rem 0.45rem; }
+      .nav-seg-value { font-size: 0.82rem; }
+      .nav-seg-label { font-size: 0.42rem; }
     }
 
     /* ── Page wrapper ─────────────────────────────────────────────────── */
@@ -333,10 +371,28 @@
       <a href="{{ url_for('leaderboard_page', pool_id=current_user.nav_pool_id) }}"
          class="nav-rank" style="text-decoration:none"
          title="View leaderboard">
-        <span class="nav-balance">${{ "%.0f"|format(current_user.nav_balance) }}</span>
-        {% if current_user.nav_rank %}
-        <span class="nav-rank-fraction">
-          <span class="nav-rank-pos">{{ current_user.nav_rank }}</span>/{{ current_user.nav_pool_size }}
+        <span class="nav-seg nav-seg-tobet">
+          <span class="nav-seg-value" data-nav-amt="tobet"
+                data-value="{{ current_user.nav_balance | round(0) }}"
+                >${{ "%.0f"|format(current_user.nav_balance) }}</span>
+          <span class="nav-seg-label">AVAIL</span>
+        </span>
+        <span class="nav-seg nav-seg-placed">
+          <span class="nav-seg-value" data-nav-amt="placed"
+                data-value="{{ current_user.nav_total_bet | round(0) }}"
+                >${{ "%.0f"|format(current_user.nav_total_bet) }}</span>
+          <span class="nav-seg-label">PLACED</span>
+        </span>
+        <span class="nav-seg nav-seg-total">
+          <span class="nav-seg-value" data-nav-amt="total"
+                data-value="{{ current_user.nav_grand_total | round(0) }}"
+                >${{ "%.0f"|format(current_user.nav_grand_total) }}</span>
+          <span class="nav-seg-label">TOTAL</span>
+        </span>
+        {% if current_user.nav_rank_label %}
+        <span class="nav-seg nav-seg-rank">
+          <span class="nav-seg-value">{{ current_user.nav_rank_label }}</span>
+          <span class="nav-seg-label">{% if current_user.nav_pool_size %}OF {{ current_user.nav_pool_size }}{% else %}RANK{% endif %}</span>
         </span>
         {% endif %}
       </a>
@@ -347,7 +403,15 @@
       {% if current_user.is_admin %}
         <a href="{{ url_for('admin_page') }}" class="nav-link">admin</a>
       {% endif %}
-      <a href="{{ url_for('logout') }}" class="nav-logout">logout</a>
+      <a href="{{ url_for('logout') }}" class="nav-logout" title="Log out" aria-label="Log out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </a>
     </div>
   </nav>
   {% endif %}
@@ -364,6 +428,50 @@
       </div>
     {% endif %}
   {% endwith %}
+
+  <!-- ── Navbar bet-amount animation ─────────────────────────────────
+       Roll the affected nav segments from their current value to a new
+       value so users see "money moving" when a bet is placed/changed.
+       Exposed globally as window.bumpNavAmounts({tobet, placed, total})
+       — any page (chiefly pool.html) calls it after a successful save. -->
+  <script>
+  (function () {
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+    function animateValue(el, from, to, durationMs) {
+      if (!el) return;
+      from = Number(from) || 0;
+      to   = Number(to)   || 0;
+      if (Math.abs(from - to) < 0.5) {
+        el.textContent = `$${Math.round(to)}`;
+        return;
+      }
+      const start = performance.now();
+      function step(now) {
+        const t = Math.min(1, (now - start) / durationMs);
+        const cur = from + (to - from) * easeOutCubic(t);
+        el.textContent = `$${Math.round(cur)}`;
+        if (t < 1) requestAnimationFrame(step);
+        else el.dataset.value = String(to);
+      }
+      el.classList.remove('is-bumping');
+      // Reflow to restart the CSS animation
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetWidth;
+      el.classList.add('is-bumping');
+      requestAnimationFrame(step);
+    }
+    window.bumpNavAmounts = function (next) {
+      if (!next) return;
+      ['tobet', 'placed', 'total'].forEach(key => {
+        if (next[key] == null) return;
+        document.querySelectorAll(`[data-nav-amt="${key}"]`).forEach(el => {
+          const from = parseFloat(el.dataset.value || el.textContent.replace(/[^0-9.\-]/g, '') || '0');
+          animateValue(el, from, next[key], 550);
+        });
+      });
+    };
+  })();
+  </script>
 
   <!-- ── Main content ───────────────────────────────────────────────── -->
   {% block content %}{% endblock %}

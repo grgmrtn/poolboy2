@@ -135,36 +135,43 @@ def current_user():
     user = dict(user)
     user["total_score"] = db.get_user_total_score(user["id"])
 
+    def _attach_nav(user, pool_id, pool_name, balance):
+        """Stamp the four navbar segments onto the user dict.
+           TO BET = balance still available · PLACED = open KO antes ·
+           TOTAL = the two added together (your full bankroll) · RANK."""
+        rank, size = db.get_member_rank(user["id"], pool_id)
+        placed = db.get_open_ko_bet_total(user["id"], pool_id)
+        user["nav_balance"]    = float(balance or 0)
+        user["nav_total_bet"]  = placed
+        user["nav_grand_total"] = float(balance or 0) + placed
+        user["nav_rank"]       = rank
+        user["nav_rank_label"] = _ordinal_short(rank) if rank else None
+        user["nav_pool_size"]  = size
+        user["nav_pool_id"]    = pool_id
+        user["nav_pool_name"]  = pool_name
+
     preferred_id = getattr(g, "nav_pool_id", None)
-    pool_for_nav = None
     if preferred_id:
         # User is on a pool page — use that pool for the nav
         pool_for_nav = db.get_pool_by_id(preferred_id)
         if pool_for_nav and db.is_pool_member(user["id"], preferred_id):
             mem = db.get_pool_membership(user["id"], preferred_id)
-            user["nav_balance"] = float(mem["balance"] or 0)
-            rank, size = db.get_member_rank(user["id"], preferred_id)
-            user["nav_rank"] = rank
-            user["nav_pool_size"] = size
-            user["nav_pool_id"] = preferred_id
-            user["nav_pool_name"] = pool_for_nav["name"]
+            _attach_nav(user, preferred_id, pool_for_nav["name"], mem["balance"])
             return user
 
     pools = db.get_pools_for_user(user["id"])
     if pools:
         first = pools[0]
-        user["nav_balance"] = float(first["balance"] or 0)
-        rank, size = db.get_member_rank(user["id"], first["id"])
-        user["nav_rank"] = rank
-        user["nav_pool_size"] = size
-        user["nav_pool_id"] = first["id"]
-        user["nav_pool_name"] = first["name"]
+        _attach_nav(user, first["id"], first["name"], first["balance"])
     else:
-        user["nav_balance"] = None
-        user["nav_rank"] = None
-        user["nav_pool_size"] = None
-        user["nav_pool_id"] = None
-        user["nav_pool_name"] = None
+        user["nav_balance"]    = None
+        user["nav_total_bet"]  = 0.0
+        user["nav_grand_total"] = None
+        user["nav_rank"]       = None
+        user["nav_rank_label"] = None
+        user["nav_pool_size"]  = None
+        user["nav_pool_id"]    = None
+        user["nav_pool_name"]  = None
     return user
 
 
@@ -746,20 +753,40 @@ def pool_page(pool_id):
     pick_counts_by_fixture = db.get_pick_counts_for_pool(pool_id)
     top_player_emails = db.get_top_n_player_emails(pool_id, n=5, tie_cap=2)
 
-    # Per-fixture field-spy cost: KO fixtures scale with the pot
-    # (max(base, min(pct*pot, cap))); group stage stays flat at base.
-    # Batched: one query returns the pot for every fixture this pool has bets on.
+    # Per-fixture field-spy cost.
+    #   • Group stage: flat aggregate_spy_cost.
+    #   • KO stage: max($5, 10% of the spy-eligible pot), no cap. The
+    #     spy-eligible pot excludes the VIEWER's own bet AND the single
+    #     largest non-viewer bet — so the price tracks "what's left of
+    #     the field to learn" rather than the headline pot. If the
+    #     viewer is themselves the top bettor, only their bet is removed.
     pots = db.get_fixture_pots_for_pool(pool_id)
+    # Walk every pick once to compute per-fixture (viewer bet, top other
+    # bet) — cheap O(N) over the pool's pick set.
+    _my_bet_by_fix  = {}
+    _top_other_by_fix = {}
+    for r in all_pick_rows:
+        amt = float(r["bet_amount"] or 0)
+        if not amt:
+            continue
+        fid = r["fixture_id"]
+        if r["user_id"] == user["id"]:
+            _my_bet_by_fix[fid] = amt
+        else:
+            if amt > _top_other_by_fix.get(fid, 0):
+                _top_other_by_fix[fid] = amt
     field_spy_cost_by_fixture = {}
-    _base = float(scoring_config.get("aggregate_spy_cost", 2.0))
-    _pct  = float(scoring_config.get("ko_spy_pct", 0.10))
-    _cap  = float(scoring_config.get("ko_spy_cap", 20.0))
+    _base   = 5.0  # KO base; group stage still uses the config value below
+    _g_base = float(scoring_config.get("aggregate_spy_cost", 2.0))
     for fix in fixture_lookup.values():
         if db.is_knockout_stage(fix.get("stage") or ""):
             pot = pots.get(fix["id"], 0.0)
-            field_spy_cost_by_fixture[fix["id"]] = round(max(_base, min(_pct * pot, _cap)), 2)
+            my  = _my_bet_by_fix.get(fix["id"], 0.0)
+            top = _top_other_by_fix.get(fix["id"], 0.0)
+            excl = max(0.0, pot - my - top)
+            field_spy_cost_by_fixture[fix["id"]] = round(max(_base, 0.10 * excl), 2)
         else:
-            field_spy_cost_by_fixture[fix["id"]] = round(_base, 2)
+            field_spy_cost_by_fixture[fix["id"]] = round(_g_base, 2)
 
     # Stages where every fixture has a result render collapsed by default —
     # keeps the page short once a matchday or round is finished. Excludes
@@ -798,7 +825,55 @@ def pool_page(pool_id):
     # Live-now banner data — any fixture flagged IN_PLAY / PAUSED gets a
     # picks-by-side breakdown so the banner can render bets without
     # another DB hit. Re-used by the /live-now JSON endpoint below.
-    live_now_data = _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture)
+    # Top-10 pool-rank map drives the badge that decorates each picker's
+    # name in the live-banner bet list. The viewer's own rank is already
+    # in `my_rank` (computed above via db.get_member_rank), we just need
+    # an ordinal label for the top-stats tile.
+    _rank_by_uid = {row["user_id"]: i + 1 for i, row in enumerate(leaderboard)}
+    my_rank_label = _ordinal_short(my_rank) if my_rank else None
+
+    # Sum of antes currently in play + the per-bet detail list. Drives
+    # both the BET circle on the stats tile and the expanded "Placed
+    # bets" list inside the new pool-hero panel.
+    my_total_bet = 0.0
+    my_placed_bets = []
+    for fix in fixture_lookup.values():
+        if fix.get("result"):
+            continue
+        if not db.is_knockout_stage(fix.get("stage") or ""):
+            continue
+        pick = existing_picks.get(fix["id"])
+        if not (pick and pick.get("bet_amount")):
+            continue
+        bet = float(pick["bet_amount"])
+        my_total_bet += bet
+        side = pick["predicted_result"]
+        ho   = fix.get("home_odds")
+        ao   = fix.get("away_odds")
+        mult = (ho if side == "H" else ao) if (ho is not None and ao is not None) else None
+        my_placed_bets.append({
+            "fixture_id": fix["id"],
+            "kick_off":   fix.get("kick_off"),
+            "kick_off_display": fix.get("kick_off_display"),
+            "home_team":  fix.get("home_team"),
+            "away_team":  fix.get("away_team"),
+            "home_abbr":  TEAM_ABBR.get(fix.get("home_team") or "") or (fix.get("home_team") or "HME")[:3].upper(),
+            "away_abbr":  TEAM_ABBR.get(fix.get("away_team") or "") or (fix.get("away_team") or "AWY")[:3].upper(),
+            "home_flag":  fix.get("home_flag_code") or "un",
+            "away_flag":  fix.get("away_flag_code") or "un",
+            "round":      fix.get("round"),
+            "stage":      fix.get("stage"),
+            "pick":       side,
+            "bet":        bet,
+            "mult":       mult,
+            "payout":     round(bet * mult, 2) if mult else None,
+        })
+    my_placed_bets.sort(key=lambda b: b.get("kick_off") or "")
+
+    live_now_data = _build_live_now_data(
+        pool_id, grouped_fixtures, all_picks_by_fixture,
+        rank_by_uid=_rank_by_uid,
+    )
 
     return render_template("pool.html",
         pool=pool,
@@ -820,6 +895,10 @@ def pool_page(pool_id):
         payouts_by_fixture=payouts_by_fixture,
         fully_complete_stages=fully_complete_stages,
         field_spy_cost_by_fixture=field_spy_cost_by_fixture,
+        ko_pot_by_fixture=pots,
+        my_rank_label=my_rank_label,
+        my_total_bet=round(my_total_bet, 2),
+        my_placed_bets=my_placed_bets,
         group_standings=group_standings,
         lock_minutes=LOCK_MINUTES,
         my_rank=my_rank,
@@ -830,7 +909,18 @@ def pool_page(pool_id):
     )
 
 
-def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
+def _ordinal_short(n):
+    """1 → '1st', 2 → '2nd', 11 → '11th' — used for the top-10 pool-rank
+    badge that decorates each picker's name in the live panel."""
+    if 10 <= (n % 100) <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture,
+                          rank_by_uid=None):
     """
     Per-fixture data for the Live banner. Includes any fixture that's
     either (a) flagged IN_PLAY / PAUSED by the auto-score cron, OR (b)
@@ -889,32 +979,54 @@ def _build_live_now_data(pool_id, grouped_fixtures, all_picks_by_fixture):
             for p in picks:
                 side = p.get("predicted_result")
                 if side in picks_by_side:
+                    uid = p.get("user_id")
+                    rank = rank_by_uid.get(uid) if rank_by_uid else None
+                    # Only surface a pool-rank badge for the top-10 — keeps
+                    # the bet list quiet for the long tail.
+                    rank_label = _ordinal_short(rank) if rank and rank <= 10 else None
                     picks_by_side[side].append({
-                        "user_id":      p.get("user_id"),
-                        "email":        p.get("email"),
-                        "first_name":   shorts.get(p.get("email"),
-                                                   _short_name(p.get("display_name"))),
-                        "bet_amount":   p.get("bet_amount"),
+                        "user_id":         uid,
+                        "email":           p.get("email"),
+                        "first_name":      shorts.get(p.get("email"),
+                                                      _short_name(p.get("display_name"))),
+                        "bet_amount":      p.get("bet_amount"),
+                        "pool_rank":       rank,
+                        "pool_rank_label": rank_label,
                     })
             for side in picks_by_side:
                 picks_by_side[side].sort(
                     key=lambda x: (-(x.get("bet_amount") or 0), x["first_name"].lower())
                 )
+            is_ko_fix = db.is_knockout_stage(f.get("stage") or "")
+            # Sum every wagered ante across H/D/A — surfaced as the
+            # "$N at risk" chip in the live panel BETS header. KO only;
+            # group-stage picks carry no bet_amount.
+            total_wagered = 0.0
+            if is_ko_fix:
+                for _side_picks in picks_by_side.values():
+                    for _p in _side_picks:
+                        total_wagered += float(_p.get("bet_amount") or 0)
             out.append({
-                "id":            f["id"],
-                "home_team":     f.get("home_team"),
-                "away_team":     f.get("away_team"),
-                "home_flag":     f.get("home_flag_code") or "un",
-                "away_flag":     f.get("away_flag_code") or "un",
-                "live_home":     f.get("live_home_score"),
-                "live_away":     f.get("live_away_score"),
-                "live_status":   f.get("live_status"),
-                "stage":         f.get("stage"),
-                "city":          f.get("city"),
-                "minute_est":    minute_est,
-                "picks_by_side": picks_by_side,
-                "is_ko":         db.is_knockout_stage(f.get("stage") or ""),
-                "is_pre_kick":   is_pre_kick,
+                "id":             f["id"],
+                "home_team":      f.get("home_team"),
+                "away_team":      f.get("away_team"),
+                "home_flag":      f.get("home_flag_code") or "un",
+                "away_flag":      f.get("away_flag_code") or "un",
+                "live_home":      f.get("live_home_score"),
+                "live_away":      f.get("live_away_score"),
+                "live_status":    f.get("live_status"),
+                "stage":          f.get("stage"),
+                "city":           f.get("city"),
+                "minute_est":     minute_est,
+                "picks_by_side":  picks_by_side,
+                "is_ko":          is_ko_fix,
+                "is_pre_kick":    is_pre_kick,
+                # KO odds for the team-name chips + match-pill display.
+                # Stored as decimals in the DB; JS reformats per the
+                # viewer's wc26_odds_mode preference.
+                "home_odds":      f.get("home_odds") if is_ko_fix else None,
+                "away_odds":      f.get("away_odds") if is_ko_fix else None,
+                "total_wagered":  round(total_wagered, 2) if is_ko_fix else None,
             })
     return out
 
@@ -950,7 +1062,10 @@ def live_now_json(pool_id):
     for r in pick_rows:
         all_picks_by_fixture.setdefault(r["fixture_id"], []).append(dict(r))
 
-    live = _build_live_now_data(pool_id, grouped_raw, all_picks_by_fixture)
+    _leaderboard = db.get_pool_leaderboard(pool_id)
+    _rank_by_uid = {row["user_id"]: i + 1 for i, row in enumerate(_leaderboard)}
+    live = _build_live_now_data(pool_id, grouped_raw, all_picks_by_fixture,
+                                 rank_by_uid=_rank_by_uid)
     return jsonify({"live": live, "my_email": user["email"]})
 
 
@@ -1314,6 +1429,24 @@ def submit_pick(pool_id):
         return jsonify({"ok": False, "error": "Draws are not allowed in knockout rounds."}), 400
 
     if knockout:
+        # Block bets on KO fixtures with unresolved matchups (one team still
+        # "TBD") or odds not yet posted. Mirrors the template-side gate so
+        # the API can't be poked around the UI.
+        conn2 = db.get_db()
+        meta = conn2.execute(
+            "SELECT home_team, away_team, home_odds, away_odds "
+            "FROM fixtures WHERE id=?", (fixture_id,)
+        ).fetchone()
+        conn2.close()
+        if meta:
+            h = (meta["home_team"] or "").upper()
+            a = (meta["away_team"] or "").upper()
+            if not h or not a or h.startswith("TBD") or a.startswith("TBD"):
+                return jsonify({"ok": False,
+                                "error": "Both teams must be confirmed before betting opens."}), 400
+            if meta["home_odds"] is None or meta["away_odds"] is None:
+                return jsonify({"ok": False,
+                                "error": "Odds aren't posted for this fixture yet."}), 400
         bet_raw = data.get("bet_amount")
         try:
             bet_amount = float(bet_raw) if bet_raw is not None else None
@@ -1338,7 +1471,16 @@ def submit_pick(pool_id):
 
     db.upsert_pick(str(uuid.uuid4()), user["id"], pool_id, fixture_id, prediction, bet_amount)
     new_balance = db.get_member_balance(user["id"], pool_id)
-    return jsonify({"ok": True, "new_balance": new_balance})
+    # Open-bet sum + grand total drive the animated nav segments so the
+    # client can roll the numbers without a follow-up request.
+    new_total_bet  = db.get_open_ko_bet_total(user["id"], pool_id) if knockout else 0.0
+    grand_total    = float(new_balance) + float(new_total_bet)
+    return jsonify({
+        "ok": True,
+        "new_balance": new_balance,
+        "new_total_bet": new_total_bet,
+        "grand_total":   grand_total,
+    })
 
 
 def _apply_ko_bet(user_id, pool_id, fixture_id, old_bet, new_bet):
@@ -1540,7 +1682,18 @@ def spy_pick(pool_id):
     if target["id"] == user["id"]:
         return jsonify({"ok": False, "error": "Cannot spy on yourself."}), 400
 
+    # Individual-player spies are too cheap relative to KO antes; field-spy
+    # only on KO fixtures (cost max($5, 10% of pot)).
     conn = db.get_db()
+    _stage_row = conn.execute(
+        "SELECT stage FROM fixtures WHERE id=?", (fixture_id,)
+    ).fetchone()
+    if _stage_row and db.is_knockout_stage((_stage_row["stage"] or "")):
+        conn.close()
+        return jsonify({
+            "ok": False,
+            "error": "Targeted spies are disabled on KO matches — use Spy the Field instead."
+        }), 400
     fixture = conn.execute("SELECT kick_off, stage FROM fixtures WHERE id=?", (fixture_id,)).fetchone()
     if not fixture:
         conn.close()
@@ -1868,6 +2021,23 @@ def set_fixture_odds(fixture_id):
     if home is False or away is False:
         flash("Odds must be positive numbers (or blank to clear).", "error")
         return redirect(url_for("admin_page"))
+
+    # The Odds cron freezes a fixture's line 12 h pre-kickoff. Once stamped
+    # `odds_locked_at`, refuse manual edits unless the admin passes
+    # `force=1` (e.g. emergency correction).
+    if not request.form.get("force"):
+        conn = db.get_db()
+        row = conn.execute(
+            "SELECT odds_locked_at FROM fixtures WHERE id=?", (fixture_id,)
+        ).fetchone()
+        conn.close()
+        if row and row["odds_locked_at"]:
+            flash(
+                f"Odds are locked (frozen {row['odds_locked_at']}). "
+                "Re-submit with the 'force' override to unlock.",
+                "error",
+            )
+            return redirect(url_for("admin_page"))
 
     db.set_fixture_odds(fixture_id, home, away)
     if home is None and away is None:

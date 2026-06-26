@@ -88,40 +88,184 @@
   }
   .pool-intro-x:hover { color: var(--text); background: rgba(255,255,255,0.05); }
 
-  /* Top stats panel + chip row */
-  .pool-stats-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-    margin-bottom: 0.85rem;
-  }
-  .ps-tile {
+  /* Pool hero — expanded view of the navbar pill. Four big segments
+     [AVAIL · PLACED · TOTAL · RANK] on top, then an optional "Placed
+     bets" detail strip listing each open wager. */
+  .pool-stats-bar { margin-bottom: 0.85rem; }
+  .ps-hero {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 0.65rem 0.9rem 0.7rem;
+    padding: 0.85rem 0.95rem;
+    display: flex; flex-direction: column; gap: 0.85rem;
     min-width: 0;
   }
-  .ps-label {
-    font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-dim); font-weight: 700;
-    margin-bottom: 0.2rem;
+  .ps-segs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    align-items: stretch;
   }
-  .ps-value {
-    font-size: 1.3rem; font-weight: 800; color: var(--accent);
-    letter-spacing: -0.01em; line-height: 1.1;
+  .ps-seg {
+    min-width: 0;             /* allow the grid track to win; values truncate cleanly */
+    text-align: center;
+    padding: 0.25rem 0.4rem;
+    border-right: 1px solid var(--border);
+    line-height: 1.1;
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+  .ps-seg-value, .ps-seg-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ps-seg:last-child { border-right: 0; }
+  .ps-seg-value {
+    font-weight: 800; font-size: 1.5rem;
     font-variant-numeric: tabular-nums;
-    display: flex; align-items: baseline; gap: 0.15rem;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    letter-spacing: -0.01em;
   }
-  .ps-divider { color: var(--text-dim); font-weight: 500; margin: 0 0.05rem; }
-  .ps-pct {
-    font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
-    margin-left: 0.4rem;
+  .ps-seg-label {
+    margin-top: 0.25rem;
+    font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em;
+    color: var(--text-dim); text-transform: uppercase;
   }
-  @media (max-width: 380px) {
-    .ps-value { font-size: 1.15rem; }
-    .ps-pct   { font-size: 0.65rem; }
+  .ps-seg-avail  .ps-seg-value { color: var(--accent); }
+  .ps-seg-placed .ps-seg-value { color: var(--lilac); }
+  .ps-seg-total  .ps-seg-value { color: #ffffff; }
+  .ps-seg-rank   .ps-seg-value { color: #ffffff; }
+  /* Pool-size suffix in the RANK segment ("/24") sits a tick smaller and
+     dim so the ordinal stays the headline. */
+  .ps-seg-of { color: var(--text-muted); font-size: 0.72em; font-weight: 600; }
+  /* Linear correct-picks readout under the four segments. Data hugs the
+     right edge so it lines up with the right-aligned BET/TO WIN columns
+     in the placed-bets table beneath. */
+  .ps-correct {
+    display: flex; align-items: baseline; gap: 0.45rem;
+    justify-content: flex-end;
+    padding: 0.5rem 0.2rem 0;
+    border-top: 1px dashed var(--border);
+    font-family: var(--mono);
+  }
+  .ps-correct-label { margin-right: auto; }
+  .ps-correct-label { font-size: 0.56rem; letter-spacing: 0.12em; font-weight: 800;
+                       color: var(--text-dim); text-transform: uppercase; }
+  .ps-correct-value { color: var(--text); font-weight: 800; font-size: 0.95rem;
+                       font-variant-numeric: tabular-nums; }
+  .ps-correct-pct   { color: var(--accent); font-weight: 700; font-size: 0.78rem;
+                       font-variant-numeric: tabular-nums; }
+  /* Bumping animation: same selector as the navbar so the existing
+     bumpNavAmounts() helper just works. */
+  .ps-seg-value.is-bumping {
+    animation: navBumpGlow 0.6s ease-out;
+  }
+  /* Placed-bet detail strip — collapses cleanly to one row per bet on
+     wider screens; stacks identity, amount, and payout on mobile. */
+  .ps-placed {
+    border-top: 1px dashed var(--border);
+    padding-top: 0.7rem;
+  }
+  .ps-placed-head {
+    font-size: 0.58rem; letter-spacing: 0.12em;
+    color: var(--text-dim); font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+  }
+  /* Placed-bets table — column structure mirrors the Completed table
+     (date | home | vs | away | bet | payout). Each row is an <a> that
+     smooth-scrolls down to the live fixture row. Picked team + payout
+     get the team's accent colour so the row reads as one decision. */
+  .ps-placed-table {
+    display: block;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Both rows share the same 6-cell grid. The header collapses the
+     three Home/Match-dash/Away sub-cells into one "MATCH" label that
+     spans grid columns 2-4 via grid-column. */
+  .ps-placed-row {
+    display: grid;
+    grid-template-columns:
+      3.2rem            /* 1: when */
+      minmax(0, 1fr)    /* 2: home */
+      1.4rem            /* 3: dash */
+      minmax(0, 1fr)    /* 4: away */
+      3rem              /* 5: bet */
+      3.6rem;           /* 6: to win */
+    gap: 0.45rem;
+    align-items: center;
+    padding: 0.5rem 0.7rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .ps-placed-row:first-child { border-top: 0; }
+  .ps-placed-head-row {
+    font-size: 0.64rem; letter-spacing: 0.12em; font-weight: 800;
+    color: var(--text-muted); text-transform: uppercase;
+    background: rgba(255,255,255,0.06);
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .ps-placed-head-row .psp-h-when  { text-align: left; }
+  .ps-placed-head-row .psp-h-match { grid-column: 2 / 5; text-align: center; }
+  .ps-placed-head-row .psp-h-bet,
+  .ps-placed-head-row .psp-h-towin { text-align: right; }
+  a.ps-placed-row:hover { background: rgba(255,255,255,0.04); }
+  a.ps-placed-row.is-pick-H:hover,
+  a.ps-placed-row.is-pick-A:hover { background: rgba(200,255,87,0.06); }
+  .psp-when {
+    display: inline-flex; flex-direction: column; line-height: 1.1;
+    font-size: 0.7rem; color: var(--text);
+  }
+  .psp-when-day  { font-weight: 700; }
+  .psp-when-time { color: var(--text-muted); font-size: 0.62rem; }
+  /* Mirror the Completed table's team cells: home is right-aligned text +
+     flag; away is flag + left-aligned text. Picked side gets the team
+     colour and 800 weight so it pops. */
+  .psp-team {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    color: var(--text-muted); font-weight: 600;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .psp-team-home { justify-content: flex-end; text-align: right; }
+  .psp-team-away { justify-content: flex-start; text-align: left; }
+  .psp-team.is-pick { font-weight: 800; color: var(--accent); }
+  .psp-flag { width: 18px; height: 13px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+  .psp-vs   { color: var(--text-dim); text-align: center; font-size: 0.66rem; }
+  /* Bet stays orange; payout is neutral grey. Both right-aligned. */
+  .psp-bet    { color: var(--lilac); font-weight: 800; text-align: right; }
+  .psp-payout { color: var(--text-muted); font-weight: 800; text-align: right; }
+  @media (max-width: 600px) {
+    /* Headers stay visible on mobile but smaller, with reduced padding so
+       the columns line up cleanly with the data rows. Team columns get
+       wider tracks and the date column shrinks. */
+    .ps-placed-row {
+      grid-template-columns:
+        2.4rem
+        minmax(2.4rem, 1.2fr)
+        0.8rem
+        minmax(2.4rem, 1.2fr)
+        2.6rem
+        3rem;
+      gap: 0.3rem;
+      padding: 0.45rem 0.5rem;
+      font-size: 0.72rem;
+    }
+    .ps-placed-head-row { font-size: 0.55rem; padding: 0.45rem 0.5rem; }
+    .psp-flag { width: 14px; height: 10px; }
+    .psp-team { gap: 0.25rem; }
+    .psp-when { font-size: 0.62rem; }
+    .psp-when-time { font-size: 0.54rem; }
+  }
+  @media (max-width: 480px) {
+    .ps-seg-value  { font-size: 1.25rem; }
+    .ps-seg-label  { font-size: 0.5rem; }
+    .ps-seg        { padding: 0.2rem 0.3rem; }
+    .ps-placed-item { font-size: 0.72rem; gap: 0.4rem; }
   }
 
   .top-chip-row {
@@ -723,6 +867,15 @@
       font-size: 1.05rem; font-weight: 800; letter-spacing: 0.04em;
       color: #0a0a0f;
     }
+    /* KO odds chip under each team's abbr in the live-now hero. Format
+       (decimal vs American) flips with the global wc26_odds_mode toggle. */
+    .ln-odds {
+      margin-top: 0.18rem;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em;
+      color: rgba(10,10,15,0.55);
+      font-variant-numeric: tabular-nums;
+    }
+    .ln-odds[hidden] { display: none; }
 
     .ln-score-bug {
       display: flex; flex-direction: column;
@@ -758,6 +911,8 @@
       padding-top: 0.85rem;
       border-top: 1px solid rgba(0,0,0,0.14);
     }
+    /* KO fixtures have no Draw column — collapse to two even columns. */
+    .ln-bets.is-ko { grid-template-columns: 1fr 1fr; }
     .ln-bet-empty {
       color: rgba(10,10,15,0.35);
       font-style: italic; font-weight: 500;
@@ -780,6 +935,21 @@
     .ln-bets-list::-webkit-scrollbar-thumb:hover {
       background: rgba(10,10,15,0.52);
     }
+    /* At-risk chip next to the BETS title — KO-only summary of total
+       wagered. Black pill with lilac text so every bet amount in the
+       UI shares the same colour cue. */
+    .ln-bets-risk {
+      margin-left: auto;
+      font-size: 0.62rem; font-weight: 800;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--lilac);
+      background: #0a0a0f;
+      padding: 0.22rem 0.55rem;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .ln-bets-risk[hidden] { display: none; }
 
     /* ── Collapsible BETS / CHAT sections ─────────────────── */
     .ln-section {
@@ -814,6 +984,17 @@
       font-size: 0.58rem; color: rgba(10,10,15,0.55); font-weight: 600;
       margin-left: auto;
     }
+    /* Red dot beside "CHAT" — flares when new messages arrive while the
+       chat section is collapsed or the panel isn't the active tab. */
+    .ln-unread-bubble {
+      display: inline-block;
+      width: 8px; height: 8px;
+      margin-left: 0.3rem; vertical-align: middle;
+      background: var(--red, #ff4d4f);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px rgba(255, 77, 79, 0.35);
+    }
+    .ln-unread-bubble[hidden] { display: none; }
     .ln-chat-list {
       background: rgba(10,10,15,0.06);
       border: 1px solid rgba(0,0,0,0.10);
@@ -941,10 +1122,11 @@
       border-bottom: 1px dashed rgba(0,0,0,0.18);
     }
     .ln-bets-head img { width: 16px; height: 11px; border-radius: 2px; }
-    .ln-bets-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ln-bets-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ln-bets-count {
       background: rgba(0,0,0,0.12); border-radius: 99px;
       padding: 0.05rem 0.4rem; font-size: 0.58rem;
+      margin-left: 0.2rem;
     }
     .ln-bets-list {
       list-style: none; padding: 0; margin: 0;
@@ -957,8 +1139,38 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .ln-bet.is-me strong { color: #0a0a0f; font-weight: 800; }
-    .ln-bet-dot { color: rgba(10,10,15,0.4); margin: 0 0.2rem; }
-    .ln-bet-amt { font-weight: 700; color: #0a0a0f; }
+    /* Bet amount sits BEFORE the player name with padding, no dot. */
+    .ln-bet { display: inline-flex; align-items: baseline; gap: 0.5rem; }
+    .ln-bet-amt {
+      font-weight: 800; color: #c4561a;   /* neon-orange shifted darker for the lime-panel bg */
+      font-variant-numeric: tabular-nums;
+      min-width: 2.4rem;
+    }
+    /* Per-side wagered total in the head, also before the team label. */
+    .ln-bets-total {
+      font-weight: 800; color: #0a0a0f;
+      background: rgba(255,122,26,0.18);
+      padding: 0.05rem 0.35rem; border-radius: 4px;
+      font-size: 0.62rem; font-variant-numeric: tabular-nums;
+      letter-spacing: 0; text-transform: none;
+      margin-right: 0.25rem;
+    }
+    /* Top-10 pool-rank badge next to the picker name. Tiny black-outlined
+       pill with black text — neutral so it never competes with the bet
+       chip. Only renders when the user sits in the top ten. */
+    .ln-bet-rank {
+      display: inline-block;
+      margin: 0 0.25rem;
+      padding: 0.05rem 0.32rem;
+      font-size: 0.56rem; font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #0a0a0f;
+      border: 1px solid #0a0a0f;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+      vertical-align: middle;
+    }
 
   /* Desktop refinement: cap the expanded-panel content width so the hero
      doesn't stretch absurdly on wide monitors. */
@@ -975,6 +1187,15 @@
     .ln-live-tag { font-size: 0.52rem; padding: 0.18rem 0.38rem; }
     .ln-bets { gap: 0.35rem; }
   }
+  .meta-odds {
+    font-size: 0.55rem; line-height: 1.25; margin-top: 0.18rem;
+    letter-spacing: 0.05em; font-weight: 700;
+    color: var(--text-dim);
+  }
+  .meta-odds.is-live    { color: var(--accent); }
+  .meta-odds.is-locking { color: var(--lilac); }
+  .meta-odds.is-locked  { color: var(--text-dim); }
+  .meta-odds.is-pending { color: var(--text-dim); font-style: italic; }
   .meta-countdown {
     font-size: 0.58rem; color: var(--amber); margin-top: 0.2rem;
     letter-spacing: 0.03em; line-height: 1.3;
@@ -1081,6 +1302,13 @@
     border: 1px solid var(--border);
     border-radius: 10px; overflow: hidden;
     transition: border-color 0.15s, box-shadow 0.4s;
+  }
+  /* For upcoming KO fixtures the .match-pill is empty (no pick-row, no
+     count-row); when no reveal-grid is rendered the container would
+     otherwise show as an empty grey-bordered card. Hide it entirely in
+     that case so the spy bar + picker pill below read as the whole row. */
+  .match-container.is-ko-empty:not(:has(.reveal-grid)) {
+    display: none;
   }
 
   /* ── Match pill ──────────────────────────────────────────────────── */
@@ -1366,47 +1594,305 @@
                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .spy-row-balance { color: var(--text-muted); font-size: 0.74rem; }
 
-  /* ── Knockout betting form ───────────────────────────────────────── */
-  .ko-bet-row {
-    display: flex; align-items: center; gap: 0.35rem;
-    padding: 0.35rem 0; flex-wrap: wrap;
+  /* Thin spy bar that floats above the KO picker pill. Three cells —
+     side counts/sums on the left/right and a buyable "👁 $price" button
+     in the middle. Once the user buys field-spy, the placeholders flip
+     to real "{N}pl. $sum" readouts and the centre reads "SPIED". */
+  .ko-spy-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    margin: 0.4rem 0 0.1rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding: 0.25rem 0 0.4rem;
   }
-  .ko-opt {
-    display: flex; align-items: center; gap: 0.3rem;
-    padding: 0.25rem 0.55rem;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; cursor: pointer;
-    font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted);
-    transition: all 0.12s; white-space: nowrap;
+  .ko-spy-side {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden; white-space: nowrap;
   }
-  .ko-opt:hover { border-color: var(--border-hi); color: var(--text); }
-  .ko-odds {
-    font-size: 0.62rem; font-weight: 700;
-    color: var(--accent); margin-left: 0.15rem;
+  .ko-spy-side-h { justify-content: flex-start; padding-left: 0.6rem; color: var(--text); }
+  .ko-spy-side-a { justify-content: flex-end;   padding-right: 0.6rem; color: var(--text); }
+  .ko-spy-count { color: var(--text-muted); font-weight: 600; font-size: 0.65rem; }
+  .ko-spy-sum   { color: var(--lilac); font-weight: 800; }
+  /* Pre-spy placeholder: "$•••" — three filled dots after the dollar sign
+     so the row reads as redacted. The user only knows the side has bets. */
+  .ko-spy-hidden {
+    color: var(--text-dim);
+    font-weight: 700; font-size: 0.78rem;
+  }
+  .ko-spy-dots {
+    letter-spacing: 0.08em;
+    font-size: 0.5rem;
+    vertical-align: 0.18em;
+    margin-left: 0.05rem;
+  }
+  .ko-spy-center {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    color: var(--text); font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 800;
+    cursor: pointer; line-height: 1;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .ko-spy-center.is-buy:hover { color: var(--text); border-color: var(--lilac); background: rgba(255,122,26,0.08); }
+  .ko-spy-eye   { font-size: 0.85rem; line-height: 1; }
+  .ko-spy-price { color: var(--lilac); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ko-spy-center.is-spied {
+    cursor: default;
+    color: var(--accent); border-color: var(--accent);
+    letter-spacing: 0.12em;
+    background: rgba(200,255,87,0.08);
+  }
+
+  /* ── Knockout betting form ──────────────────────────────────────────
+     Layout: row 1 is a 3-cell grid [H pill | $ centre | A pill] with no
+     gap, so the three cells read as ONE pill. Each side stacks flag+abbr
+     above its odds; the centre is the bet input. When a side is picked,
+     the highlight border wraps from that side around the centre, so the
+     selected half lights up as a single outlined shape. */
+  :root { --lilac: #ff7a1a; }  /* neon orange — every bet amount in the UI uses this */
+  /* ── Knockouts jumbotron ──────────────────────────────────────────── */
+  .ko-jumbo {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255,122,26,0.04) 0%, rgba(200,255,87,0.02) 100%);
+    border: 1px solid rgba(255,122,26,0.35);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.25rem 1rem;
+    margin-bottom: 1rem;
+    font-family: var(--mono);
+  }
+  .ko-jumbo[hidden] { display: none; }
+  .ko-jumbo-x {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    width: 2.6rem; height: 2.6rem;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); cursor: pointer;
+    font-size: 1.7rem; line-height: 1;
+    border-radius: 6px;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
+  }
+  .ko-jumbo-x:hover { color: var(--text); background: rgba(255,255,255,0.06); border-color: var(--border-hi); }
+  .ko-jumbo-head { margin-bottom: 0.7rem; padding-right: 3rem; }
+  .ko-jumbo-tag {
+    display: block;
+    font-size: 0.66rem; font-weight: 900;
+    letter-spacing: 0.18em; color: var(--lilac);
+    margin-bottom: 0.2rem;
+  }
+  .ko-jumbo-title {
+    display: block;
+    font-size: 1.05rem; font-weight: 800;
+    letter-spacing: 0.08em; color: var(--lilac);
+  }
+  .ko-jumbo-sub {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.78rem; color: var(--text-muted); font-weight: 600;
     letter-spacing: 0.02em;
   }
-  .ko-opt.selected-H { border-color: var(--home-color, var(--blue));
-                        color: var(--home-color, var(--blue));
-                        background: var(--home-bg); }
-  .ko-opt.selected-A { border-color: var(--away-color, var(--red));
-                        color: var(--away-color, var(--red));
-                        background: var(--away-bg); }
-  .ko-opt.selected-D { border-color: var(--accent); color: var(--accent);
-                        background: rgba(200,255,87,0.08); }
+  .ko-jumbo-list {
+    list-style: none; padding: 0; margin: 0 0 0.7rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
+    font-size: 0.78rem; color: var(--text); line-height: 1.45;
+  }
+  .ko-jumbo-cue {
+    color: var(--accent); font-weight: 800; margin-right: 0.2rem;
+    letter-spacing: 0.02em;
+  }
+  .ko-jumbo-list strong { color: var(--lilac); font-weight: 800; }
+  .ko-jumbo-foot {
+    font-size: 0.72rem; color: var(--text-muted);
+    border-top: 1px dashed var(--border);
+    padding-top: 0.55rem; line-height: 1.45;
+  }
+  .ko-jumbo-foot strong { color: var(--text); font-weight: 800; }
+  @media (max-width: 480px) {
+    .ko-jumbo-title { font-size: 0.95rem; }
+    .ko-jumbo-list, .ko-jumbo-sub { font-size: 0.74rem; }
+  }
+  .ko-bet-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+    gap: 0;
+    padding: 0.5rem 0 0;
+  }
+  .ko-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 0.18rem;
+    padding: 0.55rem 0.55rem 0.4rem;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    font-family: var(--mono); color: var(--text-muted);
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    min-width: 0;
+  }
+  .ko-opt:first-child { border-radius: 10px 0 0 10px; border-right: 0; }
+  .ko-opt:last-child  { border-radius: 0 10px 10px 0; border-left: 0; }
+  .ko-opt:hover { color: var(--text); }
+  .ko-opt-head {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    line-height: 1;
+  }
+  .ko-opt-head .flag { width: 22px; height: 16px; border-radius: 2px; object-fit: cover; }
+  .ko-opt-head .team-abbr { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.02em; color: var(--text); }
+  .ko-opt .ko-odds {
+    font-size: 0.66rem; font-weight: 700;
+    color: var(--text-muted); letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Centre cell — bet-amount input. Borders only on top + bottom so the
+     side pills supply the left/right edges of the row outline. */
+  .ko-bet-center {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface2);
+    border-top: 2px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    padding: 0 0.55rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .ko-bet-prefix {
+    color: var(--lilac); font-family: var(--mono); font-weight: 800;
+    margin-right: 0.1rem;
+  }
   .ko-bet-amt {
-    width: 80px; padding: 0.3rem 0.5rem;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text);
-    font-family: var(--mono); font-size: 1rem;   /* 16px avoids iOS zoom on focus */
-    outline: none; transition: border-color 0.12s;
+    width: 4.5rem;
+    background: transparent; border: 0;
+    color: var(--lilac);
+    font-family: var(--mono);
+    font-size: 1.25rem; font-weight: 800;
+    text-align: center;
+    outline: none;
+    -moz-appearance: textfield;
+    font-variant-numeric: tabular-nums;
   }
-  .ko-bet-amt:focus { border-color: var(--accent); }
-  .ko-potential { font-size: 0.72rem; color: var(--accent); white-space: nowrap; }
-  .ko-note { font-size: 0.68rem; color: var(--text-muted); font-style: italic; }
-  .ko-locked-label {
-    font-size: 0.72rem; color: var(--text-muted); padding: 0.2rem 0;
-    display: flex; gap: 0.5rem; align-items: center;
+  .ko-bet-amt::-webkit-outer-spin-button,
+  .ko-bet-amt::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .ko-bet-amt::placeholder { color: rgba(255,122,26,0.35); }
+  /* Strong selected emphasis. The whole half (side pill + centre cell)
+     bathes in the team colour. The centre pill grows a thick edge on
+     the SELECTED side so the "this is the side you've picked" reads
+     instantly even before you look at the buttons. */
+  .ko-opt.selected-H {
+    background: rgba(74,158,255,0.30);
+    border-color: var(--home-color, #4a9eff);
+    color: var(--text);
   }
+  .ko-bet-row.is-pick-H .ko-bet-center {
+    background: rgba(74,158,255,0.22);
+    border-top-color: var(--home-color, #4a9eff);
+    border-bottom-color: var(--home-color, #4a9eff);
+    /* Inset positive-X puts the shadow on the right interior — we need
+       LEFT (adjacent to the H pill) so the highlight reads as continuous
+       with the selected side. Hence negative offset. */
+    box-shadow: inset -4px 0 0 0 var(--home-color, #4a9eff);
+  }
+  .ko-opt.selected-A {
+    background: rgba(255,87,87,0.30);
+    border-color: var(--away-color, #ff5757);
+    color: var(--text);
+  }
+  .ko-bet-row.is-pick-A .ko-bet-center {
+    background: rgba(255,87,87,0.22);
+    border-top-color: var(--away-color, #ff5757);
+    border-bottom-color: var(--away-color, #ff5757);
+    box-shadow: inset 4px 0 0 0 var(--away-color, #ff5757);
+  }
+  .ko-opt.selected-H .team-abbr,
+  .ko-opt.selected-A .team-abbr { color: var(--text); }
+  /* Row 2: live formula on the left, Update button, Spy on the right. */
+  .ko-bet-row-2 {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.55rem 0 0;
+    flex-wrap: wrap;
+  }
+  .ko-bet-summary {
+    flex: 1; min-width: 0;
+    font-family: var(--mono);
+    font-size: 0.95rem; font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .ko-bet-summary {
+    display: inline-flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap;
+  }
+  .ko-bet-summary .ko-sum-side  { color: var(--text); font-weight: 800; align-self: center; }
+  /* Each amount lives in a tiny stack: number on top, small-caps label
+     underneath, so the line reads BET · ODDS · TO WIN at a glance. */
+  .ko-sum-cell {
+    display: inline-flex; flex-direction: column; align-items: center;
+    line-height: 1; gap: 0.18rem;
+  }
+  .ko-sum-amt {
+    font-size: 1.05rem; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .ko-sum-cell-bet .ko-sum-amt { color: var(--lilac); }
+  .ko-sum-cell-win .ko-sum-amt { color: var(--text-muted); }
+  .ko-sum-lbl {
+    font-size: 0.5rem; font-weight: 800; letter-spacing: 0.12em;
+    color: var(--text-dim); text-transform: uppercase;
+  }
+  .ko-sum-op {
+    color: var(--text-dim); font-weight: 700; font-size: 0.85rem;
+    align-self: center;
+  }
+  .ko-bet-summary.is-empty      { color: var(--text-dim); font-weight: 500; font-style: italic; font-size: 0.78rem; }
+  .ko-bet-submit {
+    background: var(--accent); color: #0a0a0f;
+    border: 0; border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 800;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.12s, background 0.12s, color 0.12s;
+  }
+  .ko-bet-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* "Placed" state — current input matches the stored bet, so the button
+     reads as a status badge rather than an action. */
+  .ko-bet-submit.is-placed {
+    background: transparent;
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+  .ko-spy-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .ko-spy-btn:hover { color: var(--text); border-color: var(--border-hi); }
+  .ko-spy-price { color: var(--lilac); font-weight: 800; }
+  .ko-note { font-size: 0.68rem; color: var(--text-muted); font-style: italic; padding-top: 0.25rem; }
+  /* "Waiting" state for KO fixtures whose matchup or odds aren't ready
+     yet. Renders in place of the bet form so the row is visible without
+     being actionable. */
+  .ko-bet-pending {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(255,255,255,0.03);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-family: var(--mono); font-size: 0.78rem;
+  }
+  .ko-bet-pending-icon { font-size: 1rem; }
+  .ko-bet-pending-text { letter-spacing: 0.01em; }
   .ko-badge {
     font-size: 0.66rem; font-weight: 700; padding: 0.15rem 0.4rem;
     border-radius: 4px; letter-spacing: 0.06em;
@@ -1530,7 +2016,7 @@
   .pill-choice { font-size: 0.68rem; opacity: 0.85; }
   .pill-pts    { font-weight: 700; font-size: 0.78rem; }
   .pill-no-pick{ font-style: italic; opacity: 0.55; font-size: 0.68rem; }
-  .pill-bet    { font-size: 0.66rem; color: var(--text-muted); }
+  .pill-bet    { font-size: 0.66rem; color: var(--lilac); font-weight: 700; font-variant-numeric: tabular-nums; }
 
   /* Saved confirmation, centred over the match pill so it draws the eye
      where the user just clicked. Floats above without affecting layout. */
@@ -1721,13 +2207,7 @@
   {% if group_standings %}
     <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
   {% endif %}
-  {% if has_ko_stage %}
-  <button class="stage-toggle" id="odds-format-toggle"
-          onclick="toggleOddsFormat(this)"
-          title="Switch between decimal and American odds">
-    Odds: dec
-  </button>
-  {% endif %}
+  {# Odds format picker removed — site uses decimal multipliers everywhere. #}
   {# Per-stage "Hide picks" toggle lives in each stage's heading below,
      not in the global stage-nav. #}
 </nav>
@@ -1785,11 +2265,18 @@
           {% endif %}
         </div>
 
-        {# Two team blocks, flag big + abbr centred #}
+        {# Two team blocks, flag big + abbr centred + optional KO odds #}
         <div class="ln-hero">
           <div class="ln-team">
             <img class="ln-flag" src="https://flagcdn.com/{{ lf.home_flag }}.svg" alt="" loading="lazy">
             <div class="ln-abbr">{{ home_abbr }}</div>
+            {# Odds chip: KO only. Decimal stored server-side; JS swaps to
+               American on the fly per the user's wc26_odds_mode setting. #}
+            <div class="ln-odds" data-side="H"
+                 data-odds="{{ '%.2f'|format(lf.home_odds) if lf.home_odds else '' }}"
+                 {% if not (lf.is_ko and lf.home_odds) %}hidden{% endif %}>
+              {% if lf.is_ko and lf.home_odds %}{{ '%.2f'|format(lf.home_odds) }}×{% endif %}
+            </div>
           </div>
 
           <div class="ln-score-bug">
@@ -1806,6 +2293,11 @@
           <div class="ln-team">
             <img class="ln-flag" src="https://flagcdn.com/{{ lf.away_flag }}.svg" alt="" loading="lazy">
             <div class="ln-abbr">{{ away_abbr }}</div>
+            <div class="ln-odds" data-side="A"
+                 data-odds="{{ '%.2f'|format(lf.away_odds) if lf.away_odds else '' }}"
+                 {% if not (lf.is_ko and lf.away_odds) %}hidden{% endif %}>
+              {% if lf.is_ko and lf.away_odds %}{{ '%.2f'|format(lf.away_odds) }}×{% endif %}
+            </div>
           </div>
         </div>
 
@@ -1821,10 +2313,17 @@
             <span class="ln-section-title">BETS</span>
           </button>
           <div class="ln-section-body">
-        <div class="ln-bets" data-fixture-id="{{ lf.id }}">
+        <div class="ln-bets{% if lf.is_ko %} is-ko{% endif %}" data-fixture-id="{{ lf.id }}">
           {% for side, label in [('H', home_abbr), ('D', 'Draw'), ('A', away_abbr)] %}
+            {% if not (lf.is_ko and side == 'D') %}
+            {# Per-side wagered total (KO only) — shown before the team
+               label so users see "$403 BRA" at a glance. #}
+            {% set _side_total = (lf.picks_by_side[side] | map(attribute='bet_amount') | reject('none') | sum) if lf.is_ko else 0 %}
             <div class="ln-bets-col ln-bets-{{ side|lower }}">
               <div class="ln-bets-head">
+                {% if lf.is_ko and _side_total > 0 %}
+                  <span class="ln-bets-total">${{ "%.0f"|format(_side_total) }}</span>
+                {% endif %}
                 {% if side == 'H' %}<img src="https://flagcdn.com/{{ lf.home_flag }}.svg" alt="" loading="lazy">
                 {% elif side == 'A' %}<img src="https://flagcdn.com/{{ lf.away_flag }}.svg" alt="" loading="lazy">
                 {% endif %}
@@ -1835,11 +2334,11 @@
                 {% for p in lf.picks_by_side[side] %}
                   {% set is_me = p.email == current_user.email %}
                   <li class="ln-bet{% if is_me %} is-me{% endif %}">
-                    {% if is_me %}<strong>You</strong>{% else %}{{ p.first_name }}{% endif %}
                     {% if lf.is_ko and p.bet_amount %}
-                      <span class="ln-bet-dot">·</span>
                       <span class="ln-bet-amt">${{ "%.0f"|format(p.bet_amount) }}</span>
                     {% endif %}
+                    {% if is_me %}<strong>You</strong>{% else %}{{ p.first_name }}{% endif %}
+                    {% if p.pool_rank_label %}<span class="ln-bet-rank" title="Pool rank">{{ p.pool_rank_label }}</span>{% endif %}
                   </li>
                 {% endfor %}
                 {% if not lf.picks_by_side[side] %}
@@ -1847,6 +2346,7 @@
                 {% endif %}
               </ul>
             </div>
+            {% endif %}
           {% endfor %}
         </div>
           </div>{# /ln-section-body BETS #}
@@ -1858,7 +2358,10 @@
           <button type="button" class="ln-section-head"
                   onclick="event.stopPropagation(); toggleLnSection(this)">
             <span class="ln-section-caret">▾</span>
-            <span class="ln-section-title">CHAT</span>
+            <span class="ln-section-title">
+              CHAT
+              <span class="ln-unread-bubble" data-role="unread-bubble" hidden></span>
+            </span>
             <span class="ln-chat-count" data-role="count"></span>
           </button>
           <div class="ln-section-body">
@@ -1896,20 +2399,90 @@
     </p>
   </div>
 
-  <!-- ── Top stats tile: balance + pick accuracy ─────────────────────── -->
+  <!-- ── Pool hero: expanded view of the four-segment navbar pill,
+       with a "Placed bets" detail strip listing every open wager ──── -->
   <div class="pool-stats-bar">
-    <div class="ps-tile">
-      <div class="ps-label">Balance</div>
-      <div class="ps-value">${{ "%.0f"|format(my_balance) }}</div>
-    </div>
-    <div class="ps-tile">
-      <div class="ps-label">Correct picks</div>
-      <div class="ps-value">
-        {{ pick_accuracy.correct }}<span class="ps-divider">/</span>{{ pick_accuracy.total }}
-        {% if pick_accuracy.total %}
-          <span class="ps-pct">{{ (pick_accuracy.correct * 100 / pick_accuracy.total) | round(0, 'common') | int }}%</span>
-        {% endif %}
+    <div class="ps-hero">
+      <div class="ps-segs">
+        <div class="ps-seg ps-seg-avail">
+          <div class="ps-seg-value" data-nav-amt="tobet"
+               data-value="{{ my_balance | round(0) }}">${{ "%.0f"|format(my_balance) }}</div>
+          <div class="ps-seg-label">AVAIL</div>
+        </div>
+        <div class="ps-seg ps-seg-placed">
+          <div class="ps-seg-value" data-nav-amt="placed"
+               data-value="{{ my_total_bet | round(0) }}">${{ "%.0f"|format(my_total_bet) }}</div>
+          <div class="ps-seg-label">PLACED</div>
+        </div>
+        <div class="ps-seg ps-seg-total">
+          <div class="ps-seg-value" data-nav-amt="total"
+               data-value="{{ (my_balance + my_total_bet) | round(0) }}">${{ "%.0f"|format(my_balance + my_total_bet) }}</div>
+          <div class="ps-seg-label">TOTAL</div>
+        </div>
+        <div class="ps-seg ps-seg-rank">
+          <div class="ps-seg-value">{% if my_rank_label %}{{ my_rank_label }}{% else %}—{% endif %}</div>
+          <div class="ps-seg-label">{% if pool_size %}OUT OF {{ pool_size }}{% else %}RANK{% endif %}</div>
+        </div>
       </div>
+
+      {# Linear stat under the four segments — keeps the old "Correct picks
+         35/56 (62%)" readout visible without taking a whole tile. #}
+      {% if pick_accuracy and pick_accuracy.total %}
+        {% set _pct = (pick_accuracy.correct * 100 / pick_accuracy.total) | round(0, 'common') | int %}
+        <div class="ps-correct">
+          <span class="ps-correct-label">CORRECT PICKS</span>
+          <span class="ps-correct-value">{{ pick_accuracy.correct }}/{{ pick_accuracy.total }}</span>
+          <span class="ps-correct-pct">({{ _pct }}%)</span>
+        </div>
+      {% endif %}
+
+      {% if my_placed_bets %}
+      <div class="ps-placed">
+        <div class="ps-placed-head">
+          PLACED · {{ my_placed_bets|length }} open
+          {{ 'bet' if my_placed_bets|length == 1 else 'bets' }}
+        </div>
+        <div class="ps-placed-table" role="table" aria-label="Placed bets">
+          <div class="ps-placed-row ps-placed-head-row" role="row">
+            <span role="columnheader" class="psp-h-when">WHEN</span>
+            <span role="columnheader" class="psp-h-match" aria-colspan="3">MATCH</span>
+            <span role="columnheader" class="psp-h-bet">BET</span>
+            <span role="columnheader" class="psp-h-towin">TO WIN</span>
+          </div>
+          {% for b in my_placed_bets %}
+            {% set ko = b.kick_off_display or b.kick_off or '' %}
+            {% set when_day = ko[8:10] if ko else '' %}
+            {% set when_mo  = ko[5:7]  if ko else '' %}
+            {% set when_t   = ko[11:16] if ko else '' %}
+            <a class="ps-placed-row is-pick-{{ b.pick }}"
+               href="#fixture-{{ b.fixture_id }}"
+               role="row"
+               title="Jump to {{ b.home_abbr }} vs {{ b.away_abbr }}">
+              <span role="cell" class="psp-when">
+                <span class="psp-when-day">{{ when_day }}/{{ when_mo }}</span>
+                <span class="psp-when-time">{{ when_t }}</span>
+              </span>
+              {# Home / vs / Away mirror the Completed-table format exactly:
+                 home cell is text-then-flag, right-aligned; away cell is
+                 flag-then-text, left-aligned. Picked side gets the team
+                 colour via .is-pick on the relevant team span. #}
+              <span role="cell" class="psp-team psp-team-home{% if b.pick == 'H' %} is-pick{% endif %}">
+                {{ b.home_abbr }}
+                <img class="psp-flag" src="https://flagcdn.com/{{ b.home_flag }}.svg" alt="" loading="lazy">
+              </span>
+              <span role="cell" class="psp-vs">–</span>
+              <span role="cell" class="psp-team psp-team-away{% if b.pick == 'A' %} is-pick{% endif %}">
+                <img class="psp-flag" src="https://flagcdn.com/{{ b.away_flag }}.svg" alt="" loading="lazy">
+                {{ b.away_abbr }}
+              </span>
+              <span role="cell" class="psp-bet">${{ '%.0f'|format(b.bet) }}</span>
+              {# TO WIN = bet + winnings (full payout if correct). #}
+              <span role="cell" class="psp-payout">{% if b.mult %}${{ '%.0f'|format(b.payout) }}{% else %}—{% endif %}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -1924,6 +2497,41 @@
       <line x1="12" y1="2" x2="12" y2="15"/>
     </svg>
     in Safari, then <strong>Add to Home Screen</strong>.
+  </div>
+
+  <!-- ── Knockouts jumbotron — explains KO betting + spy pricing ─────
+       Renders once the user reaches the page after KO opens; dismissible
+       and remembered per-browser via localStorage. -->
+  <div id="ko-jumbo" class="ko-jumbo" hidden>
+    <button type="button" class="ko-jumbo-x" onclick="dismissKoJumbo()" aria-label="Dismiss">×</button>
+    <div class="ko-jumbo-head">
+      <span class="ko-jumbo-tag">GAMES START SUNDAY · BET NOW</span>
+      <span class="ko-jumbo-title">WELCOME TO THE KNOCKOUTS</span>
+      <span class="ko-jumbo-sub">Put your winnings on the line. Same picks, more to play for.</span>
+    </div>
+    <ul class="ko-jumbo-list">
+      <li>
+        <span class="ko-jumbo-cue">▸ Place a wager.</span>
+        Pick a side and place a bet. If you're right, win with real odds. If you're wrong,
+        lose only the bet.
+      </li>
+      <li>
+        <span class="ko-jumbo-cue">▸ Bets stay live.</span>
+        Change your wager until 15 minutes before kickoff. Odds lock 12 hours before kickoff.
+      </li>
+      <li>
+        <span class="ko-jumbo-cue">▸ Intel got steep.</span>
+        Spies cost <strong>max($5, 10% of the pot)</strong> for each match. Spend it where it counts.
+      </li>
+      <li>
+        <span class="ko-jumbo-cue">▸ KO results.</span>
+        There can only be one winner — including extra time and penalties if they're needed.
+      </li>
+    </ul>
+    <div class="ko-jumbo-foot">
+      <strong>AVAIL</strong> is free cash · <strong>PLACED</strong> is what's at risk on open
+      matches · <strong>TOTAL</strong> is your full bankroll. Good luck.
+    </div>
   </div>
 
   <!-- ── Quick-explainer banner (with embedded "Get more info" + dismiss X) ─── -->
@@ -2187,7 +2795,10 @@
                   {% set pill_cls = 'match-pill completed' %}
                 {% endif %}
               {% elif my_pick %}
-                {% set pill_cls = 'match-pill has-pick' %}
+                {# Upcoming KO fixtures hide the pickrow + countrow, leaving
+                   .match-pill empty. Drop the .has-pick class so the lime
+                   border doesn't ring an empty card. #}
+                {% set pill_cls = 'match-pill' if (is_ko_stage and not is_started) else 'match-pill has-pick' %}
               {% elif is_started %}
                 {% set pill_cls = 'match-pill locked' %}
               {% else %}
@@ -2201,6 +2812,8 @@
                    data-is-ko="{{ 'true' if is_ko_stage else 'false' }}"
                    data-home-team="{{ f.home_team or '' }}"
                    data-away-team="{{ f.away_team or '' }}"
+                   data-home-abbr="{{ ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() }}"
+                   data-away-abbr="{{ ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() }}"
                    data-home-odds="{{ f.home_odds if f.home_odds is not none else '' }}"
                    data-away-odds="{{ f.away_odds if f.away_odds is not none else '' }}">
 
@@ -2215,17 +2828,23 @@
                   {% else %}
                     <div class="meta-date" style="color:var(--text-dim)">TBC</div>
                   {% endif %}
+                  {# Group fixtures still link to the group page; KO drops
+                     the redundant round label here (the stage section
+                     heading carries it already) to save vertical space. #}
                   {% if f.stage and f.stage.startswith('Group ') %}
                     <a class="meta-group" href="{{ url_for('group_page', pool_id=pool.id, letter=f.stage[-1]) }}"
                        title="Open Group {{ f.stage[-1] }} page">Grp {{ f.stage[-1] }}</a>
-                  {% elif f.stage %}
-                    <div class="meta-group">{{ f.stage[:4] }}</div>
-                  {% else %}
-                    <div class="meta-group">—</div>
                   {% endif %}
                   {# Countdown shown only for upcoming unlocked fixtures #}
                   {% if f.kick_off and not is_completed and not is_started %}
                     <div class="meta-countdown" id="countdown-{{ f.id }}"></div>
+                    {# KO odds-status line: live with hours until odds lock
+                       (kick_off − 12h), or pending when no odds are set. #}
+                    {% if is_ko_stage %}
+                      <div class="meta-odds" data-fixture="{{ f.id }}"
+                           data-kick-off="{{ f.kick_off or '' }}"
+                           data-has-odds="{{ '1' if (f.home_odds and f.away_odds) else '0' }}"></div>
+                    {% endif %}
                   {% endif %}
                 </div>
 
@@ -2234,7 +2853,7 @@
 
                   <!-- Match pill (top) + reveal grid (bottom) unified into one card -->
                   <div class="match-row">
-                    <div class="match-container">
+                    <div class="match-container{% if _hide_pickrow_for_ko %} is-ko-empty{% endif %}">
                     {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
                     {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
 
@@ -2242,7 +2861,13 @@
                          data-home-flag="{{ f.home_flag_code or 'un' }}"
                          data-away-flag="{{ f.away_flag_code or 'un' }}">
 
-                      {# ─── Top row: pick buttons OR score display, 3-col grid ─── #}
+                      {# ─── Top row: pick buttons OR score display, 3-col grid ───
+                         Upcoming KO fixtures skip this row — the new
+                         .ko-bet-row below acts as both the team display
+                         and the bet picker, so we'd otherwise render two
+                         redundant team-name pills back to back. #}
+                      {% set _hide_pickrow_for_ko = is_ko_stage and not is_completed and not is_started %}
+                      {% if not _hide_pickrow_for_ko %}
                       <div class="match-pill-row pick-row">
                       {% if is_completed or is_started %}
                         <div class="pill-side home">
@@ -2294,11 +2919,14 @@
                         </button>
                       {% endif %}
                       </div><!-- /.pick-row -->
+                      {% endif %}{# end _hide_pickrow_for_ko gate #}
 
-                      {# ─── Field-spy counts row INSIDE the pill, only when revealed ─── #}
+                      {# ─── Field-spy counts row INSIDE the pill, only when revealed.
+                         Suppressed for upcoming KO fixtures — the new spy bar
+                         above the picker shows the same info more clearly. #}
                       {% set field_revealed_for_pill = is_completed or is_started or (f.id in aggregate_spy_set) %}
                       {% set t_pill = field_totals.get(f.id) if field_revealed_for_pill else None %}
-                      {% if t_pill %}
+                      {% if t_pill and not _hide_pickrow_for_ko %}
                         <div class="match-pill-row count-row {% if is_ko_stage %}is-ko-row{% endif %}">
                           <div class="pill-count pill-count-home">
                             <b>{{ t_pill.H.count }}</b>
@@ -2378,8 +3006,12 @@
                   <!-- Action area (everything else lives below the match pill) -->
                   <div class="fixture-actions">
 
-                    <!-- My pick pill -->
-                    {% if is_completed %}
+                    <!-- My pick pill — skipped for upcoming KO fixtures
+                         since the new .ko-bet-row beneath shows the same
+                         "You / TEAM / $bet" info inline. -->
+                    {% set _hide_mypill_for_ko = is_ko_stage and not is_completed and not is_started %}
+                    {% if _hide_mypill_for_ko %}
+                    {% elif is_completed %}
                       {% if my_payout is not none %}
                         {% if my_payout > 0 %}
                           {% set pts_cls = 'scored-pos' %}
@@ -2423,8 +3055,10 @@
                        above (between match pill and action row), aligned with
                        the H/D/A columns of the match pill. #}
 
-                    {# Combined spy + picks-in button: "👁 Spy on 21 picks" #}
-                    {% if not is_completed and not is_started %}
+                    {# Combined spy + picks-in button: "👁 Spy on 21 picks".
+                       Hidden on upcoming KO fixtures — those use the spy
+                       button built into the new .ko-bet-row below. #}
+                    {% if not is_completed and not is_started and not is_ko_stage %}
                       {% set picks_so_far = pick_counts_by_fixture.get(f.id, 0) %}
                       <button type="button" class="spy-trigger"
                               id="picks-in-{{ f.id }}"
@@ -2445,57 +3079,123 @@
 
                   </div><!-- /.fixture-actions -->
 
-                  <!-- Knockout bet form (below pills, before lock, not completed) -->
+                  <!-- Knockout bet form — unified pre/post-bet view because
+                       picks can be changed up to LOCK_MINUTES before kickoff.
+                       Layout: [H pill] [centre amount input] [A pill] / then
+                       a second row with the live formula and a spy button.
+                       Pre-bet gate: both teams must be resolved (no "TBD"
+                       placeholders) AND odds must be set — otherwise show
+                       a "Waiting for matchups / odds" placeholder so users
+                       can see the fixture exists without being able to wager. -->
                   {% if is_ko_stage and not is_completed and not is_started %}
+                    {% set _h = (f.home_team or '').upper() %}
+                    {% set _a = (f.away_team or '').upper() %}
+                    {% set _teams_tbd = (not f.home_team) or (not f.away_team) or _h.startswith('TBD') or _a.startswith('TBD') %}
+                    {% set _odds_set  = f.home_odds is not none and f.away_odds is not none %}
+                    {% set is_bettable = (not _teams_tbd) and _odds_set %}
+                    {% if not is_bettable %}
+                      <div class="ko-bet-pending">
+                        <span class="ko-bet-pending-icon">⏳</span>
+                        <span class="ko-bet-pending-text">
+                          {% if _teams_tbd %}Waiting for both teams to be confirmed
+                          {% elif not _odds_set %}Odds pending — bets open once they're posted
+                          {% endif %}
+                        </span>
+                      </div>
+                    {% else %}
                     {% set picks_locked = pool.entry_fee and not has_paid %}
-                    {% if not my_pick %}
                     {% set home_odds_display = f.home_odds if f.home_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
                     {% set away_odds_display = f.away_odds if f.away_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
-                    <div class="ko-bet-row" id="ko-form-{{ f.id }}">
-                      <button class="ko-opt" id="ko-H-{{ f.id }}"
+                    {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
+                    {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
+                    {# Spy cost — computed server-side as max($5, 10% of
+                       (pot − viewer's bet − top other bet)). No cap. The
+                       same dict drives the spy modal price + the new
+                       inline spy bar above the picker. #}
+                    {% set ko_spy_cost = field_spy_cost_by_fixture.get(f.id, 5) %}
+                    {# Spy bar above the picker. Pre-spy: dotted $ooo on each
+                       side and a buyable eye-+-price in the middle. Post-spy:
+                       real per-side counts + bet totals, SPIED in the centre. #}
+                    {% set _spy_revealed = f.id in aggregate_spy_set %}
+                    {% set _spy_totals = field_totals.get(f.id) if _spy_revealed else None %}
+                    <div class="ko-spy-bar{% if _spy_revealed %} is-revealed{% endif %}"
+                         id="ko-spy-bar-{{ f.id }}">
+                      <span class="ko-spy-side ko-spy-side-h">
+                        {% if _spy_revealed and _spy_totals %}
+                          <span class="ko-spy-count">{{ _spy_totals.H.count }}pl.</span>
+                          <span class="ko-spy-sum">${{ "%.0f"|format(_spy_totals.H.wagered or 0) }}</span>
+                        {% else %}
+                          <span class="ko-spy-hidden">$<span class="ko-spy-dots">●●●</span></span>
+                        {% endif %}
+                      </span>
+                      {% if _spy_revealed %}
+                        <span class="ko-spy-center is-spied">SPIED</span>
+                      {% else %}
+                        <button type="button" class="ko-spy-center is-buy"
+                                data-pool="{{ pool.id }}"
+                                data-fixture="{{ f.id }}"
+                                data-base-cost="{{ '%.0f'|format(ko_spy_cost) }}"
+                                onclick="openFieldSpyFromKoBet(this)">
+                          <span class="ko-spy-eye">👁</span>
+                          <span class="ko-spy-price">${{ '%.0f'|format(ko_spy_cost) }}</span>
+                        </button>
+                      {% endif %}
+                      <span class="ko-spy-side ko-spy-side-a">
+                        {% if _spy_revealed and _spy_totals %}
+                          <span class="ko-spy-count">{{ _spy_totals.A.count }}pl.</span>
+                          <span class="ko-spy-sum">${{ "%.0f"|format(_spy_totals.A.wagered or 0) }}</span>
+                        {% else %}
+                          <span class="ko-spy-hidden">$<span class="ko-spy-dots">●●●</span></span>
+                        {% endif %}
+                      </span>
+                    </div>
+                    <div class="ko-bet-row{% if my_pick %} has-pick is-pick-{{ my_pick }}{% endif %}"
+                         id="ko-form-{{ f.id }}"
+                         data-home-abbr="{{ home_abbr }}"
+                         data-away-abbr="{{ away_abbr }}">
+                      <button class="ko-opt ko-opt-side{% if my_pick == 'H' %} selected-H{% endif %}"
+                              id="ko-H-{{ f.id }}"
                               data-choice="H"
                               onclick="selectKoOpt('{{ f.id }}','H',this)">
-                        <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" loading="lazy">
-                        {{ (f.home_team or 'Home')[:10] }} wins
+                        <span class="ko-opt-head">
+                          <img class="flag" src="https://flagcdn.com/{{ f.home_flag_code or 'un' }}.svg" alt="" loading="lazy">
+                          <span class="team-abbr">{{ home_abbr }}</span>
+                        </span>
                         <span class="ko-odds">{{ "%g"|format(home_odds_display) }}×</span>
                       </button>
-                      <button class="ko-opt" id="ko-A-{{ f.id }}"
+                      <div class="ko-bet-center{% if my_pick %} is-{{ my_pick }}{% endif %}"
+                           id="ko-center-{{ f.id }}">
+                        <span class="ko-bet-prefix">$</span>
+                        <input type="text" inputmode="decimal" pattern="[0-9]*"
+                               class="ko-bet-amt" id="ko-amt-{{ f.id }}"
+                               placeholder="0" maxlength="6"
+                               value="{% if my_bet %}{{ '%.0f'|format(my_bet) }}{% endif %}"
+                               data-original-bet="{{ '%.2f'|format(my_bet) if my_bet else '0' }}"
+                               {% if picks_locked %}disabled{% endif %}
+                               oninput="updateKoPotential('{{ f.id }}')">
+                      </div>
+                      <button class="ko-opt ko-opt-side{% if my_pick == 'A' %} selected-A{% endif %}"
+                              id="ko-A-{{ f.id }}"
                               data-choice="A"
                               onclick="selectKoOpt('{{ f.id }}','A',this)">
-                        {{ (f.away_team or 'Away')[:10] }} wins
+                        <span class="ko-opt-head">
+                          <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" loading="lazy">
+                          <span class="team-abbr">{{ away_abbr }}</span>
+                        </span>
                         <span class="ko-odds">{{ "%g"|format(away_odds_display) }}×</span>
-                        <img class="flag" src="https://flagcdn.com/{{ f.away_flag_code or 'un' }}.svg" alt="" loading="lazy">
                       </button>
-                      <div class="ko-note">includes ET &amp; pens if necessary</div>
-                      <input type="number" class="ko-bet-amt" id="ko-amt-{{ f.id }}"
-                             placeholder="$" min="0.01" step="1" max="{{ my_balance }}"
-                             {% if picks_locked %}disabled{% endif %}
-                             oninput="updateKoPotential('{{ f.id }}')">
-                      <span class="ko-potential" id="ko-pot-{{ f.id }}"></span>
-                      <button class="btn btn-primary btn-sm"
+                    </div>
+                    <div class="ko-bet-row-2">
+                      <div class="ko-bet-summary" id="ko-summary-{{ f.id }}"
+                           data-home-abbr="{{ home_abbr }}"
+                           data-away-abbr="{{ away_abbr }}"></div>
+                      <button class="ko-bet-submit{% if my_pick %} is-placed{% endif %}"
                               id="ko-submit-{{ f.id }}"
+                              data-saved-pick="{{ my_pick or '' }}"
                               {% if picks_locked %}disabled title="Payment required"{% endif %}
-                              onclick="saveKoPick('{{ pool.id }}','{{ f.id }}',this)">Bet</button>
+                              onclick="saveKoPick('{{ pool.id }}','{{ f.id }}',this)">{% if my_pick %}Placed{% else %}Bet{% endif %}</button>
                     </div>
-                    {% else %}
-                    {% if my_pick == 'H' %}
-                      {% set my_mult = f.home_odds if f.home_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
-                    {% elif my_pick == 'A' %}
-                      {% set my_mult = f.away_odds if f.away_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
-                    {% else %}
-                      {% set my_mult = scoring_config.knockout_flat_payout_multiplier %}
-                    {% endif %}
-                    <div class="ko-locked-label">
-                      <span class="ko-badge ko-badge-{{ my_pick }}">
-                        {% if my_pick == 'H' %}{{ (f.home_team or 'Home')[:12] }} wins
-                        {% elif my_pick == 'A' %}{{ (f.away_team or 'Away')[:12] }} wins
-                        {% else %}Draw{% endif %}
-                      </span>
-                      {% if my_bet %}<span>${{ "%.2f"|format(my_bet) }} bet @ {{ "%g"|format(my_mult) }}×</span>
-                        <span style="color:var(--accent)">→ potential ${{ "%.2f"|format(my_bet * my_mult) }}</span>
-                      {% endif %}
-                    </div>
-                    {% endif %}
+                    {% endif %}{# end is_bettable branch #}
                   {% endif %}
 
                 </div><!-- /.fixture-col -->
@@ -2610,7 +3310,7 @@
              or subsequent openSpyModal calls null-ref on it. #}
           <span id="spy-field-explain-buy">
             See how many players picked each side — counts only, no names.
-            Costs <strong id="spy-field-cost">$2</strong><span id="spy-field-cost-note" style="display:none"> <span style="color:var(--text-dim);font-size:0.78rem">(scales with the pot on KO matches — 10% of total wagered, capped at $20)</span></span>
+            Costs <strong id="spy-field-cost">$2</strong><span id="spy-field-cost-note" style="display:none"> <span style="color:var(--text-dim);font-size:0.78rem">(KO matches scale with the pot — <strong>max($5, 10% of total wagered)</strong>, no cap)</span></span>
             the first time; after that, re-check the live spread any time until kick-off, free.
           </span>
           <span id="spy-field-explain-bought" style="display:none">
@@ -2623,8 +3323,10 @@
       <div class="spy-field-spread" id="spy-field-spread" style="display:none"></div>
     </div>
 
-    <!-- Section 2: Spy on a specific player -->
-    <div class="spy-modal-section">
+    <!-- Section 2: Spy on a specific player — hidden on KO matches
+         (targeted spies are too cheap relative to KO antes; field spy
+         only). #spy-modal-unified[data-is-ko="1"] hides this. -->
+    <div class="spy-modal-section" data-section="player">
       <h4>🕵️ Spy on a Player</h4>
       <div class="modal-body" style="margin-bottom:0.5rem">
         Reveal one player's pick on this match. The cost rises with each
@@ -2835,6 +3537,22 @@
   const A2HS_KEY  = `wc26_a2hs_dismissed`;
   const IS_ADMIN  = {{ current_user.is_admin | tojson }};
 
+  // ── Knockouts jumbotron: show once, dismiss persists per-browser ──────
+  const KO_JUMBO_KEY = 'wc26_ko_jumbo_dismissed';
+  function dismissKoJumbo() {
+    const j = document.getElementById('ko-jumbo');
+    if (j) j.hidden = true;
+    try { localStorage.setItem(KO_JUMBO_KEY, '1'); } catch (e) {}
+  }
+  function maybeShowKoJumbo() {
+    try {
+      if (localStorage.getItem(KO_JUMBO_KEY) === '1') return;
+    } catch (e) {}
+    const j = document.getElementById('ko-jumbo');
+    if (j) j.hidden = false;
+  }
+  document.addEventListener('DOMContentLoaded', maybeShowKoJumbo);
+
   // ── Pool-intro banner: dismiss → swap for compact "How it works" pill ──
   function dismissPoolIntro() {
     const banner = document.getElementById('pool-intro-banner');
@@ -2968,6 +3686,29 @@
             if (h) h.textContent = lf.live_home != null ? lf.live_home : 0;
             if (a) a.textContent = lf.live_away != null ? lf.live_away : 0;
             if (m) m.textContent = lf.minute_est != null ? `${lf.minute_est}'` : '—';
+            // (At-risk chip removed — per-side totals render in the
+            // bet-list head instead. See .ln-bets-total.)
+            // Per-team odds chips — refresh in case the admin updated them.
+            const mode = (function () {
+              try { return localStorage.getItem('wc26_odds_format') || 'decimal'; }
+              catch (e) { return 'decimal'; }
+            })();
+            const _hodds = panel.querySelector('.ln-odds[data-side="H"]');
+            const _aodds = panel.querySelector('.ln-odds[data-side="A"]');
+            if (_hodds) {
+              if (lf.is_ko && lf.home_odds) {
+                _hodds.dataset.odds = lf.home_odds;
+                _hodds.textContent = formatOdds(lf.home_odds, mode);
+                _hodds.hidden = false;
+              } else { _hodds.hidden = true; }
+            }
+            if (_aodds) {
+              if (lf.is_ko && lf.away_odds) {
+                _aodds.dataset.odds = lf.away_odds;
+                _aodds.textContent = formatOdds(lf.away_odds, mode);
+                _aodds.hidden = false;
+              } else { _aodds.hidden = true; }
+            }
           }
         });
       })
@@ -3009,6 +3750,16 @@
     tab.classList.toggle('has-unread', !!unread);
   }
 
+  // Show a red dot next to the word "CHAT" in the section header — even
+  // when the chat section is collapsed (where the tab dot wouldn't help).
+  function setChatSectionUnread(fixtureId, unread) {
+    const sec = document.querySelector(
+      `#live-now-banner .ln-section--chat[data-fixture-id="${fixtureId}"]`);
+    if (!sec) return;
+    const bubble = sec.querySelector('[data-role="unread-bubble"]');
+    if (bubble) bubble.hidden = !unread;
+  }
+
   // True when the user is currently looking at this fixture's chat
   // (panel is active AND CHAT section is not collapsed).
   function chatIsVisible(chatPanel) {
@@ -3021,6 +3772,7 @@
     const st = CHAT_STATE.get(fixtureId);
     if (st) st.unread = 0;
     setTabUnreadDot(fixtureId, false);
+    setChatSectionUnread(fixtureId, false);
   }
 
   // Collapse/expand a BETS or CHAT section. Clears unread when the user
@@ -3250,9 +4002,11 @@
         if (visible) {
           state.unread = 0;
           setTabUnreadDot(fid, false);
+          setChatSectionUnread(fid, false);
         } else if (newFromOthers > 0) {
           state.unread = (state.unread || 0) + newFromOthers;
           setTabUnreadDot(fid, true);
+          setChatSectionUnread(fid, true);
         }
         // Update count chip in the section head.
         const countEl = panel.querySelector('[data-role="count"]');
@@ -3525,6 +4279,11 @@
       const fixtureId = row.dataset.fixtureId;
       const kickOff   = row.dataset.kickOff;
       if (kickOff) setupCountdown(fixtureId, kickOff, POOL_ID);
+      const oddsEl = row.querySelector('.meta-odds');
+      if (oddsEl) {
+        refreshOddsStatus(oddsEl);
+        setInterval(() => refreshOddsStatus(oddsEl), 60_000);
+      }
       const activeBtn = row.querySelector('.pick-btn.active');
       if (activeBtn) {
         let pred = 'D';
@@ -3601,6 +4360,38 @@
   function hidePills(email) {
     document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
       .forEach(p => p.classList.add('player-hidden'));
+  }
+
+  // ── KO odds-status line (sibling of the countdown) ─────────────────
+  // "Odds live · locks in Xh" until kick_off − 12 h; "Odds locking" inside
+  // the final hour pre-lock; "Odds locked" after; "Odds: pending" when no
+  // numbers are set yet. Updated alongside the countdown ticker.
+  function refreshOddsStatus(el) {
+    if (!el) return;
+    const ko = new Date((el.dataset.kickOff || '')
+      .replace(' ', 'T').replace(/Z$/, '')
+      .replace(/[+-]\d{2}:?\d{2}$/, '') + 'Z');
+    if (isNaN(ko.getTime())) { el.textContent = ''; return; }
+    if (el.dataset.hasOdds !== '1') {
+      el.className = 'meta-odds is-pending';
+      el.textContent = 'Odds: pending';
+      return;
+    }
+    const lockMs = ko.getTime() - 12 * 60 * 60 * 1000;
+    const diff = lockMs - Date.now();
+    if (diff <= 0) {
+      el.className = 'meta-odds is-locked';
+      el.textContent = 'Odds locked';
+      return;
+    }
+    const hrs = diff / 3.6e6;
+    if (hrs < 1) {
+      el.className = 'meta-odds is-locking';
+      el.textContent = `Odds locking in ${Math.max(1, Math.round(diff / 60000))}m`;
+    } else {
+      el.className = 'meta-odds is-live';
+      el.textContent = `Odds live · ${Math.round(hrs)}h to lock`;
+    }
   }
 
   // ── Countdown timers ───────────────────────────────────────────────────
@@ -3750,6 +4541,13 @@
       if (!el.dataset.decimal) el.dataset.decimal = el.textContent.replace('×','').trim();
       el.textContent = formatOdds(el.dataset.decimal, mode);
     });
+    // Live-now per-team odds chips — same format. data-odds holds the
+    // decimal; rendered text is either "1.85×" or "-118×".
+    document.querySelectorAll('.ln-odds[data-odds]').forEach(el => {
+      const d = el.dataset.odds;
+      if (!d) return;
+      el.textContent = formatOdds(d, mode);
+    });
     const btn = document.getElementById('odds-format-toggle');
     if (btn) {
       btn.textContent = 'Odds: ' + (mode === 'american' ? 'am' : 'dec');
@@ -3881,6 +4679,11 @@
 
     _spyPool = poolId; _spyFix = fixtureId;
     _spyFieldBought = !!alreadyFieldRevealed;
+
+    // KO matches hide the targeted-spy section entirely.
+    modalEl.dataset.isKo = isKo ? '1' : '0';
+    const playerSec = modalEl.querySelector('[data-section="player"]');
+    if (playerSec) playerSec.style.display = isKo ? 'none' : '';
 
     // Reset field section UI. NEVER overwrite innerHTML on a parent of
     // spy-field-cost — destroying that element causes every subsequent
@@ -4181,14 +4984,53 @@
   // ── Knockout bet UI ────────────────────────────────────────────────────
   const koSelections = {};  // fixtureId → 'H' | 'A' | 'D'
 
+  // On load: if the server rendered a bet form pre-selected (user already
+  // has a pick), mirror that into koSelections so the formula summary
+  // shows up immediately without requiring a click.
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.ko-bet-row.has-pick').forEach(row => {
+      const fid = row.id.replace('ko-form-', '');
+      const sel = row.querySelector('.ko-opt.selected-H, .ko-opt.selected-A, .ko-opt.selected-D');
+      if (sel && sel.dataset.choice) {
+        koSelections[fid] = sel.dataset.choice;
+      }
+      updateKoPotential(fid);
+    });
+  });
+
   function selectKoOpt(fixtureId, choice, btn) {
     koSelections[fixtureId] = choice;
-    const row = document.getElementById('fixture-' + fixtureId);
-    row.querySelectorAll('.ko-opt').forEach(b => {
-      b.classList.remove('selected-H','selected-A','selected-D');
-    });
+    const fixtureRow = document.getElementById('fixture-' + fixtureId);
+    if (fixtureRow) {
+      fixtureRow.querySelectorAll('.ko-opt').forEach(b => {
+        b.classList.remove('selected-H','selected-A','selected-D');
+      });
+    }
     btn.classList.add('selected-' + choice);
+    // Tint the centre amount cell with the chosen team's colour so the
+    // pill reads as one continuous selected unit.
+    const betRow = document.getElementById('ko-form-' + fixtureId);
+    if (betRow) {
+      betRow.classList.remove('is-pick-H', 'is-pick-A', 'is-pick-D');
+      betRow.classList.add('is-pick-' + choice);
+    }
+    const center = document.getElementById('ko-center-' + fixtureId);
+    if (center) {
+      center.classList.remove('is-H', 'is-A', 'is-D');
+      center.classList.add('is-' + choice);
+    }
     updateKoPotential(fixtureId);
+  }
+
+  // Spy button on the KO bet form just opens the existing unified spy
+  // modal in field-spy mode. Cost is the per-fixture max($5, 10%·pot).
+  function openFieldSpyFromKoBet(btn) {
+    const poolId    = btn.dataset.pool;
+    const fixtureId = btn.dataset.fixture;
+    const cost      = parseFloat(btn.dataset.baseCost) || 5;
+    if (typeof openSpyModal === 'function') {
+      openSpyModal(poolId, fixtureId, cost, false, true);
+    }
   }
 
   // Return the multiplier to apply to a KO bet for the user's chosen side.
@@ -4206,17 +5048,120 @@
 
   function updateKoPotential(fixtureId) {
     const amtEl = document.getElementById('ko-amt-' + fixtureId);
-    const potEl = document.getElementById('ko-pot-' + fixtureId);
-    if (!amtEl || !potEl) return;
-    const amt = parseFloat(amtEl.value);
-    if (isNaN(amt) || amt <= 0) {
-      potEl.textContent = '';
+    const sumEl = document.getElementById('ko-summary-' + fixtureId);
+    if (!amtEl || !sumEl) return;
+    const raw = (amtEl.value || '').trim();
+    const amt = parseFloat(raw);
+    const choice = koSelections[fixtureId];
+    if (!choice && (!amt || amt <= 0)) {
+      sumEl.className = 'ko-bet-summary is-empty';
+      sumEl.textContent = 'Pick a side and enter a bet';
       return;
     }
-    const choice = koSelections[fixtureId];
-    const mult   = choice ? koMultFor(fixtureId, choice) : KO_MULT;
-    const suffix = choice ? '' : ' (pick a side)';
-    potEl.textContent = `→ $${(amt * mult).toFixed(2)} if correct${suffix}`;
+    if (!choice) {
+      sumEl.className = 'ko-bet-summary is-empty';
+      sumEl.textContent = 'Pick a side';
+      return;
+    }
+    const abbr = (choice === 'H' ? sumEl.dataset.homeAbbr
+                : choice === 'A' ? sumEl.dataset.awayAbbr
+                : 'Draw') || (choice === 'H' ? 'HOME' : 'AWAY');
+    const mult = koMultFor(fixtureId, choice);
+    if (!amt || amt <= 0) {
+      sumEl.className = 'ko-bet-summary is-empty';
+      sumEl.textContent = `${abbr} — enter a bet`;
+      return;
+    }
+    const payout = amt * mult;
+    // Sync the submit button label so the user knows whether they have
+    // unsaved changes. "Placed" = current state matches the server-saved
+    // pick + bet; "Update" = something has changed since last save.
+    const submitBtn = document.getElementById('ko-submit-' + fixtureId);
+    if (submitBtn) {
+      const savedBet  = parseFloat(amtEl.dataset.originalBet || '0');
+      const savedPick = submitBtn.dataset.savedPick || '';
+      const dirty = Math.abs(amt - savedBet) > 0.005 || choice !== savedPick;
+      submitBtn.textContent = dirty
+        ? 'Update'
+        : (savedPick ? 'Placed' : 'Bet');
+      submitBtn.classList.toggle('is-placed', !dirty && !!savedPick);
+    }
+    // Each number stacks as amount-on-top + small caps label below so the
+    // formula reads BET × ODDS = TO WIN even without prior context. The
+    // chosen-team chip was dropped so the whole formula fits one line.
+    sumEl.className = `ko-bet-summary is-${choice}`;
+    sumEl.innerHTML =
+      `<span class="ko-sum-cell ko-sum-cell-bet">` +
+        `<span class="ko-sum-amt">$${amt.toFixed(0)}</span>` +
+        `<span class="ko-sum-lbl">BET</span>` +
+      `</span>` +
+      `<span class="ko-sum-op">×</span>` +
+      `<span class="ko-sum-cell">` +
+        `<span class="ko-sum-amt">${(+mult).toString()}</span>` +
+        `<span class="ko-sum-lbl">ODDS</span>` +
+      `</span>` +
+      `<span class="ko-sum-op">=</span>` +
+      `<span class="ko-sum-cell ko-sum-cell-win">` +
+        `<span class="ko-sum-amt">$${payout.toFixed(0)}</span>` +
+        `<span class="ko-sum-lbl">TO WIN</span>` +
+      `</span>`;
+  }
+
+  // Adjust the spy bar's displayed per-side counts + sums to reflect the
+  // viewer's own bet change. Only relevant when the bar is already in
+  // the .is-revealed state (user previously bought the field spy on this
+  // fixture); does nothing otherwise.
+  function applySelfBetToSpyBar(fixtureId, prevPick, prevBet, newPick, newBet) {
+    const bar = document.getElementById('ko-spy-bar-' + fixtureId);
+    if (!bar || !bar.classList.contains('is-revealed')) return;
+    function pickSide(p) {
+      if (p === 'H') return bar.querySelector('.ko-spy-side-h');
+      if (p === 'A') return bar.querySelector('.ko-spy-side-a');
+      return null;
+    }
+    function readEls(sideEl) {
+      if (!sideEl) return null;
+      return {
+        countEl: sideEl.querySelector('.ko-spy-count'),
+        sumEl:   sideEl.querySelector('.ko-spy-sum'),
+      };
+    }
+    function parseCount(el) {
+      const m = (el && el.textContent || '').match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    }
+    function parseSum(el) {
+      const m = (el && el.textContent || '').replace(/[^0-9.\-]/g, '');
+      return m ? parseFloat(m) : 0;
+    }
+    function write(els, count, sum) {
+      if (!els) return;
+      if (els.countEl) els.countEl.textContent = `${Math.max(0, count)}pl.`;
+      if (els.sumEl)   els.sumEl.textContent   = `$${Math.max(0, Math.round(sum))}`;
+    }
+
+    // Decrement old side (if there was a prior bet on a real side)
+    if (prevPick && prevBet > 0) {
+      const oldEls = readEls(pickSide(prevPick));
+      if (oldEls) {
+        const c = parseCount(oldEls.countEl) - 1;
+        const s = parseSum(oldEls.sumEl)   - prevBet;
+        write(oldEls, c, s);
+      }
+    }
+    // Increment new side
+    if (newPick && newBet > 0) {
+      const newEls = readEls(pickSide(newPick));
+      if (newEls) {
+        // If the user is updating the same side (no prior bet on this side,
+        // i.e. prevPick !== newPick OR no prior bet), the count goes up;
+        // if they're adjusting an existing same-side bet, count stays.
+        const sameSide = prevPick === newPick && prevBet > 0;
+        const c = parseCount(newEls.countEl) + (sameSide ? 0 : 1);
+        const s = parseSum(newEls.sumEl) + newBet;
+        write(newEls, c, s);
+      }
+    }
   }
 
   async function saveKoPick(poolId, fixtureId, submitBtn) {
@@ -4226,10 +5171,18 @@
     const amtEl = document.getElementById('ko-amt-' + fixtureId);
     const bet_amount = parseFloat(amtEl ? amtEl.value : 0);
     if (!bet_amount || bet_amount <= 0) { alert('Enter a bet amount.'); return; }
-    if (bet_amount > myBalance) {
-      alert(`Insufficient balance. You have $${myBalance.toFixed(2)}.`); return;
+    // The old ante is refunded server-side when a KO pick changes, so the
+    // user's *available* balance for this fixture is current balance plus
+    // whatever they already had wagered on it. Without adding originalBet
+    // back here the client falsely blocks reductions.
+    const originalBet = parseFloat(amtEl.dataset.originalBet || '0');
+    const available   = myBalance + originalBet;
+    if (bet_amount > available) {
+      alert(`Insufficient balance. You have $${available.toFixed(2)} available (including the $${originalBet.toFixed(2)} currently wagered here).`);
+      return;
     }
 
+    const originalLabel = submitBtn.textContent;
     submitBtn.disabled = true;
     submitBtn.textContent = '...';
 
@@ -4244,18 +5197,36 @@
       if (data.ok) {
         myBalance = data.new_balance;
         updateBalanceDisplay(myBalance);
-
-        const form = document.getElementById('ko-form-' + fixtureId);
-        if (form) {
-          const label = document.createElement('div');
-          label.className = 'ko-locked-label';
-          const teamLabel = escHtml(pickLabel(prediction, fixtureId));
-          const lockedMult = koMultFor(fixtureId, prediction);
-          label.innerHTML = `<span class="ko-badge ko-badge-${prediction}">${teamLabel} wins</span>` +
-            `<span>$${bet_amount.toFixed(2)} bet @ ${(+lockedMult).toString()}×</span>` +
-            `<span style="color:var(--accent)">→ $${(bet_amount * lockedMult).toFixed(2)} if correct</span>`;
-          form.replaceWith(label);
+        // Roll the navbar segments to the new amounts so the bet visibly
+        // moves from TO BET into PLACED. TOTAL stays the same (money's
+        // conserved) but we still pass it so the data attribute updates.
+        if (window.bumpNavAmounts) {
+          window.bumpNavAmounts({
+            tobet:  data.new_balance,
+            placed: data.new_total_bet,
+            total:  data.grand_total,
+          });
         }
+
+        // If the user has already revealed the spy bar for this fixture,
+        // their own bet should immediately roll into the displayed totals.
+        // Compute the delta from the previous saved state and walk the
+        // bar's counts/sums in place — keeps the "what's on the board"
+        // honest without a page refresh.
+        const prevPick = submitBtn.dataset.savedPick || '';
+        const prevBet  = parseFloat(amtEl.dataset.originalBet || '0');
+        applySelfBetToSpyBar(fixtureId, prevPick, prevBet, prediction, bet_amount);
+
+        // Keep the unified KO form mounted (picks can change again until
+        // lock) — update the input's stored "original" + saved pick on
+        // the submit button, then refresh the summary. The label becomes
+        // "Placed" until the user dirties the form again.
+        amtEl.dataset.originalBet = bet_amount.toFixed(2);
+        submitBtn.dataset.savedPick = prediction;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Placed';
+        submitBtn.classList.add('is-placed');
+        updateKoPotential(fixtureId);
 
         const pill   = document.getElementById('mypill-' + fixtureId);
         const choice = document.getElementById('mypill-choice-' + fixtureId);
@@ -4272,12 +5243,12 @@
       } else {
         alert('Could not save: ' + (data.error || 'unknown error'));
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Bet';
+        submitBtn.textContent = originalLabel;
       }
     } catch {
       alert('Network error — please try again.');
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Bet';
+      submitBtn.textContent = originalLabel;
     }
   }
 

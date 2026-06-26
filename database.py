@@ -307,6 +307,11 @@ def init_db():
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS city TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_banned INTEGER DEFAULT 0",
             "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS posted_minute INTEGER",
+            # Set by sim/fetch_odds.py the first cron run that finds a
+            # fixture within LOCK_HOURS of kickoff. After that, the row's
+            # home_odds / away_odds are frozen and the admin form refuses
+            # writes (without an override).
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS odds_locked_at TEXT",
         ]:
             c.execute(sql)
     else:
@@ -339,6 +344,7 @@ def init_db():
             ("fixtures",       "city TEXT"),
             ("users",          "chat_banned INTEGER DEFAULT 0"),
             ("chat_messages",  "posted_minute INTEGER"),
+            ("fixtures",       "odds_locked_at TEXT"),
         ]
         for table, col_def in migrations:
             try:
@@ -362,6 +368,28 @@ _KNOCKOUT_STAGES = frozenset({
 def is_knockout_stage(stage):
     """Return True if the given stage name is a knockout round (not group stage)."""
     return (stage or '').strip() in _KNOCKOUT_STAGES
+
+
+def get_open_ko_bet_total(user_id, pool_id):
+    """Sum of bet_amount across the user's KO picks on fixtures that
+    haven't been settled yet. Drives the BET circle on the navbar."""
+    if not user_id or not pool_id:
+        return 0.0
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
+    conn = get_db()
+    row = conn.execute(
+        f"""SELECT COALESCE(SUM(p.bet_amount), 0.0) AS total
+              FROM picks p
+              JOIN fixtures f ON f.id = p.fixture_id
+             WHERE p.user_id = ?
+               AND p.pool_id = ?
+               AND p.bet_amount IS NOT NULL
+               AND (f.result IS NULL OR f.result = '')
+               AND f.stage IN ({placeholders})""",
+        (user_id, pool_id, *_KNOCKOUT_STAGES)
+    ).fetchone()
+    conn.close()
+    return float(row["total"] or 0)
 
 
 def _round_type_for_stage(stage):

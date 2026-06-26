@@ -297,8 +297,10 @@ def get_all_fixtures():
         home    = row["home_team"] or ""
         away    = row["away_team"] or ""
         kick_off = row["kick_off"] or ""
-        if home == "TBD" and away == "TBD":
-            continue
+        # Previously: skip rows where both teams were "TBD". We now keep
+        # them so the whole KO bracket lists at launch — the bet form gates
+        # itself on `is_bettable` (both teams resolved + odds set) so users
+        # can't wager until the matchup is real.
         if kick_off and not kick_off.startswith("202"):
             continue
         if kick_off and kick_off[:4] not in ("2025", "2026", "2027"):
