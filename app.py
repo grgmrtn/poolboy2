@@ -1429,13 +1429,14 @@ def submit_pick(pool_id):
         return jsonify({"ok": False, "error": "Draws are not allowed in knockout rounds."}), 400
 
     if knockout:
-        # Block bets on KO fixtures with unresolved matchups (one team still
-        # "TBD") or odds not yet posted. Mirrors the template-side gate so
-        # the API can't be poked around the UI.
+        # Block bets on KO fixtures whose matchup is still unresolved (one
+        # team "TBD"). We deliberately do NOT block when odds are null —
+        # the bet form falls through to the global flat multiplier and
+        # the odds cron will refine the line within 3 h.
         conn2 = db.get_db()
         meta = conn2.execute(
-            "SELECT home_team, away_team, home_odds, away_odds "
-            "FROM fixtures WHERE id=?", (fixture_id,)
+            "SELECT home_team, away_team FROM fixtures WHERE id=?",
+            (fixture_id,),
         ).fetchone()
         conn2.close()
         if meta:
@@ -1444,9 +1445,6 @@ def submit_pick(pool_id):
             if not h or not a or h.startswith("TBD") or a.startswith("TBD"):
                 return jsonify({"ok": False,
                                 "error": "Both teams must be confirmed before betting opens."}), 400
-            if meta["home_odds"] is None or meta["away_odds"] is None:
-                return jsonify({"ok": False,
-                                "error": "Odds aren't posted for this fixture yet."}), 400
         bet_raw = data.get("bet_amount")
         try:
             bet_amount = float(bet_raw) if bet_raw is not None else None
