@@ -1893,23 +1893,6 @@
   }
   .ko-bet-pending-icon { font-size: 1rem; }
   .ko-bet-pending-text { letter-spacing: 0.01em; }
-  /* Provisional-odds chip: rendered above the picker pill when the row's
-     home/away_odds are still null and the form is showing the flat global
-     multiplier as a placeholder. Tells the user the line will move
-     before lock without blocking the bet. */
-  .ko-odds-provisional {
-    display: inline-block;
-    margin: 0.5rem 0 0.2rem;
-    padding: 0.25rem 0.55rem;
-    background: rgba(255,122,26,0.08);
-    border: 1px dashed rgba(255,122,26,0.45);
-    border-radius: 999px;
-    color: var(--lilac);
-    font-family: var(--mono);
-    font-size: 0.6rem; font-weight: 800;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    cursor: help;
-  }
   .ko-badge {
     font-size: 0.66rem; font-weight: 700; padding: 0.15rem 0.4rem;
     border-radius: 4px; letter-spacing: 0.06em;
@@ -3123,15 +3106,8 @@
                     {% set picks_locked = pool.entry_fee and not has_paid %}
                     {% set home_odds_display = f.home_odds if f.home_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
                     {% set away_odds_display = f.away_odds if f.away_odds is not none else scoring_config.knockout_flat_payout_multiplier %}
-                    {# Signal when the displayed odds are the global fallback
-                       (no Pinnacle line yet) so users know the multiplier
-                       will refine before lock. #}
-                    {% set _odds_provisional = not _odds_set %}
-                    {% if _odds_provisional %}
-                      <div class="ko-odds-provisional" title="Lines update every 3h until 12h before kickoff">
-                        Opening odds · refining
-                      </div>
-                    {% endif %}
+                    {# Provisional-odds signal lives in the date/time column
+                       on the left (.meta-odds, set by refreshOddsStatus). #}
                     {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
                     {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
                     {# Spy cost — computed server-side as max($5, 10% of
@@ -4399,10 +4375,10 @@
       .replace(/[+-]\d{2}:?\d{2}$/, '') + 'Z');
     if (isNaN(ko.getTime())) { el.textContent = ''; return; }
     if (el.dataset.hasOdds !== '1') {
-      // Provisional state: bet form is open at the flat multiplier; we
-      // expect the odds cron to refine the line within the next 3 hours.
+      // Provisional state: bet form is open at the flat multiplier; the
+      // odds cron will refine the line within the next 3 hours.
       el.className = 'meta-odds is-pending';
-      el.textContent = 'Opening odds';
+      el.textContent = 'Placeholder odds';
       return;
     }
     const lockMs = ko.getTime() - 12 * 60 * 60 * 1000;
