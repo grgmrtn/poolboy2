@@ -63,10 +63,9 @@
   .sc-detail-toggle.is-on { color: var(--accent); border-color: var(--accent); }
 
   /* ── Leaderboard, completed-table style ───────────────────────────────
-     Single-row-per-player CSS grid layout — same aesthetic as the
-     Completed table on the pool page. The 'detail' cells stay in the DOM
-     and the toggle just hides/shows them via display, so the column
-     widths recompute cleanly without re-rendering. */
+     Single-row-per-player CSS grid. Detail-mode adds 5 more columns; the
+     three matchup-based cells (Rarest / Riskiest / Largest Win) use a
+     2-line internal layout: matchup on top, secondary number below. */
   .lb-wrap {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -79,28 +78,27 @@
   .lb-table {
     display: flex; flex-direction: column;
     font-family: var(--mono);
-    font-size: 0.82rem;
+    font-size: 0.74rem;
     min-width: 0;
   }
-  /* Default (undetailed) grid: rank | player | total — three tight columns.
-     Detailed-mode rule below extends with hidden cells. */
+  /* Default (undetailed) grid: rank | player | total. */
   .lb-row {
     display: grid;
     grid-template-columns:
-      2.2rem            /* rank */
+      2rem              /* rank */
       minmax(0, 1fr)    /* player */
-      4.6rem;           /* total */
+      4.4rem;           /* total */
     align-items: center;
     gap: 0.55rem;
-    padding: 0.55rem 0.95rem;
+    padding: 0.5rem 0.85rem;
     border-top: 1px solid var(--border);
   }
   .lb-row:first-child { border-top: 0; }
   .lb-row.lb-head {
     background: rgba(255,255,255,0.04);
-    font-size: 0.6rem; letter-spacing: 0.1em; font-weight: 800;
+    font-size: 0.56rem; letter-spacing: 0.1em; font-weight: 800;
     color: var(--text-dim); text-transform: uppercase;
-    padding: 0.55rem 0.95rem;
+    padding: 0.5rem 0.85rem;
     border-bottom: 1px solid var(--border);
     border-top: 0;
   }
@@ -110,37 +108,47 @@
     text-align: right;
   }
   .lb-row.is-me .lb-rank { color: var(--accent); }
+  /* Player cell stacks team name on top, real name underneath. Falls back
+     to just the display name when no team alias is set. */
   .lb-name {
     color: var(--text); font-weight: 700;
-    display: inline-flex; align-items: baseline; gap: 0.5rem;
-    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    display: flex; flex-direction: column;
+    line-height: 1.15;
+    overflow: hidden;
     min-width: 0;
   }
-  .lb-name .lb-real {
-    color: var(--text-muted); font-size: 0.7rem; font-weight: 500;
-    overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  .lb-name-team {
+    font-size: 0.78rem; font-weight: 800;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .lb-name-real {
+    color: var(--text-muted); font-size: 0.6rem; font-weight: 500;
+    letter-spacing: 0.02em;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    margin-top: 0.08rem;
   }
   .lb-balance {
-    color: var(--accent); font-weight: 800;
+    color: var(--accent); font-weight: 800; font-size: 0.95rem;
     text-align: right; letter-spacing: -0.01em;
   }
-  /* Detail cells — hidden by default, revealed when body.show-detail is on.
-     The grid template gets re-applied so the extra columns get tracks. */
+  /* Detail cells — hidden by default, revealed when body.show-detail is on. */
   .lb-pct, .lb-streak, .lb-rare, .lb-risk, .lb-win,
   .lb-head .lb-pct-h, .lb-head .lb-streak-h, .lb-head .lb-rare-h,
   .lb-head .lb-risk-h, .lb-head .lb-win-h {
     display: none;
   }
   body.show-detail .lb-row {
+    /* 8 columns; matchup cells get 1fr each to share the remaining width
+       evenly. Streak got a wider track so the flame + number breathe. */
     grid-template-columns:
-      2rem              /* rank */
-      minmax(0, 1.4fr)  /* player */
-      4.6rem            /* total */
-      3.6rem            /* % correct */
-      2.6rem            /* streak */
-      minmax(0, 1.2fr)  /* rarest win */
-      4.4rem            /* riskiest */
-      4.4rem;           /* largest win */
+      1.8rem            /* rank */
+      minmax(5rem, 1.5fr) /* player */
+      3.8rem            /* total */
+      3.4rem            /* % correct */
+      3.6rem            /* streak */
+      minmax(0, 1fr)    /* rarest */
+      minmax(0, 1fr)    /* riskiest */
+      minmax(0, 1fr);   /* largest win */
   }
   body.show-detail .lb-pct,
   body.show-detail .lb-streak,
@@ -161,59 +169,43 @@
   .lb-pct .lb-pct-pct { color: var(--text-dim); font-size: 0.82em; margin-left: 0.2rem; }
   .lb-streak { color: var(--text-muted); font-weight: 700; text-align: right; }
   .lb-streak-flame { color: var(--accent); font-weight: 800; }
-  .lb-risk, .lb-win {
-    color: var(--text-muted); font-weight: 700;
-    text-align: right; white-space: nowrap;
+  .lb-empty { color: var(--text-dim); text-align: center; }
+  /* 2-line cell for matchup-based stats: match on top, secondary below.
+     Shared across .lb-rare, .lb-risk, .lb-win. */
+  .lb-mcell {
+    display: flex; flex-direction: column;
+    line-height: 1.1;
+    min-width: 0;
   }
-  .lb-risk-amt { color: var(--lilac); font-weight: 800; }
-  .lb-win-amt  { color: var(--accent); font-weight: 800; }
-  /* Detail mode is a lot of columns — let it horizontally scroll on mobile
-     rather than wrap, so each row stays one line. */
-  body.show-detail .lb-table { min-width: 720px; }
-
-  /* Rarest-pick cell. Picked side gets a pill background so the highlight
-     is unambiguous (no more confusion between picked + bold-but-not-picked).
-     The score in the middle is highlighted ONLY when the user picked Draw —
-     otherwise it stays muted so it doesn't compete with the team highlights. */
-  .lb-rare { min-width: 180px; }
-  /* Tight 0.15rem gap so home / score / away read as one matched-up line;
-     pill padding (0.18 / 0.25) keeps the chips legible but doesn't push
-     the away team off into its own visual zone. */
-  .lb-rare-row { display: inline-flex; align-items: center; gap: 0.15rem; }
-  .lb-rare-side, .lb-rare-score {
-    display: inline-flex; align-items: center; gap: 0.3rem;
-    color: var(--text-dim); font-weight: 500; font-size: 0.78rem;
-    padding: 0.18rem 0.3rem; border-radius: 4px;
-    border: 1px solid transparent;
-    font-variant-numeric: tabular-nums;
+  .lb-mcell-top {
+    display: inline-flex; align-items: center; gap: 0.18rem;
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--text);
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
-  .lb-rare-side img {
-    width: 18px; height: 13px; border-radius: 2px;
+  .lb-mcell-flag {
+    width: 14px; height: 10px; border-radius: 2px;
     object-fit: cover; flex-shrink: 0;
   }
-  /* Picked side / score: lime background pill, accent text, bold. */
-  .lb-rare-side.picked, .lb-rare-score.picked {
-    color: var(--accent); font-weight: 800;
-    background: rgba(200,255,87,0.10);
-    border-color: rgba(200,255,87,0.35);
+  .lb-mcell-team { color: var(--text-muted); font-weight: 600; }
+  .lb-mcell-team.is-pick { color: var(--accent); font-weight: 800; }
+  .lb-mcell-score {
+    color: var(--text-muted); font-weight: 700;
+    margin: 0 0.12rem;
+    font-variant-numeric: tabular-nums;
   }
-  /* The middle "vs" score stays muted when not picked — readable but
-     clearly NOT highlighted. */
-  .lb-rare-score:not(.picked) {
-    color: var(--text-muted); font-weight: 600;
+  .lb-mcell-score.is-draw { color: var(--accent); font-weight: 800; }
+  .lb-mcell-sub {
+    margin-top: 0.12rem;
+    color: var(--text-dim); font-size: 0.6rem; font-weight: 600;
+    letter-spacing: 0.02em;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
-  .lb-rare-correct, .lb-rare-wrong {
-    margin-left: 0.4rem;
-    font-size: 0.7rem; font-weight: 700;
-  }
-  .lb-rare-correct { color: var(--accent); }
-  .lb-rare-wrong   { color: var(--red); }
-  .lb-rare-pct {
-    color: var(--text-dim); font-size: 0.62rem;
-    letter-spacing: 0.05em; margin-left: 0.35rem;
-    font-weight: 600;
-  }
-  .lb-rare-empty { color: var(--text-dim); font-size: 0.75rem; }
+  .lb-mcell-sub.is-orange { color: var(--lilac); font-weight: 800; }
+  .lb-mcell-sub.is-lime   { color: var(--accent); font-weight: 800; }
+  /* Detail mode is a lot of columns — let it horizontally scroll on mobile
+     rather than wrap, so each row stays one line. */
+  body.show-detail .lb-table { min-width: 760px; }
 
   /* Chart card */
   .chart-card {
@@ -381,10 +373,32 @@
     </button>
   </div>
 
-  <!-- ── Leaderboard table ───────────────────────────────────────────
-       Single-row-per-player CSS grid. Always-shown: rank, player, total.
-       Detail-mode adds: % Correct, Streak, Rarest Win, Riskiest, Largest
-       Win (toggle pinned to the body.show-detail class). -->
+  {# Macro for the 2-line matchup cell used by Rarest / Riskiest / Largest
+     Win. Top line: flag + abbr + score (or "vs" if no score yet) + abbr +
+     flag, with the user's pick side lit lime. Bottom line: caller-supplied
+     secondary text (field %, ante, payout). #}
+  {% macro match_cell(m, pick, sub_text, sub_class='') -%}
+    {% set ha = TEAM_ABBR.get(m.home_team) or (m.home_team or '?')[:3].upper() %}
+    {% set aa = TEAM_ABBR.get(m.away_team) or (m.away_team or '?')[:3].upper() %}
+    {% set has_score = m.home_score is not none and m.away_score is not none %}
+    {% set is_draw = has_score and m.home_score == m.away_score %}
+    <div class="lb-mcell">
+      <div class="lb-mcell-top">
+        <img class="lb-mcell-flag" src="https://flagcdn.com/{{ m.home_flag }}.svg" alt="" loading="lazy">
+        <span class="lb-mcell-team{% if pick == 'H' %} is-pick{% endif %}">{{ ha }}</span>
+        {% if has_score %}
+          <span class="lb-mcell-score{% if is_draw and pick == 'D' %} is-draw{% endif %}">{{ m.home_score }}–{{ m.away_score }}</span>
+        {% else %}
+          <span class="lb-mcell-score">vs</span>
+        {% endif %}
+        <span class="lb-mcell-team{% if pick == 'A' %} is-pick{% endif %}">{{ aa }}</span>
+        <img class="lb-mcell-flag" src="https://flagcdn.com/{{ m.away_flag }}.svg" alt="" loading="lazy">
+      </div>
+      <div class="lb-mcell-sub {{ sub_class }}">{{ sub_text }}</div>
+    </div>
+  {%- endmacro %}
+
+  <!-- ── Leaderboard table ─────────────────────────────────────────── -->
   <div class="lb-wrap" id="lb-section">
     <div class="lb-scroll">
       <div class="lb-table" role="table" aria-label="Pool leaderboard">
@@ -392,7 +406,7 @@
           <span role="columnheader" class="lb-rank">#</span>
           <span role="columnheader">Player</span>
           <span role="columnheader" class="lb-balance">Total</span>
-          <span role="columnheader" class="lb-pct lb-pct-h">% Correct</span>
+          <span role="columnheader" class="lb-pct lb-pct-h">Correct</span>
           <span role="columnheader" class="lb-streak lb-streak-h">Streak</span>
           <span role="columnheader" class="lb-rare lb-rare-h">Rarest Win</span>
           <span role="columnheader" class="lb-risk lb-risk-h">Riskiest</span>
@@ -402,8 +416,12 @@
         <div class="lb-row{% if row.email == current_user.email %} is-me{% endif %}" role="row">
           <span role="cell" class="lb-rank">{{ loop.index }}</span>
           <span role="cell" class="lb-name">
-            {% if row.team_name %}{{ row.team_name }}<span class="lb-real">{{ row.display_name }}</span>
-            {% else %}{{ row.display_name }}{% endif %}
+            {% if row.team_name %}
+              <span class="lb-name-team">{{ row.team_name }}</span>
+              <span class="lb-name-real">{{ row.display_name }}</span>
+            {% else %}
+              <span class="lb-name-team">{{ row.display_name }}</span>
+            {% endif %}
           </span>
           <span role="cell" class="lb-balance">${{ row.balance | round(0, 'ceil') | int }}</span>
           <span role="cell" class="lb-pct">
@@ -420,33 +438,29 @@
           </span>
           <span role="cell" class="lb-rare">
             {% if row.rare_pick %}
-              {% set rp = row.rare_pick %}
-              {% set ha = TEAM_ABBR.get(rp.home_team) or (rp.home_team or '?')[:3].upper() %}
-              {% set aa = TEAM_ABBR.get(rp.away_team) or (rp.away_team or '?')[:3].upper() %}
-              <span class="lb-rare-row">
-                <span class="lb-rare-side{% if rp.my_pick == 'H' %} picked{% endif %}">
-                  <img src="https://flagcdn.com/{{ rp.home_flag }}.svg" alt="" onerror="this.style.display='none'">
-                  {{ ha }}
-                </span>
-                <span class="lb-rare-score{% if rp.my_pick == 'D' %} picked{% endif %}">{{ rp.home_score }}–{{ rp.away_score }}</span>
-                <span class="lb-rare-side{% if rp.my_pick == 'A' %} picked{% endif %}">
-                  {{ aa }}
-                  <img src="https://flagcdn.com/{{ rp.away_flag }}.svg" alt="" onerror="this.style.display='none'">
-                </span>
-              </span>
+              {{ match_cell(row.rare_pick, row.rare_pick.my_pick,
+                            (row.rare_pick.field_pct | round | int) ~ '% picked') }}
             {% else %}
-              <span class="lb-rare-empty">—</span>
+              <span class="lb-empty">—</span>
             {% endif %}
           </span>
           <span role="cell" class="lb-risk">
             {% if row.riskiest_bet %}
-              <span class="lb-risk-amt">${{ row.riskiest_bet.amount | round(0, 'ceil') | int }}</span>
-            {% else %}—{% endif %}
+              {{ match_cell(row.riskiest_bet, row.riskiest_bet.pick,
+                            '$' ~ (row.riskiest_bet.amount | round(0, 'ceil') | int) ~ ' ante',
+                            'is-orange') }}
+            {% else %}
+              <span class="lb-empty">—</span>
+            {% endif %}
           </span>
           <span role="cell" class="lb-win">
             {% if row.largest_win %}
-              <span class="lb-win-amt">${{ row.largest_win.amount | round(0, 'ceil') | int }}</span>
-            {% else %}—{% endif %}
+              {{ match_cell(row.largest_win, row.largest_win.pick,
+                            '+$' ~ (row.largest_win.amount | round(0, 'ceil') | int) ~ ' won',
+                            'is-lime') }}
+            {% else %}
+              <span class="lb-empty">—</span>
+            {% endif %}
           </span>
         </div>
         {% endfor %}
