@@ -1960,6 +1960,156 @@ def admin_sync_fixtures():
     return redirect(url_for("admin_page"))
 
 
+# Pinnacle ↔ football-data team-name drift. Mirrors fetch_odds.TEAM_ALIASES
+# but kept local so this endpoint doesn't depend on the sim/ module.
+_PINNACLE_ALIASES = {
+    "USA":                    "United States",
+    "Bosnia & Herzegovina":   "Bosnia-Herzegovina",
+    "Cape Verde":             "Cape Verde Islands",
+    "DR Congo":               "Congo DR",
+    "Korea Republic":         "South Korea",
+    "Korea DPR":              "North Korea",
+    "Türkiye":                "Turkey",
+}
+
+
+def _canonical_team_name(name):
+    """Try the alias map first, fall back to the raw Pinnacle name. Used
+    for both DB writes and flag-code lookups so they stay in sync."""
+    if not name:
+        return name
+    return _PINNACLE_ALIASES.get(name, name)
+
+
+@app.route("/admin/fill-ko-from-odds", methods=["POST"])
+@admin_required
+def admin_fill_ko_from_odds():
+    """One-click bracket bootstrap: fetch The Odds API, look for events
+    whose teams are confirmed, find any KO placeholder row in our DB with
+    a kick-off within 4h of the API kick-off and at least one TBD team,
+    and write the real teams + flag codes. Lets bets open before the
+    football-data fixtures sync catches up to the bracket draw.
+
+    Idempotent — slots that already have real teams are left alone.
+    """
+    import requests as _r
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    api_key = os.environ.get("THE_ODDS_API_KEY")
+    if not api_key:
+        flash("THE_ODDS_API_KEY isn't set on this service.", "error")
+        return redirect(url_for("admin_page"))
+
+    try:
+        resp = _r.get(
+            "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds",
+            params={
+                "apiKey":     api_key,
+                "regions":    "us",
+                "markets":    "h2h",
+                "bookmakers": "pinnacle",
+                "oddsFormat": "decimal",
+                "dateFormat": "iso",
+            },
+            timeout=20,
+        )
+        if not resp.ok:
+            flash(f"The Odds API returned {resp.status_code}.", "error")
+            return redirect(url_for("admin_page"))
+        events = resp.json() or []
+    except Exception as e:
+        flash(f"Odds fetch failed: {e}", "error")
+        return redirect(url_for("admin_page"))
+
+    filled = []  # (slot_id, "Home vs Away")
+    skipped_already_set = 0
+    skipped_no_slot     = 0
+
+    conn = db.get_db()
+    KO_STAGES = (
+        "Round of 32", "Round of 16", "Quarter-Finals",
+        "Semi-Finals", "Third Place", "Final",
+    )
+    for ev in events:
+        home_raw = (ev.get("home_team") or "").strip()
+        away_raw = (ev.get("away_team") or "").strip()
+        ko_iso   = ev.get("commence_time") or ""
+        if not (home_raw and away_raw and ko_iso):
+            continue
+        try:
+            ev_ko = _dt.fromisoformat(ko_iso.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+
+        home = _canonical_team_name(home_raw)
+        away = _canonical_team_name(away_raw)
+
+        # Window match against KO placeholders: any KO row with at least
+        # one TBD team whose kick_off is within MATCH_KO_HOURS of the API
+        # event. We pick the closest in time.
+        candidates = conn.execute(
+            f"""SELECT id, home_team, away_team, kick_off
+                  FROM fixtures
+                 WHERE stage IN ({','.join('?' * len(KO_STAGES))})
+                   AND (UPPER(home_team) LIKE 'TBD%' OR UPPER(away_team) LIKE 'TBD%')""",
+            KO_STAGES,
+        ).fetchall()
+        best = None
+        best_diff = None
+        for c in candidates:
+            ck_raw = (c["kick_off"] or "")[:19].rstrip("Z")
+            try:
+                ck = _dt.fromisoformat(ck_raw).replace(tzinfo=_tz.utc)
+            except ValueError:
+                continue
+            d = abs((ck - ev_ko).total_seconds())
+            if best_diff is None or d < best_diff:
+                best, best_diff = c, d
+        if not best or best_diff is None or best_diff > 4 * 3600:
+            # Either no TBD slot left (already filled) or no slot within
+            # 4h of the API kick-off. Distinguish for the flash message.
+            if conn.execute(
+                "SELECT 1 FROM fixtures WHERE LOWER(home_team)=LOWER(?) "
+                "AND LOWER(away_team)=LOWER(?) LIMIT 1",
+                (home, away),
+            ).fetchone():
+                skipped_already_set += 1
+            else:
+                skipped_no_slot += 1
+            continue
+
+        conn.execute(
+            "UPDATE fixtures "
+            "   SET home_team=?, away_team=?, "
+            "       home_flag_code=?, away_flag_code=? "
+            " WHERE id=?",
+            (
+                home, away,
+                fx.get_flag_code(home), fx.get_flag_code(away),
+                best["id"],
+            ),
+        )
+        filled.append((best["id"], f"{home} vs {away}"))
+
+    conn.commit()
+    conn.close()
+
+    msg_parts = []
+    if filled:
+        msg_parts.append(
+            f"Filled {len(filled)} KO slot{'s' if len(filled) != 1 else ''}: "
+            + ", ".join(label for _, label in filled[:10])
+            + (" …" if len(filled) > 10 else "")
+        )
+    if skipped_already_set:
+        msg_parts.append(f"{skipped_already_set} already set")
+    if skipped_no_slot:
+        msg_parts.append(f"{skipped_no_slot} matchup{'s' if skipped_no_slot != 1 else ''} have no matching TBD slot")
+    flash(" · ".join(msg_parts) or "No KO slots needed filling.",
+          "success" if filled else "info")
+    return redirect(url_for("admin_page"))
+
+
 @app.route("/admin/seed-euro2024", methods=["POST"])
 @admin_required
 def admin_seed_euro2024():

@@ -308,6 +308,10 @@
       <form method="POST" action="{{ url_for('admin_sync_fixtures') }}" style="flex-shrink:0">
         <button type="submit" class="btn btn-ghost btn-sm">↻ Force fixture sync</button>
       </form>
+      <form method="POST" action="{{ url_for('admin_fill_ko_from_odds') }}" style="flex-shrink:0"
+            title="Fetch The Odds API and fill any TBD KO slot whose kick-off matches a confirmed Pinnacle matchup.">
+        <button type="submit" class="btn btn-ghost btn-sm">🎯 Fill KO from odds</button>
+      </form>
       <form method="POST" action="{{ url_for('admin_seed_euro2024') }}" style="flex-shrink:0">
         <button type="submit" class="btn btn-ghost btn-sm">⚽ Seed Euro 2024 sim</button>
       </form>
