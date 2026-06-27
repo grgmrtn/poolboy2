@@ -675,16 +675,46 @@ def upsert_fixture(fixture):
 
     fixture: a dict with keys: id, home_team, away_team, home_flag_code,
              away_flag_code, kick_off, stage
+
+    NEVER overwrites a real team name with 'TBD'/empty. football-data has
+    been observed to "forget" KO team assignments during late group-stage
+    flux (returning None for matches that previously had real teams). The
+    upsert only ratchets forward — TBD→Brazil is allowed, Brazil→TBD is
+    not. Same protection on flag codes (no real team → 'un').
     """
     conn = get_db()
     conn.execute("""
         INSERT INTO fixtures (id, home_team, away_team, home_flag_code, away_flag_code, kick_off, stage)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-            home_team      = excluded.home_team,
-            away_team      = excluded.away_team,
-            home_flag_code = excluded.home_flag_code,
-            away_flag_code = excluded.away_flag_code,
+            home_team      = CASE
+                WHEN excluded.home_team IS NULL
+                  OR excluded.home_team = ''
+                  OR excluded.home_team = 'TBD'
+                THEN home_team
+                ELSE excluded.home_team
+            END,
+            away_team      = CASE
+                WHEN excluded.away_team IS NULL
+                  OR excluded.away_team = ''
+                  OR excluded.away_team = 'TBD'
+                THEN away_team
+                ELSE excluded.away_team
+            END,
+            home_flag_code = CASE
+                WHEN excluded.home_flag_code IS NULL
+                  OR excluded.home_flag_code = ''
+                  OR excluded.home_flag_code = 'un'
+                THEN home_flag_code
+                ELSE excluded.home_flag_code
+            END,
+            away_flag_code = CASE
+                WHEN excluded.away_flag_code IS NULL
+                  OR excluded.away_flag_code = ''
+                  OR excluded.away_flag_code = 'un'
+                THEN away_flag_code
+                ELSE excluded.away_flag_code
+            END,
             kick_off       = excluded.kick_off,
             stage          = excluded.stage
     """, (
