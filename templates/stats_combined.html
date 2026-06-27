@@ -85,7 +85,10 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    overflow: hidden;
+    /* `overflow: hidden` would break position:sticky inside this wrapper
+       on Safari. `overflow: clip` clips the rounded corners without
+       establishing a scroll container, leaving sticky behaviour intact. */
+    overflow: clip;
     margin-bottom: 1.75rem;
     font-variant-numeric: tabular-nums;
   }
@@ -109,13 +112,10 @@
     border-top: 1px solid var(--border);
   }
   .lb-row:first-child { border-top: 0; }
-  /* Header is a flex container instead of a grid, so the icon picker can
-     slide to the right edge without occupying a grid column in the data
-     rows below. The columnheader spans inherit lb-* widths only via JS
-     would be too brittle — visual alignment with data rows isn't perfect
-     here, but the picker placement is what matters. */
+  /* Same grid template as data rows — column-aligned. The stat picker
+     sits in a SEPARATE sticky bar above the head (.lb-picker-bar) so
+     it doesn't push the grid columns around. */
   .lb-row.lb-head {
-    display: flex; align-items: center; gap: 0.6rem;
     background: rgba(20,20,28,0.96);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -124,16 +124,25 @@
     padding: 0.65rem 0.95rem;
     border-bottom: 1px solid var(--border);
     border-top: 0;
-    /* Sticks under the navbar + sc-nav. CSS variables let any responsive
-       size change to those bars cascade automatically — no per-breakpoint
-       fixes needed. The values default to the measured heights and JS
-       re-measures on resize (see end of <style> block). */
+    /* Sticks under the navbar + sc-nav + the picker bar above us. */
     position: sticky;
-    top: var(--sc-sticky-offset, 100px);
+    top: calc(var(--sc-sticky-offset, 100px) + var(--lb-picker-h, 0px));
     z-index: 4;
   }
-  .lb-row.lb-head > * { flex-shrink: 0; }
-  .lb-row.lb-head > .lb-stat-picker-wrap { flex-shrink: 1; }
+  /* Sticky picker bar — sits ABOVE the column headers. Its measured
+     height is exposed as --lb-picker-h so the lb-head can stick beneath
+     it without overlap. */
+  .lb-picker-bar {
+    position: sticky;
+    top: var(--sc-sticky-offset, 100px);
+    z-index: 5;
+    background: rgba(20,20,28,0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.55rem 0.95rem;
+    display: flex; align-items: center; justify-content: flex-end;
+  }
   .lb-row.is-me { background: rgba(200,255,87,0.06); }
   .lb-rank {
     color: var(--text-muted); font-weight: 700;
@@ -452,11 +461,34 @@
 
   <!-- ── Leaderboard table ─────────────────────────────────────────── -->
   <div class="lb-wrap" id="lb-section">
+    {# Stat picker — its own sticky bar above the column headers so the
+       grid layout in lb-head stays column-aligned with the data rows. #}
+    <div class="lb-picker-bar" id="lb-picker-bar">
+      <div class="sc-stat-picker" role="group" aria-label="Stat to show">
+        <button type="button" class="sc-stat-btn" data-stat="streak"
+                onclick="selectStat('streak')" title="Streak + Correct">
+          <span class="sc-stat-icon">🔥</span>
+          <span class="sc-stat-label">Streak</span>
+        </button>
+        <button type="button" class="sc-stat-btn" data-stat="risk"
+                onclick="selectStat('risk')" title="Riskiest bet">
+          <span class="sc-stat-icon">🤠</span>
+          <span class="sc-stat-label">Riskiest</span>
+        </button>
+        <button type="button" class="sc-stat-btn" data-stat="large"
+                onclick="selectStat('large')" title="Largest win">
+          <span class="sc-stat-icon">⚒</span>
+          <span class="sc-stat-label">Largest</span>
+        </button>
+        <button type="button" class="sc-stat-btn" data-stat="rare"
+                onclick="selectStat('rare')" title="Rarest win">
+          <span class="sc-stat-icon">💎</span>
+          <span class="sc-stat-label">Rarest</span>
+        </button>
+      </div>
+    </div>
     <div class="lb-scroll">
       <div class="lb-table" role="table" aria-label="Pool leaderboard">
-        {# Stat picker lives inside the sticky leaderboard header — one
-           icon at a time selects which detail column shows. Title appears
-           only when the icon is active. #}
         <div class="lb-row lb-head" role="row">
           <span role="columnheader" class="lb-rank">#</span>
           <span role="columnheader">Player</span>
@@ -466,30 +498,6 @@
           <span role="columnheader" class="lb-rare lb-rare-h">Rarest Win</span>
           <span role="columnheader" class="lb-risk lb-risk-h">Riskiest</span>
           <span role="columnheader" class="lb-win lb-win-h">Largest Win</span>
-          <span role="columnheader" class="lb-stat-picker-wrap">
-            <span class="sc-stat-picker" role="group" aria-label="Stat to show">
-              <button type="button" class="sc-stat-btn" data-stat="streak"
-                      onclick="selectStat('streak')" title="Streak + Correct">
-                <span class="sc-stat-icon">🔥</span>
-                <span class="sc-stat-label">Streak</span>
-              </button>
-              <button type="button" class="sc-stat-btn" data-stat="risk"
-                      onclick="selectStat('risk')" title="Riskiest bet">
-                <span class="sc-stat-icon">🤠</span>
-                <span class="sc-stat-label">Riskiest</span>
-              </button>
-              <button type="button" class="sc-stat-btn" data-stat="large"
-                      onclick="selectStat('large')" title="Largest win">
-                <span class="sc-stat-icon">⚒</span>
-                <span class="sc-stat-label">Largest</span>
-              </button>
-              <button type="button" class="sc-stat-btn" data-stat="rare"
-                      onclick="selectStat('rare')" title="Rarest win">
-                <span class="sc-stat-icon">💎</span>
-                <span class="sc-stat-label">Rarest</span>
-              </button>
-            </span>
-          </span>
         </div>
         {% for row in leaderboard %}
         <div class="lb-row{% if row.email == current_user.email %} is-me{% endif %}" role="row">
@@ -614,11 +622,15 @@
   // .sc-nav reflows (e.g., 2-line on narrow screens), leaving the
   // header floating below where it should pin. ──────────────────────
   function recomputeStickyOffset() {
-    const nav     = document.querySelector('.navbar');
-    const scNav   = document.querySelector('.sc-nav');
-    const navH    = nav   ? nav.getBoundingClientRect().height   : 56;
-    const scNavH  = scNav ? scNav.getBoundingClientRect().height : 44;
-    document.documentElement.style.setProperty('--sc-sticky-offset', `${navH + scNavH}px`);
+    const nav      = document.querySelector('.navbar');
+    const scNav    = document.querySelector('.sc-nav');
+    const pickBar  = document.getElementById('lb-picker-bar');
+    const navH     = nav     ? nav.getBoundingClientRect().height     : 56;
+    const scNavH   = scNav   ? scNav.getBoundingClientRect().height   : 44;
+    const pickH    = pickBar ? pickBar.getBoundingClientRect().height : 0;
+    const root = document.documentElement;
+    root.style.setProperty('--sc-sticky-offset', `${navH + scNavH}px`);
+    root.style.setProperty('--lb-picker-h',      `${pickH}px`);
   }
   document.addEventListener('DOMContentLoaded', recomputeStickyOffset);
   window.addEventListener('resize', recomputeStickyOffset);

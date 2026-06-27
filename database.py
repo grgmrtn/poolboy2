@@ -1050,14 +1050,14 @@ def row_present(row):
 
 
 def get_user_riskiest_bet(user_id, pool_id):
-    """Return the user's biggest single KO ante in this pool — across
-    every KO pick they've made, settled or not. Used as a 'riskiest bet'
-    stat in the leaderboard detailed view.
+    """Return the user's biggest single KO ante in this pool — settled
+    matches only. Open bets are excluded so a public leaderboard can't
+    leak who's wagered what on a fixture before it locks (otherwise this
+    would amount to free spy intel).
 
     Returns {amount, home_team, away_team, home_flag, away_flag, pick,
     home_score, away_score, result, mult, payout} or None when the user
-    has no KO bets. Includes the actual payout (or None if unresolved)
-    so the row can render the outcome inline.
+    has no settled KO bets yet.
     """
     placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
     conn = get_db()
@@ -1074,6 +1074,7 @@ def get_user_riskiest_bet(user_id, pool_id):
                AND p.bet_amount IS NOT NULL
                AND p.bet_amount > 0
                AND f.stage IN ({placeholders})
+               AND f.result IS NOT NULL AND f.result <> ''
              ORDER BY p.bet_amount DESC
              LIMIT 1""",
         (user_id, pool_id, *_KNOCKOUT_STAGES),
