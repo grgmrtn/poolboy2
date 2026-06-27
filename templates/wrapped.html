@@ -7,13 +7,16 @@
      Spotify-style full-bleed vertical carousel. Each .wr-slide is a
      screen-height block of bold color. Snap-scroll keeps slides
      aligned; click/tap dots or scroll to advance. */
-  body { background: #0a0a10; }
+  body { background: #0a0a10; overflow: hidden; }
+  /* Hide base.html chrome while Wrapped is open -- it's a full takeover. */
+  body > .navbar, body > #loading-bar, body::before { display: none !important; }
   .wr-stage {
     position: fixed; inset: 0;
     overflow-y: auto;
     scroll-snap-type: y mandatory;
     scrollbar-width: none;
-    z-index: 100;
+    z-index: 9000;
+    background: #0a0a10;
   }
   .wr-stage::-webkit-scrollbar { display: none; }
 
@@ -134,7 +137,7 @@
 
   /* Sticky controls — dismiss + dot indicator */
   .wr-close {
-    position: fixed; top: 1rem; right: 1rem; z-index: 101;
+    position: fixed; top: 1rem; right: 1rem; z-index: 9001;
     background: rgba(0,0,0,0.45);
     color: #fff;
     border: 1px solid rgba(255,255,255,0.25);
@@ -148,7 +151,7 @@
   .wr-dots {
     position: fixed; right: 1rem; top: 50%;
     transform: translateY(-50%);
-    z-index: 101;
+    z-index: 9001;
     display: flex; flex-direction: column; gap: 0.45rem;
   }
   .wr-dot {
