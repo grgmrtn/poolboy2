@@ -1738,26 +1738,20 @@ def get_wrapped_stats(user_id, pool_id):
     correct_picks = int(row["correct"] or 0)
     accuracy_pct  = round(100.0 * correct_picks / total_picks, 1) if total_picks else 0.0
 
-    # ── 3. Best day of betting: day with the largest sum of payouts.
-    #    Ties broken by later date.
+    # ── 3. Best day of betting: day with the largest sum of payouts,
+    #    grouped by the FIXTURE'S kick_off date (NOT the transaction
+    #    created_at -- the scorer often re-runs and stamps everything
+    #    with one date, which made the original implementation collapse
+    #    every payout into "the day the scorer ran").
     days = conn.execute("""
-        SELECT substr(t.created_at::text, 1, 10) AS day,
+        SELECT substr(f.kick_off, 1, 10) AS day,
                COALESCE(SUM(t.amount), 0) AS payout
         FROM transactions t
         JOIN fixtures f ON f.id = t.fixture_id
         WHERE t.user_id=? AND t.pool_id=? AND t.type='payout'
           AND f.stage LIKE 'Group %'
-        GROUP BY substr(t.created_at::text, 1, 10)
-        ORDER BY payout DESC, day DESC
-        LIMIT 1
-    """, (user_id, pool_id)).fetchone() if _USE_POSTGRES else conn.execute("""
-        SELECT substr(t.created_at, 1, 10) AS day,
-               COALESCE(SUM(t.amount), 0) AS payout
-        FROM transactions t
-        JOIN fixtures f ON f.id = t.fixture_id
-        WHERE t.user_id=? AND t.pool_id=? AND t.type='payout'
-          AND f.stage LIKE 'Group %'
-        GROUP BY substr(t.created_at, 1, 10)
+          AND f.kick_off IS NOT NULL
+        GROUP BY substr(f.kick_off, 1, 10)
         ORDER BY payout DESC, day DESC
         LIMIT 1
     """, (user_id, pool_id)).fetchone()
@@ -1792,6 +1786,39 @@ def get_wrapped_stats(user_id, pool_id):
     best_group  = max(g_rows, key=lambda r: (r["accuracy"],  r["n_total"], -ord(r["letter"][0]))) if g_rows else None
     worst_group = min(g_rows, key=lambda r: (r["accuracy"], -r["n_total"],  ord(r["letter"][0]))) if g_rows else None
 
+    # Attach the fixture detail for the best & worst groups so the slide
+    # can render a recap table -- same shape as the Completed table on
+    # the pool page (date, time, home, score, away, my pick, payout).
+    def _fixture_detail(stage_name):
+        rows = conn.execute("""
+            SELECT f.kick_off, f.home_team, f.away_team, f.home_flag_code,
+                   f.away_flag_code, f.home_score, f.away_score, f.result,
+                   p.predicted_result,
+                   COALESCE((SELECT t.amount FROM transactions t
+                              WHERE t.user_id=? AND t.pool_id=?
+                                AND t.fixture_id=f.id AND t.type='payout'),
+                            0) AS payout
+            FROM fixtures f
+            JOIN picks p ON p.fixture_id = f.id
+                        AND p.user_id=? AND p.pool_id=?
+            WHERE f.stage=? AND f.result IS NOT NULL
+            ORDER BY f.kick_off
+        """, (user_id, pool_id, user_id, pool_id, stage_name)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["got_it_right"] = (d.get("predicted_result") == d.get("result"))
+            d["payout"]       = float(d.get("payout") or 0)
+            out.append(d)
+        return out
+
+    if best_group:
+        best_group["fixtures"]  = _fixture_detail("Group " + best_group["letter"])
+    if worst_group and (not best_group or worst_group["letter"] != best_group["letter"]):
+        worst_group["fixtures"] = _fixture_detail("Group " + worst_group["letter"])
+    elif worst_group:
+        worst_group["fixtures"] = best_group["fixtures"]  # same group, share list
+
     # ── 5. Most similar bettor: max count of matching (fixture, prediction)
     #    tuples vs the current user across the group stage.
     similar = conn.execute("""
@@ -1819,14 +1846,28 @@ def get_wrapped_stats(user_id, pool_id):
         similar_bettor["total_compared"] = int(similar_bettor["total_compared"])
 
     # ── 6. Leaderboard neighbours (rank-1, you, rank+1).
-    #    Uses balance as the ranking criterion (same metric the leaderboard uses).
-    lb = conn.execute("""
-        SELECT pm.user_id, u.display_name, u.team_name, pm.balance
+    #    Mirrors get_member_rank: total_worth = free balance + open KO
+    #    bets, sorted DESC with joined_at as tiebreak. Anything else
+    #    drifts away from the rank the user sees everywhere else.
+    placeholders = ",".join("?" * len(_KNOCKOUT_STAGES))
+    lb = conn.execute(f"""
+        SELECT pm.user_id, u.display_name, u.team_name,
+               COALESCE(pm.balance, 100.0) +
+               COALESCE((
+                 SELECT SUM(p.bet_amount)
+                   FROM picks p
+                   JOIN fixtures f ON f.id = p.fixture_id
+                  WHERE p.user_id = pm.user_id
+                    AND p.pool_id = pm.pool_id
+                    AND p.bet_amount IS NOT NULL
+                    AND (f.result IS NULL OR f.result = '')
+                    AND f.stage IN ({placeholders})
+               ), 0) AS balance
         FROM pool_members pm
         JOIN users u ON u.id = pm.user_id
         WHERE pm.pool_id=?
-        ORDER BY pm.balance DESC, u.display_name ASC
-    """, (pool_id,)).fetchall()
+        ORDER BY balance DESC, pm.joined_at ASC
+    """, (*_KNOCKOUT_STAGES, pool_id)).fetchall()
     lb_list = [dict(r) for r in lb]
     my_idx = next((i for i, r in enumerate(lb_list) if r["user_id"] == user_id), None)
     def _row_for(i):

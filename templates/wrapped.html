@@ -79,6 +79,61 @@
     margin: 1rem 0;
   }
 
+  /* Recap mini-table on the best/worst-group slides. Mirrors the
+     completed-fixtures table on the pool page but trimmed for the
+     full-bleed carousel context. */
+  .wr-recap {
+    width: min(100%, 30rem);
+    margin: 1.25rem 0 0;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    overflow: hidden;
+  }
+  .wr-recap-row {
+    display: grid;
+    grid-template-columns:
+      3.2rem            /* date */
+      minmax(0, 1fr)    /* home */
+      2.6rem            /* score */
+      minmax(0, 1fr)    /* away */
+      1.7rem;           /* pick mark */
+    gap: 0.4rem;
+    align-items: center;
+    padding: 0.5rem 0.65rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .wr-recap-row:first-child { border-top: 0; }
+  .wr-recap-date {
+    font-size: 0.65rem; opacity: 0.7;
+    line-height: 1.05;
+    display: flex; flex-direction: column;
+  }
+  .wr-recap-date small { opacity: 0.6; font-size: 0.55rem; }
+  .wr-recap-team {
+    font-weight: 700;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .wr-recap-team.is-home  { text-align: right; }
+  .wr-recap-team.is-winner { color: #d3ff67; }
+  .wr-recap-score {
+    text-align: center;
+    font-weight: 800;
+    background: rgba(0,0,0,0.25);
+    border-radius: 4px;
+    padding: 0.1rem 0.2rem;
+  }
+  .wr-recap-mark {
+    text-align: right;
+    font-weight: 800;
+  }
+  .wr-recap-mark.is-right { color: #d3ff67; }
+  .wr-recap-mark.is-wrong { color: rgba(255,255,255,0.4); }
+
   /* Side-by-side panel for the under/over slide. */
   .wr-pair {
     display: grid;
@@ -248,16 +303,39 @@
     {% endif %}
   </section>
 
+  {% macro recap_table(fixtures) %}
+    <div class="wr-recap">
+      {% for f in fixtures %}
+        {% set win = f.result %}
+        {% set right = f.got_it_right %}
+        {% set mday = f.kick_off[5:10] if f.kick_off else '' %}
+        <div class="wr-recap-row">
+          <span class="wr-recap-date">{{ mday }}</span>
+          <span class="wr-recap-team is-home{% if win == 'H' %} is-winner{% endif %}">
+            {{ f.home_team }}
+          </span>
+          <span class="wr-recap-score">{{ f.home_score|default('-', true) }}–{{ f.away_score|default('-', true) }}</span>
+          <span class="wr-recap-team{% if win == 'A' %} is-winner{% endif %}">
+            {{ f.away_team }}
+          </span>
+          <span class="wr-recap-mark {% if right %}is-right{% else %}is-wrong{% endif %}">
+            {% if right %}✓{% else %}✗{% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endmacro %}
+
   <!-- 5: Best group ────────────────────────────────────────────────── -->
   <section class="wr-slide s-5">
     <div class="wr-eyebrow">You owned</div>
     {% if stats.best_group %}
       <div class="wr-headline">Group {{ stats.best_group.letter }}</div>
-      <div class="wr-big">{{ stats.best_group.accuracy|int }}%</div>
+      <div class="wr-big" style="font-size:clamp(2.4rem,9vw,4.5rem)">{{ stats.best_group.accuracy|int }}%</div>
       <p class="wr-subhead">
         {{ stats.best_group.n_correct }} of {{ stats.best_group.n_total }} matches right.
-        Your sharpest group of the stage.
       </p>
+      {{ recap_table(stats.best_group.fixtures or []) }}
     {% else %}
       <div class="wr-big">—</div>
       <p class="wr-subhead">You didn't pick any group fully.</p>
@@ -269,11 +347,12 @@
     <div class="wr-eyebrow">Your group of death</div>
     {% if stats.worst_group %}
       <div class="wr-headline">Group {{ stats.worst_group.letter }}</div>
-      <div class="wr-big">{{ stats.worst_group.accuracy|int }}%</div>
+      <div class="wr-big" style="font-size:clamp(2.4rem,9vw,4.5rem)">{{ stats.worst_group.accuracy|int }}%</div>
       <p class="wr-subhead">
         Only {{ stats.worst_group.n_correct }} of {{ stats.worst_group.n_total }} called.
         We've all got one.
       </p>
+      {{ recap_table(stats.worst_group.fixtures or []) }}
     {% else %}
       <div class="wr-big">—</div>
       <p class="wr-subhead">Either flawless or absent.</p>
