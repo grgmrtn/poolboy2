@@ -205,6 +205,18 @@ def init_db():
         )
     """)
 
+    # One row per (user, pool) the first time they open the group-stage
+    # Wrapped retrospective. Used to suppress the auto-popup on second
+    # and subsequent pool-page loads.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS wrapped_views (
+            user_id    TEXT NOT NULL REFERENCES users(id),
+            pool_id    TEXT NOT NULL REFERENCES pools(id),
+            viewed_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, pool_id)
+        )
+    """)
+
     # Records who has paid to reveal whose pick on which fixture.
     c.execute("""
         CREATE TABLE IF NOT EXISTS spy_log (
@@ -1628,6 +1640,261 @@ def get_spy_activity_by_day(days=14):
             "total_spend": row["target_spend"] + row["field_spend"],
         })
     return out
+
+
+def is_group_stage_complete(pool_id):
+    """
+    True once every group-stage fixture has a result. Used to gate the
+    Wrapped retrospective: nothing to wrap until groups are done.
+    """
+    conn = get_db()
+    row = conn.execute("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN result IS NOT NULL THEN 1 ELSE 0 END) AS done
+        FROM fixtures
+        WHERE stage LIKE 'Group %'
+    """).fetchone()
+    conn.close()
+    if not row or not row["total"]:
+        return False
+    return int(row["done"] or 0) >= int(row["total"])
+
+
+def has_seen_wrapped(user_id, pool_id):
+    # Defensive: if the table doesn't exist yet (e.g. boot race before
+    # init_db ran on a fresh deploy), treat it as "not seen" rather than
+    # propagating a 500 up through the pool page render.
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT 1 FROM wrapped_views WHERE user_id=? AND pool_id=?",
+            (user_id, pool_id)
+        ).fetchone()
+        conn.close()
+        return bool(row)
+    except Exception:
+        return False
+
+
+def mark_wrapped_seen(user_id, pool_id):
+    """Idempotent — does nothing if already marked or the table is missing."""
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO wrapped_views (user_id, pool_id) VALUES (?, ?)",
+                (user_id, pool_id)
+            )
+            conn.commit()
+        except _IntegrityError:
+            pass  # Already marked; primary key collision is fine.
+        conn.close()
+    except Exception:
+        pass
+
+
+def get_wrapped_stats(user_id, pool_id):
+    """
+    Compute every Wrapped slide stat in one round-trip per concept.
+    Returns a dict with all numbers; the template just renders them.
+
+    Only counts group-stage fixtures (stage LIKE 'Group %') with a final
+    result. Tied breakers documented inline.
+
+    Returned keys:
+      net_winnings, correct_picks, total_picks, accuracy_pct,
+      best_day {date, payout}, best_group {letter, accuracy, n_correct, n_total},
+      worst_group {letter, accuracy, n_correct, n_total},
+      similar_bettor {user_id, display_name, team_name, match_count, total_compared},
+      neighbours {above, you, below}  (each = {rank, display_name, team_name, balance} or None),
+      underestimated_team {team, count}, overestimated_team {team, count}
+    """
+    conn = get_db()
+
+    # ── 1. Net winnings: sum of payout transactions for group-stage fixtures
+    #    (filtered via JOIN to fixtures).
+    row = conn.execute("""
+        SELECT COALESCE(SUM(t.amount), 0) AS s
+        FROM transactions t
+        JOIN fixtures f ON f.id = t.fixture_id
+        WHERE t.user_id=? AND t.pool_id=? AND t.type='payout'
+          AND f.stage LIKE 'Group %'
+    """, (user_id, pool_id)).fetchone()
+    net_winnings = float(row["s"] or 0.0)
+
+    # ── 2. Correct picks + total picks across group stage.
+    row = conn.execute("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN p.predicted_result = f.result THEN 1 ELSE 0 END) AS correct
+        FROM picks p
+        JOIN fixtures f ON f.id = p.fixture_id
+        WHERE p.user_id=? AND p.pool_id=?
+          AND f.stage LIKE 'Group %'
+          AND f.result IS NOT NULL
+    """, (user_id, pool_id)).fetchone()
+    total_picks   = int(row["total"] or 0)
+    correct_picks = int(row["correct"] or 0)
+    accuracy_pct  = round(100.0 * correct_picks / total_picks, 1) if total_picks else 0.0
+
+    # ── 3. Best day of betting: day with the largest sum of payouts.
+    #    Ties broken by later date.
+    days = conn.execute("""
+        SELECT substr(t.created_at::text, 1, 10) AS day,
+               COALESCE(SUM(t.amount), 0) AS payout
+        FROM transactions t
+        JOIN fixtures f ON f.id = t.fixture_id
+        WHERE t.user_id=? AND t.pool_id=? AND t.type='payout'
+          AND f.stage LIKE 'Group %'
+        GROUP BY substr(t.created_at::text, 1, 10)
+        ORDER BY payout DESC, day DESC
+        LIMIT 1
+    """, (user_id, pool_id)).fetchone() if _USE_POSTGRES else conn.execute("""
+        SELECT substr(t.created_at, 1, 10) AS day,
+               COALESCE(SUM(t.amount), 0) AS payout
+        FROM transactions t
+        JOIN fixtures f ON f.id = t.fixture_id
+        WHERE t.user_id=? AND t.pool_id=? AND t.type='payout'
+          AND f.stage LIKE 'Group %'
+        GROUP BY substr(t.created_at, 1, 10)
+        ORDER BY payout DESC, day DESC
+        LIMIT 1
+    """, (user_id, pool_id)).fetchone()
+    best_day = ({"date": days["day"], "payout": float(days["payout"])}
+                if days and float(days["payout"]) > 0 else None)
+
+    # ── 4. Per-group accuracy → best + worst.
+    #    Tie-break: most picks first (more data), then alphabetic.
+    groups = conn.execute("""
+        SELECT f.stage AS stage,
+               COUNT(*) AS n_total,
+               SUM(CASE WHEN p.predicted_result = f.result THEN 1 ELSE 0 END) AS n_correct
+        FROM picks p
+        JOIN fixtures f ON f.id = p.fixture_id
+        WHERE p.user_id=? AND p.pool_id=?
+          AND f.stage LIKE 'Group %'
+          AND f.result IS NOT NULL
+        GROUP BY f.stage
+    """, (user_id, pool_id)).fetchall()
+    g_rows = []
+    for g in groups:
+        n_total = int(g["n_total"] or 0)
+        n_correct = int(g["n_correct"] or 0)
+        if n_total == 0:
+            continue
+        g_rows.append({
+            "letter":    (g["stage"] or "")[6:],  # 'Group A' -> 'A'
+            "n_total":   n_total,
+            "n_correct": n_correct,
+            "accuracy":  round(100.0 * n_correct / n_total, 1),
+        })
+    best_group  = max(g_rows, key=lambda r: (r["accuracy"],  r["n_total"], -ord(r["letter"][0]))) if g_rows else None
+    worst_group = min(g_rows, key=lambda r: (r["accuracy"], -r["n_total"],  ord(r["letter"][0]))) if g_rows else None
+
+    # ── 5. Most similar bettor: max count of matching (fixture, prediction)
+    #    tuples vs the current user across the group stage.
+    similar = conn.execute("""
+        WITH me AS (
+            SELECT p.fixture_id, p.predicted_result
+            FROM picks p
+            JOIN fixtures f ON f.id = p.fixture_id
+            WHERE p.user_id=? AND p.pool_id=? AND f.stage LIKE 'Group %'
+        )
+        SELECT u.id AS user_id, u.display_name,
+               u.team_name,
+               COUNT(*) AS match_count,
+               (SELECT COUNT(*) FROM me) AS total_compared
+        FROM picks p
+        JOIN me ON me.fixture_id = p.fixture_id AND me.predicted_result = p.predicted_result
+        JOIN users u ON u.id = p.user_id
+        WHERE p.pool_id=? AND p.user_id <> ?
+        GROUP BY u.id, u.display_name, u.team_name
+        ORDER BY match_count DESC, u.display_name ASC
+        LIMIT 1
+    """, (user_id, pool_id, pool_id, user_id)).fetchone()
+    similar_bettor = (dict(similar) if similar else None)
+    if similar_bettor:
+        similar_bettor["match_count"]    = int(similar_bettor["match_count"])
+        similar_bettor["total_compared"] = int(similar_bettor["total_compared"])
+
+    # ── 6. Leaderboard neighbours (rank-1, you, rank+1).
+    #    Uses balance as the ranking criterion (same metric the leaderboard uses).
+    lb = conn.execute("""
+        SELECT pm.user_id, u.display_name, u.team_name, pm.balance
+        FROM pool_members pm
+        JOIN users u ON u.id = pm.user_id
+        WHERE pm.pool_id=?
+        ORDER BY pm.balance DESC, u.display_name ASC
+    """, (pool_id,)).fetchall()
+    lb_list = [dict(r) for r in lb]
+    my_idx = next((i for i, r in enumerate(lb_list) if r["user_id"] == user_id), None)
+    def _row_for(i):
+        if i is None or i < 0 or i >= len(lb_list):
+            return None
+        r = lb_list[i]
+        return {"rank": i + 1, "display_name": r["display_name"],
+                "team_name": r["team_name"], "balance": float(r["balance"] or 0)}
+    neighbours = {
+        "above": _row_for(my_idx - 1) if my_idx is not None else None,
+        "you":   _row_for(my_idx),
+        "below": _row_for(my_idx + 1) if my_idx is not None else None,
+    }
+
+    # ── 7. Underestimated team: team won most often when you picked against.
+    #    Overestimated team: team lost most often when you picked them.
+    #    For each pick + result, attribute one side to each team in the
+    #    match and check if user's pick aligned with the winner.
+    rows = conn.execute("""
+        SELECT f.home_team, f.away_team, f.result, p.predicted_result
+        FROM picks p
+        JOIN fixtures f ON f.id = p.fixture_id
+        WHERE p.user_id=? AND p.pool_id=?
+          AND f.stage LIKE 'Group %'
+          AND f.result IS NOT NULL
+    """, (user_id, pool_id)).fetchall()
+    under = {}  # team -> count of times they won when user picked against
+    over  = {}  # team -> count of times they lost when user picked them
+    for r in rows:
+        h, a, res, pred = r["home_team"], r["away_team"], r["result"], r["predicted_result"]
+        if not h or not a or h.startswith("TBD") or a.startswith("TBD"):
+            continue
+        if res == "H":
+            # Home won. If user picked A (or D), they underestimated home.
+            # Also: if user picked H, they overestimated away.
+            if pred in ("A", "D"):
+                under[h] = under.get(h, 0) + 1
+            if pred == "H":
+                over[a]  = over.get(a, 0) + 1
+        elif res == "A":
+            if pred in ("H", "D"):
+                under[a] = under.get(a, 0) + 1
+            if pred == "A":
+                over[h]  = over.get(h, 0) + 1
+        # Draws don't have a "winner" to under/overestimate.
+    def _top(counts):
+        if not counts:
+            return None
+        team, count = max(counts.items(), key=lambda kv: (kv[1], kv[0]))
+        return {"team": team, "count": count}
+    underestimated_team = _top(under)
+    overestimated_team  = _top(over)
+
+    conn.close()
+
+    return {
+        "net_winnings":         net_winnings,
+        "correct_picks":        correct_picks,
+        "total_picks":          total_picks,
+        "accuracy_pct":         accuracy_pct,
+        "best_day":             best_day,
+        "best_group":           best_group,
+        "worst_group":          worst_group,
+        "similar_bettor":       similar_bettor,
+        "neighbours":           neighbours,
+        "underestimated_team":  underestimated_team,
+        "overestimated_team":   overestimated_team,
+    }
 
 
 def record_spy(spy_id, tx_id, buyer_id, target_id, pool_id, fixture_id, cost):

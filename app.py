@@ -1049,6 +1049,8 @@ def pool_page(pool_id):
         show_bracket=show_bracket,
         live_now=live_now_data,
         pick_accuracy=pick_accuracy,
+        wrapped_ready=db.is_group_stage_complete(pool_id),
+        wrapped_seen=db.has_seen_wrapped(user["id"], pool_id),
     )
 
 
@@ -1644,6 +1646,33 @@ def _apply_ko_bet(user_id, pool_id, fixture_id, old_bet, new_bet):
     db._update_balance(conn, user_id, pool_id, -new_bet)
     conn.commit()
     conn.close()
+
+
+@app.route("/pool/<pool_id>/wrapped")
+@login_required
+def wrapped_page(pool_id):
+    """
+    Group-stage Wrapped retrospective. Renders the carousel of stats
+    and (importantly) marks the user as having seen it, so the auto-
+    popup on the pool page doesn't fire again.
+    """
+    user = current_user()
+    if not db.is_pool_member(user["id"], pool_id):
+        flash("You are not a member of that pool.", "error")
+        return redirect(url_for("home"))
+    pool = db.get_pool_by_id(pool_id)
+    if not pool:
+        flash("Pool not found.", "error")
+        return redirect(url_for("home"))
+    if not db.is_group_stage_complete(pool_id):
+        flash("Group-stage Wrapped isn't ready yet — wait until all "
+              "group matches are scored.", "info")
+        return redirect(url_for("pool_page", pool_id=pool_id))
+
+    stats = db.get_wrapped_stats(user["id"], pool_id)
+    db.mark_wrapped_seen(user["id"], pool_id)
+    return render_template("wrapped.html",
+                           pool=pool, stats=stats, user_obj=user)
 
 
 @app.route("/pool/<pool_id>/fixture/<fixture_id>/picks")

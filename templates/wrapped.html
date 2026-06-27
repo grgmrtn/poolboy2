@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block title %}Group Stage Wrapped — {{ pool.name }}{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Wrapped carousel ──────────────────────────────────────────────
+     Spotify-style full-bleed vertical carousel. Each .wr-slide is a
+     screen-height block of bold color. Snap-scroll keeps slides
+     aligned; click/tap dots or scroll to advance. */
+  body { background: #0a0a10; }
+  .wr-stage {
+    position: fixed; inset: 0;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    z-index: 100;
+  }
+  .wr-stage::-webkit-scrollbar { display: none; }
+
+  .wr-slide {
+    min-height: 100vh; min-height: 100dvh;
+    width: 100%;
+    scroll-snap-align: start;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4rem 1.5rem 6rem;
+    text-align: center;
+    position: relative;
+    color: #fff;
+    overflow: hidden;
+  }
+  /* Each slide cycles through a bold color palette. */
+  .wr-slide.s-1  { background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%); }
+  .wr-slide.s-2  { background: linear-gradient(160deg, #d3ff67 0%, #8fc02b 100%); color: #1a1a2e; }
+  .wr-slide.s-3  { background: linear-gradient(160deg, #ff7a1a 0%, #c84e0a 100%); }
+  .wr-slide.s-4  { background: linear-gradient(160deg, #1a1a2e 0%, #2d2d52 100%); }
+  .wr-slide.s-5  { background: linear-gradient(160deg, #c8ff57 0%, #6fb010 100%); color: #1a1a2e; }
+  .wr-slide.s-6  { background: linear-gradient(160deg, #c2185b 0%, #6d0a31 100%); }
+  .wr-slide.s-7  { background: linear-gradient(160deg, #2196f3 0%, #0d47a1 100%); }
+  .wr-slide.s-8  { background: linear-gradient(160deg, #311b92 0%, #1a0f5c 100%); }
+  .wr-slide.s-9  { background: linear-gradient(160deg, #1a1a2e 0%, #0a0a10 100%); }
+
+  .wr-eyebrow {
+    font-family: var(--mono, "JetBrains Mono", monospace);
+    font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 1.25rem;
+  }
+  .wr-headline {
+    font-family: var(--mono, "JetBrains Mono", monospace);
+    font-size: clamp(2.4rem, 9vw, 5.5rem);
+    font-weight: 800; line-height: 0.95;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.6rem;
+  }
+  .wr-subhead {
+    font-size: clamp(1rem, 2.4vw, 1.3rem);
+    font-weight: 600;
+    opacity: 0.85;
+    max-width: 30rem;
+    line-height: 1.35;
+  }
+  .wr-big {
+    font-family: var(--mono, "JetBrains Mono", monospace);
+    font-size: clamp(4rem, 18vw, 9rem);
+    font-weight: 900; line-height: 1;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    margin: 1rem 0;
+  }
+  .wr-flag {
+    width: 88px; height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    margin: 1rem 0;
+  }
+
+  /* Side-by-side panel for the under/over slide. */
+  .wr-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    width: min(100%, 32rem);
+    margin-top: 1.5rem;
+  }
+  .wr-pair > div {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1.25rem 0.75rem;
+  }
+  .wr-pair-label {
+    font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    opacity: 0.75; margin-bottom: 0.6rem;
+  }
+  .wr-pair-team {
+    font-family: var(--mono, "JetBrains Mono", monospace);
+    font-size: 1.1rem; font-weight: 800;
+    line-height: 1.1;
+  }
+  .wr-pair-count {
+    font-size: 0.75rem; opacity: 0.7; margin-top: 0.35rem;
+  }
+
+  /* Leaderboard neighbours table */
+  .wr-lb {
+    display: flex; flex-direction: column;
+    gap: 0.55rem;
+    width: min(100%, 26rem);
+    margin-top: 1.5rem;
+  }
+  .wr-lb-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+  .wr-lb-row.is-you {
+    background: rgba(255,255,255,0.18);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.35) inset;
+    font-weight: 800;
+  }
+  .wr-lb-rank { font-family: var(--mono, monospace); font-weight: 700; opacity: 0.7; }
+  .wr-lb-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  .wr-lb-team { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wr-lb-real { font-size: 0.65rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wr-lb-bal  { font-family: var(--mono, monospace); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* Sticky controls — dismiss + dot indicator */
+  .wr-close {
+    position: fixed; top: 1rem; right: 1rem; z-index: 101;
+    background: rgba(0,0,0,0.45);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 1.1rem; font-weight: 700;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .wr-close:hover { background: rgba(0,0,0,0.7); }
+  .wr-dots {
+    position: fixed; right: 1rem; top: 50%;
+    transform: translateY(-50%);
+    z-index: 101;
+    display: flex; flex-direction: column; gap: 0.45rem;
+  }
+  .wr-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .wr-dot.is-active { background: #fff; transform: scale(1.5); }
+  @media (max-width: 600px) {
+    .wr-dots { right: 0.5rem; }
+    .wr-dot { width: 6px; height: 6px; }
+  }
+
+  .wr-cta {
+    margin-top: 2rem;
+    background: rgba(255,255,255,0.18);
+    color: inherit;
+    border: 1px solid rgba(255,255,255,0.35);
+    padding: 0.85rem 1.6rem;
+    border-radius: 999px;
+    font-family: var(--mono, monospace);
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .wr-cta:hover { background: rgba(255,255,255,0.3); }
+</style>
+
+<button type="button" class="wr-close" onclick="dismissWrapped()" title="Close">×</button>
+<div class="wr-dots" id="wr-dots"></div>
+
+<div class="wr-stage" id="wr-stage">
+
+  <!-- 1: Cover ─────────────────────────────────────────────────────── -->
+  <section class="wr-slide s-1">
+    <div class="wr-eyebrow">{{ pool.name }} · 2026</div>
+    <h1 class="wr-headline">Your<br>group stage,<br>wrapped.</h1>
+    <p class="wr-subhead">
+      Three matchdays. Twelve groups. A lot of opinions. Here's how
+      yours panned out.
+    </p>
+    <div class="wr-cta" onclick="document.querySelector('.s-2').scrollIntoView({behavior:'smooth'})">
+      Begin →
+    </div>
+  </section>
+
+  <!-- 2: Net winnings ──────────────────────────────────────────────── -->
+  <section class="wr-slide s-2">
+    <div class="wr-eyebrow">You won</div>
+    <div class="wr-big">${{ stats.net_winnings|round(0, 'ceil')|int }}</div>
+    <p class="wr-subhead">
+      {% if stats.net_winnings > 0 -%}
+        in payouts from group-stage picks alone.
+      {%- else -%}
+        in group-stage payouts. The knockouts are where the real
+        money lives — see you tomorrow.
+      {%- endif %}
+    </p>
+  </section>
+
+  <!-- 3: Correct picks ─────────────────────────────────────────────── -->
+  <section class="wr-slide s-3">
+    <div class="wr-eyebrow">You called</div>
+    <div class="wr-big">{{ stats.correct_picks }} / {{ stats.total_picks }}</div>
+    <p class="wr-subhead">
+      group-stage matches correctly — that's <strong>{{ stats.accuracy_pct }}%</strong> accuracy.
+      {% if stats.accuracy_pct >= 70 %}
+        Elite.
+      {% elif stats.accuracy_pct >= 50 %}
+        Above the field.
+      {% elif stats.accuracy_pct >= 33 %}
+        You're better than a coin flip.
+      {% else %}
+        At least the goals were exciting.
+      {% endif %}
+    </p>
+  </section>
+
+  <!-- 4: Best day ──────────────────────────────────────────────────── -->
+  <section class="wr-slide s-4">
+    <div class="wr-eyebrow">Your best day</div>
+    {% if stats.best_day %}
+      <div class="wr-big">${{ stats.best_day.payout|round(0, 'ceil')|int }}</div>
+      <p class="wr-subhead">
+        That was <strong>{{ stats.best_day.date }}</strong> — your single
+        biggest day of winnings.
+      </p>
+    {% else %}
+      <div class="wr-big">—</div>
+      <p class="wr-subhead">No payout days yet. The knockouts are waiting.</p>
+    {% endif %}
+  </section>
+
+  <!-- 5: Best group ────────────────────────────────────────────────── -->
+  <section class="wr-slide s-5">
+    <div class="wr-eyebrow">You owned</div>
+    {% if stats.best_group %}
+      <div class="wr-headline">Group {{ stats.best_group.letter }}</div>
+      <div class="wr-big">{{ stats.best_group.accuracy|int }}%</div>
+      <p class="wr-subhead">
+        {{ stats.best_group.n_correct }} of {{ stats.best_group.n_total }} matches right.
+        Your sharpest group of the stage.
+      </p>
+    {% else %}
+      <div class="wr-big">—</div>
+      <p class="wr-subhead">You didn't pick any group fully.</p>
+    {% endif %}
+  </section>
+
+  <!-- 6: Group of death ────────────────────────────────────────────── -->
+  <section class="wr-slide s-6">
+    <div class="wr-eyebrow">Your group of death</div>
+    {% if stats.worst_group %}
+      <div class="wr-headline">Group {{ stats.worst_group.letter }}</div>
+      <div class="wr-big">{{ stats.worst_group.accuracy|int }}%</div>
+      <p class="wr-subhead">
+        Only {{ stats.worst_group.n_correct }} of {{ stats.worst_group.n_total }} called.
+        We've all got one.
+      </p>
+    {% else %}
+      <div class="wr-big">—</div>
+      <p class="wr-subhead">Either flawless or absent.</p>
+    {% endif %}
+  </section>
+
+  <!-- 7: Similar bettor ────────────────────────────────────────────── -->
+  <section class="wr-slide s-7">
+    <div class="wr-eyebrow">Your pick twin</div>
+    {% if stats.similar_bettor %}
+      <div class="wr-headline">{{ stats.similar_bettor.team_name or stats.similar_bettor.display_name }}</div>
+      {% set pct = (100 * stats.similar_bettor.match_count / stats.similar_bettor.total_compared)|round|int if stats.similar_bettor.total_compared else 0 %}
+      <div class="wr-big">{{ pct }}%</div>
+      <p class="wr-subhead">
+        of your picks matched theirs ({{ stats.similar_bettor.match_count }} of
+        {{ stats.similar_bettor.total_compared }}). The closest bettor to you in the pool.
+      </p>
+    {% else %}
+      <div class="wr-big">Solo</div>
+      <p class="wr-subhead">You played alone in this pool's group stage.</p>
+    {% endif %}
+  </section>
+
+  <!-- 8: Under / overestimated ─────────────────────────────────────── -->
+  <section class="wr-slide s-8">
+    <div class="wr-eyebrow">Teams you misread</div>
+    <h2 class="wr-headline" style="font-size:clamp(1.6rem,5vw,2.6rem)">Hot &amp; cold</h2>
+    <div class="wr-pair">
+      <div>
+        <div class="wr-pair-label">Underrated</div>
+        {% if stats.underestimated_team %}
+          <div class="wr-pair-team">{{ stats.underestimated_team.team }}</div>
+          <div class="wr-pair-count">won {{ stats.underestimated_team.count }}×
+            when you picked against</div>
+        {% else %}
+          <div class="wr-pair-team">—</div>
+        {% endif %}
+      </div>
+      <div>
+        <div class="wr-pair-label">Overrated</div>
+        {% if stats.overestimated_team %}
+          <div class="wr-pair-team">{{ stats.overestimated_team.team }}</div>
+          <div class="wr-pair-count">lost {{ stats.overestimated_team.count }}×
+            after you backed</div>
+        {% else %}
+          <div class="wr-pair-team">—</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- 9: Leaderboard neighbours + send-off ─────────────────────────── -->
+  <section class="wr-slide s-9">
+    <div class="wr-eyebrow">Heading into the knockouts</div>
+    <h2 class="wr-headline" style="font-size:clamp(1.6rem,5vw,2.6rem)">You're sitting at</h2>
+    {% if stats.neighbours.you %}
+      <div class="wr-big" style="font-size:clamp(3rem,12vw,5.5rem)">#{{ stats.neighbours.you.rank }}</div>
+      <div class="wr-lb">
+        {% if stats.neighbours.above %}
+          <div class="wr-lb-row">
+            <span class="wr-lb-rank">#{{ stats.neighbours.above.rank }}</span>
+            <span class="wr-lb-name">
+              <span class="wr-lb-team">{{ stats.neighbours.above.team_name or stats.neighbours.above.display_name }}</span>
+              {% if stats.neighbours.above.team_name %}
+                <span class="wr-lb-real">{{ stats.neighbours.above.display_name }}</span>
+              {% endif %}
+            </span>
+            <span class="wr-lb-bal">${{ stats.neighbours.above.balance|round(0, 'ceil')|int }}</span>
+          </div>
+        {% endif %}
+        <div class="wr-lb-row is-you">
+          <span class="wr-lb-rank">#{{ stats.neighbours.you.rank }}</span>
+          <span class="wr-lb-name">
+            <span class="wr-lb-team">{{ stats.neighbours.you.team_name or stats.neighbours.you.display_name }}</span>
+            {% if stats.neighbours.you.team_name %}
+              <span class="wr-lb-real">{{ stats.neighbours.you.display_name }} · you</span>
+            {% else %}
+              <span class="wr-lb-real">you</span>
+            {% endif %}
+          </span>
+          <span class="wr-lb-bal">${{ stats.neighbours.you.balance|round(0, 'ceil')|int }}</span>
+        </div>
+        {% if stats.neighbours.below %}
+          <div class="wr-lb-row">
+            <span class="wr-lb-rank">#{{ stats.neighbours.below.rank }}</span>
+            <span class="wr-lb-name">
+              <span class="wr-lb-team">{{ stats.neighbours.below.team_name or stats.neighbours.below.display_name }}</span>
+              {% if stats.neighbours.below.team_name %}
+                <span class="wr-lb-real">{{ stats.neighbours.below.display_name }}</span>
+              {% endif %}
+            </span>
+            <span class="wr-lb-bal">${{ stats.neighbours.below.balance|round(0, 'ceil')|int }}</span>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+    <p class="wr-subhead" style="margin-top:1.5rem">
+      Round of 32 starts tomorrow. Place your bets.
+    </p>
+    <a href="{{ url_for('pool_page', pool_id=pool.id) }}" class="wr-cta">
+      Back to the pool →
+    </a>
+  </section>
+
+</div>
+
+<script>
+  // Build dot indicator dynamically based on slide count.
+  (function() {
+    const stage  = document.getElementById('wr-stage');
+    const dotsEl = document.getElementById('wr-dots');
+    const slides = Array.from(document.querySelectorAll('.wr-slide'));
+    slides.forEach((s, i) => {
+      const dot = document.createElement('span');
+      dot.className = 'wr-dot' + (i === 0 ? ' is-active' : '');
+      dot.onclick = () => s.scrollIntoView({behavior:'smooth'});
+      dotsEl.appendChild(dot);
+    });
+    // Highlight the dot for the slide currently in view.
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.intersectionRatio >= 0.5) {
+          const idx = slides.indexOf(e.target);
+          dotsEl.querySelectorAll('.wr-dot').forEach((d, i) => {
+            d.classList.toggle('is-active', i === idx);
+          });
+        }
+      });
+    }, { threshold: [0.5], root: stage });
+    slides.forEach(s => io.observe(s));
+  })();
+
+  function dismissWrapped() {
+    window.location.href = "{{ url_for('pool_page', pool_id=pool.id) }}";
+  }
+</script>
+{% endblock %}

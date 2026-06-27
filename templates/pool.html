@@ -2779,7 +2779,24 @@
     </button>
     {% endif %}
     <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" class="how-it-works-pill">Stats</a>
+    {% if wrapped_ready %}
+    <a href="{{ url_for('wrapped_page', pool_id=pool.id) }}" id="wrapped-chip"
+       class="how-it-works-pill"
+       style="background:linear-gradient(90deg, rgba(200,255,87,0.18), rgba(255,122,26,0.18)); border-color:rgba(200,255,87,0.45);">
+      ✨ Group Stage Wrapped
+    </a>
+    {% endif %}
   </div>
+  {% if wrapped_ready and not wrapped_seen %}
+  <script>
+    // Auto-redirect to the wrapped retrospective on first pool-page
+    // load after group stage finishes. The /wrapped route marks the
+    // user as seen, so subsequent loads come straight here.
+    (function() {
+      window.location.href = "{{ url_for('wrapped_page', pool_id=pool.id) }}";
+    })();
+  </script>
+  {% endif %}
 
   {% if pool.entry_fee and not has_paid %}
   <div style="
