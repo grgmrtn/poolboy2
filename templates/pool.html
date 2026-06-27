@@ -2779,21 +2779,22 @@
     </button>
     {% endif %}
     <a href="{{ url_for('pool_stats', pool_id=pool.id) }}" class="how-it-works-pill">Stats</a>
-    {% if wrapped_ready %}
-    <a href="{{ url_for('wrapped_page', pool_id=pool.id) }}" id="wrapped-chip"
+    {# Chip shows for everyone once wrapped is ready. Admins always see it so they can QA early. #}
+    {% if wrapped_ready or current_user.is_admin %}
+    <a href="{{ url_for('wrapped_page', pool_id=pool.id) }}{% if not wrapped_ready and current_user.is_admin %}?force=1{% endif %}"
+       id="wrapped-chip"
        class="how-it-works-pill"
        style="background:linear-gradient(90deg, rgba(200,255,87,0.18), rgba(255,122,26,0.18)); border-color:rgba(200,255,87,0.45);">
-      ✨ Group Stage Wrapped
+      ✨ Group Stage Wrapped{% if not wrapped_ready %} <span style="opacity:0.7;font-size:0.62rem">(preview)</span>{% endif %}
     </a>
     {% endif %}
   </div>
-  {% if wrapped_ready and not wrapped_seen %}
+  {# Auto-redirect: real trigger once groups finish, plus admin ?force=1 override for QA. #}
+  {% set is_admin_force = current_user.is_admin and request.args.get('force') == '1' %}
+  {% if (wrapped_ready and not wrapped_seen) or is_admin_force %}
   <script>
-    // Auto-redirect to the wrapped retrospective on first pool-page
-    // load after group stage finishes. The /wrapped route marks the
-    // user as seen, so subsequent loads come straight here.
     (function() {
-      window.location.href = "{{ url_for('wrapped_page', pool_id=pool.id) }}";
+      window.location.href = "{{ url_for('wrapped_page', pool_id=pool.id) }}{% if is_admin_force %}?force=1{% endif %}";
     })();
   </script>
   {% endif %}
