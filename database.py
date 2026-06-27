@@ -1758,6 +1758,34 @@ def get_wrapped_stats(user_id, pool_id):
     best_day = ({"date": days["day"], "payout": float(days["payout"])}
                 if days and float(days["payout"]) > 0 else None)
 
+    # Attach every pick the user made on the best day so the slide can
+    # render a recap table (including wrong ones). Same row shape as
+    # the best/worst-group fixture detail above.
+    if best_day:
+        rows = conn.execute("""
+            SELECT f.kick_off, f.home_team, f.away_team,
+                   f.home_score, f.away_score, f.result,
+                   p.predicted_result,
+                   COALESCE((SELECT t.amount FROM transactions t
+                              WHERE t.user_id=? AND t.pool_id=?
+                                AND t.fixture_id=f.id AND t.type='payout'),
+                            0) AS payout
+            FROM fixtures f
+            JOIN picks p ON p.fixture_id = f.id
+                        AND p.user_id=? AND p.pool_id=?
+            WHERE f.stage LIKE 'Group %'
+              AND f.result IS NOT NULL
+              AND substr(f.kick_off, 1, 10) = ?
+            ORDER BY f.kick_off
+        """, (user_id, pool_id, user_id, pool_id, best_day["date"])).fetchall()
+        fxs = []
+        for r in rows:
+            d = dict(r)
+            d["got_it_right"] = (d.get("predicted_result") == d.get("result"))
+            d["payout"]       = float(d.get("payout") or 0)
+            fxs.append(d)
+        best_day["fixtures"] = fxs
+
     # ── 4. Per-group accuracy → best + worst.
     #    Tie-break: most picks first (more data), then alphabetic.
     groups = conn.execute("""

@@ -31,6 +31,21 @@
     color: #fff;
     overflow: hidden;
   }
+  /* Grainy film-noise overlay on every slide -- adds visual texture so
+     the solid gradients don't feel flat. Stronger than base.html's
+     0.04 (which we hide while Wrapped is open). */
+  .wr-slide::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 320 320' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='wn'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23wn)'/%3E%3C/svg%3E");
+    background-size: 320px 320px;
+    pointer-events: none;
+    opacity: 0.22;
+    mix-blend-mode: overlay;
+    z-index: 0;
+  }
+  /* Make sure actual slide content sits above the noise layer. */
+  .wr-slide > * { position: relative; z-index: 1; }
   /* Each slide cycles through a bold color palette. */
   .wr-slide.s-1  { background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%); }
   .wr-slide.s-2  { background: linear-gradient(160deg, #d3ff67 0%, #8fc02b 100%); color: #1a1a2e; }
@@ -243,6 +258,31 @@
 
 <div class="wr-stage" id="wr-stage">
 
+  {# Recap mini-table macro used by slides 4 (best day), 5 (best group),
+     and 6 (group of death). Must be declared before its first call site. #}
+  {% macro recap_table(fixtures) %}
+    <div class="wr-recap">
+      {% for f in fixtures %}
+        {% set win = f.result %}
+        {% set right = f.got_it_right %}
+        {% set mday = f.kick_off[5:10] if f.kick_off else '' %}
+        <div class="wr-recap-row">
+          <span class="wr-recap-date">{{ mday }}</span>
+          <span class="wr-recap-team is-home{% if win == 'H' %} is-winner{% endif %}">
+            {{ f.home_team }}
+          </span>
+          <span class="wr-recap-score">{{ f.home_score|default('-', true) }}–{{ f.away_score|default('-', true) }}</span>
+          <span class="wr-recap-team{% if win == 'A' %} is-winner{% endif %}">
+            {{ f.away_team }}
+          </span>
+          <span class="wr-recap-mark {% if right %}is-right{% else %}is-wrong{% endif %}">
+            {% if right %}✓{% else %}✗{% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endmacro %}
+
   <!-- 1: Cover ─────────────────────────────────────────────────────── -->
   <section class="wr-slide s-1">
     <div class="wr-eyebrow">{{ pool.name }} · 2026</div>
@@ -292,39 +332,16 @@
   <section class="wr-slide s-4">
     <div class="wr-eyebrow">Your best day</div>
     {% if stats.best_day %}
-      <div class="wr-big">${{ stats.best_day.payout|round(0, 'ceil')|int }}</div>
+      <div class="wr-big" style="font-size:clamp(3rem,14vw,7rem)">${{ stats.best_day.payout|round(0, 'ceil')|int }}</div>
       <p class="wr-subhead">
-        That was <strong>{{ stats.best_day.date }}</strong> — your single
-        biggest day of winnings.
+        On <strong>{{ stats.best_day.date }}</strong> — your biggest payout of the stage.
       </p>
+      {{ recap_table(stats.best_day.fixtures or []) }}
     {% else %}
       <div class="wr-big">—</div>
       <p class="wr-subhead">No payout days yet. The knockouts are waiting.</p>
     {% endif %}
   </section>
-
-  {% macro recap_table(fixtures) %}
-    <div class="wr-recap">
-      {% for f in fixtures %}
-        {% set win = f.result %}
-        {% set right = f.got_it_right %}
-        {% set mday = f.kick_off[5:10] if f.kick_off else '' %}
-        <div class="wr-recap-row">
-          <span class="wr-recap-date">{{ mday }}</span>
-          <span class="wr-recap-team is-home{% if win == 'H' %} is-winner{% endif %}">
-            {{ f.home_team }}
-          </span>
-          <span class="wr-recap-score">{{ f.home_score|default('-', true) }}–{{ f.away_score|default('-', true) }}</span>
-          <span class="wr-recap-team{% if win == 'A' %} is-winner{% endif %}">
-            {{ f.away_team }}
-          </span>
-          <span class="wr-recap-mark {% if right %}is-right{% else %}is-wrong{% endif %}">
-            {% if right %}✓{% else %}✗{% endif %}
-          </span>
-        </div>
-      {% endfor %}
-    </div>
-  {% endmacro %}
 
   <!-- 5: Best group ────────────────────────────────────────────────── -->
   <section class="wr-slide s-5">
