@@ -829,21 +829,31 @@ def pool_page(pool_id):
         if stage_name != "Completed" and fixs and all(f.get("result") for f in fixs)
     }
 
-    # Plus: collapse every stage strictly later than the soonest
-    # not-yet-resolved one — so only the "current" round (and earlier
-    # stale rounds, if any) stays open. Determined by earliest kick_off
-    # among unresolved fixtures in each stage.
+    # Auto-collapse rounds that have nothing actionable yet. A round
+    # stays expanded if it's either (a) the next stage to fully resolve
+    # OR (b) contains at least one fixture where BOTH teams are real
+    # (i.e. bettable now). The second branch is critical when a later
+    # round opens for betting before the earlier one fully closes —
+    # otherwise users see MD3 only and assume the bracket is missing.
     _earliest_open_ko = {}
+    _stages_with_real_match = set()
     for stage_name, fixs in grouped_fixtures.items():
         if stage_name == "Completed":
             continue
         kos = [f.get("kick_off") for f in fixs if not f.get("result") and f.get("kick_off")]
         if kos:
             _earliest_open_ko[stage_name] = min(kos)
+        for f in fixs:
+            h = (f.get("home_team") or "").upper()
+            a = (f.get("away_team") or "").upper()
+            if h and a and not h.startswith("TBD") and not a.startswith("TBD"):
+                _stages_with_real_match.add(stage_name)
+                break
     if _earliest_open_ko:
         _current_ko = min(_earliest_open_ko.values())
         future_collapsed_stages = {
-            s for s, ko in _earliest_open_ko.items() if ko > _current_ko
+            s for s, ko in _earliest_open_ko.items()
+            if ko > _current_ko and s not in _stages_with_real_match
         }
     else:
         future_collapsed_stages = set()
