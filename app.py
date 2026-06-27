@@ -1664,13 +1664,19 @@ def wrapped_page(pool_id):
     if not pool:
         flash("Pool not found.", "error")
         return redirect(url_for("home"))
-    if not db.is_group_stage_complete(pool_id):
+    # Admin QA: ?force=1 bypasses the group-complete gate so the page
+    # renders against whatever data exists. Also skips the "seen" mark
+    # so the admin can preview repeatedly without poisoning their own
+    # auto-popup state.
+    force = request.args.get("force") == "1" and user.get("is_admin")
+    if not force and not db.is_group_stage_complete(pool_id):
         flash("Group-stage Wrapped isn't ready yet — wait until all "
               "group matches are scored.", "info")
         return redirect(url_for("pool_page", pool_id=pool_id))
 
     stats = db.get_wrapped_stats(user["id"], pool_id)
-    db.mark_wrapped_seen(user["id"], pool_id)
+    if not force:
+        db.mark_wrapped_seen(user["id"], pool_id)
     return render_template("wrapped.html",
                            pool=pool, stats=stats, user_obj=user)
 
