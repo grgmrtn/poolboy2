@@ -932,6 +932,69 @@ def pool_page(pool_id):
         })
     my_placed_bets.sort(key=lambda b: b.get("kick_off") or "")
 
+    # Bracket layout — one cell per KO fixture, grouped by round and
+    # ordered by kick-off so adjacent cells visually pair into the next
+    # round's source. Used by the new BRACKET section.
+    _BRACKET_ROUNDS = [
+        ("Round of 32", "r32"),
+        ("Round of 16", "r16"),
+        ("Quarter-Finals", "qf"),
+        ("Semi-Finals", "sf"),
+        ("Final", "final"),
+    ]
+    bracket_columns = []
+    for stage_name, col_key in _BRACKET_ROUNDS:
+        fixes = grouped_fixtures.get(stage_name, [])
+        cells = []
+        for f in sorted(fixes, key=lambda x: x.get("kick_off") or ""):
+            home_abbr = TEAM_ABBR.get(f.get("home_team") or "") or (f.get("home_team") or "TBD")[:3].upper()
+            away_abbr = TEAM_ABBR.get(f.get("away_team") or "") or (f.get("away_team") or "TBD")[:3].upper()
+            pick = existing_picks.get(f["id"])
+            cells.append({
+                "id":         f["id"],
+                "home_team":  f.get("home_team") or "TBD",
+                "away_team":  f.get("away_team") or "TBD",
+                "home_abbr":  home_abbr,
+                "away_abbr":  away_abbr,
+                "home_flag":  f.get("home_flag_code") or "un",
+                "away_flag":  f.get("away_flag_code") or "un",
+                "home_odds":  f.get("home_odds"),
+                "away_odds":  f.get("away_odds"),
+                "home_score": f.get("home_score"),
+                "away_score": f.get("away_score"),
+                "result":     f.get("result"),
+                "kick_off":   f.get("kick_off"),
+                "kick_off_display": f.get("kick_off_display"),
+                "my_pick":    pick.get("predicted_result") if pick else None,
+                "my_bet":     pick.get("bet_amount") if pick else None,
+            })
+        bracket_columns.append({"stage": stage_name, "key": col_key, "cells": cells})
+    # 3rd-place hangs off the bracket separately (not connected by lines).
+    bracket_third = None
+    third_list = grouped_fixtures.get("Third Place", [])
+    if third_list:
+        f = third_list[0]
+        pick = existing_picks.get(f["id"])
+        bracket_third = {
+            "id": f["id"],
+            "home_team":  f.get("home_team") or "TBD",
+            "away_team":  f.get("away_team") or "TBD",
+            "home_abbr":  TEAM_ABBR.get(f.get("home_team") or "") or (f.get("home_team") or "TBD")[:3].upper(),
+            "away_abbr":  TEAM_ABBR.get(f.get("away_team") or "") or (f.get("away_team") or "TBD")[:3].upper(),
+            "home_flag":  f.get("home_flag_code") or "un",
+            "away_flag":  f.get("away_flag_code") or "un",
+            "home_odds":  f.get("home_odds"),
+            "away_odds":  f.get("away_odds"),
+            "home_score": f.get("home_score"),
+            "away_score": f.get("away_score"),
+            "result":     f.get("result"),
+            "kick_off":   f.get("kick_off"),
+            "kick_off_display": f.get("kick_off_display"),
+            "my_pick":    pick.get("predicted_result") if pick else None,
+            "my_bet":     pick.get("bet_amount") if pick else None,
+        }
+    show_bracket = any(c["cells"] for c in bracket_columns)
+
     live_now_data = _build_live_now_data(
         pool_id, grouped_fixtures, all_picks_by_fixture,
         rank_by_uid=_rank_by_uid,
@@ -967,6 +1030,9 @@ def pool_page(pool_id):
         my_rank=my_rank,
         pool_size=pool_size,
         has_ko_stage=has_ko_stage,
+        bracket_columns=bracket_columns,
+        bracket_third=bracket_third,
+        show_bracket=show_bracket,
         live_now=live_now_data,
         pick_accuracy=pick_accuracy,
     )

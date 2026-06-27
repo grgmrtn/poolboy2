@@ -2138,6 +2138,148 @@
     margin-bottom: 0.75rem;
   }
 
+  /* ── Bracket view ─────────────────────────────────────────────────
+     Read-only KO bracket. 5 columns side-by-side, each round half the
+     cell count of the previous. SVG connectors drawn client-side. */
+  .bracket-section { margin-top: 1rem; }
+  .bracket-heading .stage-meta { font-style: italic; }
+  .bracket-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.5rem;
+  }
+  .bracket-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 9.5rem);
+    gap: 0 1.4rem;
+    align-items: stretch;
+    /* Match-row height × 32 cells for R32 column. The other columns
+       (16 / 8 / 4 / 2) scale up to fill the same total height via the
+       sub-grids below, so paired cells visually align across rounds. */
+    min-height: 84rem;
+    padding: 0.5rem 0.5rem 1rem;
+  }
+  .bracket-connectors {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+  .bracket-col {
+    display: grid; gap: 0;
+    /* All columns share the parent's min-height; the row template here
+       determines how many cells fit. */
+    grid-auto-flow: row;
+    position: relative;
+    z-index: 1;
+  }
+  .bracket-col-r32   { grid-template-rows: auto repeat(16, 1fr); }
+  /* Each next column is half as dense; the auto row at the top is for
+     the round label so the rest can space out symmetrically. */
+  .bracket-col-r16   { grid-template-rows: auto repeat(8,  1fr); }
+  .bracket-col-qf    { grid-template-rows: auto repeat(4,  1fr); }
+  .bracket-col-sf    { grid-template-rows: auto repeat(2,  1fr); }
+  .bracket-col-final { grid-template-rows: auto repeat(1,  1fr); }
+  /* R32 has 32 cells but the grid above gives it 16 rows. Each cell
+     spans half a row. We render the 32 cells across the rows by
+     letting them flow naturally — set explicit single-row spans so
+     each cell takes 1 unit of grid space (half a paired-row). */
+  .bracket-col-r32 .bracket-cell { /* defaults to 1 row */ }
+  .bracket-col-head {
+    font-size: 0.56rem; letter-spacing: 0.12em; font-weight: 800;
+    color: var(--text-dim); text-transform: uppercase;
+    text-align: center; padding: 0 0 0.4rem;
+    scroll-snap-align: start;
+  }
+  /* The bracket cell: a date/time strip + two team pills stacked. Pure
+     anchor → taps jump to the fixture row in the table view. */
+  .bracket-cell {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    padding: 0.25rem 0.35rem;
+    align-self: center;
+    margin: 0.18rem 0;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .bracket-cell:hover { border-color: var(--border-hi); background: rgba(255,255,255,0.04); }
+  .bracket-when {
+    font-size: 0.5rem; color: var(--text-dim);
+    letter-spacing: 0.02em; text-align: center;
+    margin-bottom: 0.18rem;
+  }
+  .bracket-pill {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.25rem;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 0.65rem; line-height: 1.1;
+    color: var(--text-muted);
+  }
+  .bracket-pill + .bracket-pill { margin-top: 0.1rem; }
+  .bracket-flag { width: 14px; height: 10px; object-fit: cover; border-radius: 2px; }
+  .bracket-abbr { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bracket-odds { color: var(--text-dim); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.6rem; }
+  .bracket-score {
+    color: var(--text); font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.06);
+    padding: 0 0.25rem; border-radius: 3px;
+  }
+  .bracket-bet { color: var(--lilac); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .bracket-pill.is-pick {
+    background: rgba(200,255,87,0.08);
+    box-shadow: 0 0 0 1px rgba(200,255,87,0.45) inset;
+  }
+  .bracket-pill.is-pick .bracket-abbr { color: var(--accent); }
+  .bracket-pill.is-won  { background: rgba(200,255,87,0.16); }
+  .bracket-pill.is-won  .bracket-abbr { color: var(--accent); }
+  .bracket-pill.is-won  .bracket-score { background: var(--accent); color: #0a0a0f; }
+  /* TBD placeholder rendering — when a team is still 'TBD' the abbr
+     reads TBD; tone it down so it doesn't shout. */
+  .bracket-pill .bracket-abbr:where(:not(.is-resolved)) { /* no-op */ }
+
+  /* 3rd-place match — hangs below the bracket grid, separate. */
+  .bracket-third {
+    display: inline-flex; flex-direction: column;
+    align-items: stretch;
+    margin: 1.25rem 0 0.5rem;
+    padding-left: 0.5rem;
+    border-top: 1px dashed var(--border);
+    padding-top: 1rem;
+    width: 11rem;
+  }
+  .bracket-third-label {
+    color: var(--lilac);
+  }
+
+  /* SVG connectors live behind the cells (z-index: 0). They draw faint
+     dashed paths from each pair of source cells to the destination
+     cell in the next column. */
+  .bracket-connectors path {
+    fill: none;
+    stroke: var(--border-hi);
+    stroke-width: 1;
+  }
+
+  @media (max-width: 640px) {
+    .bracket-grid {
+      grid-template-columns: repeat(5, 8.5rem);
+      gap: 0 1rem;
+      min-height: 76rem;
+    }
+    .bracket-pill { font-size: 0.6rem; gap: 0.25rem; padding: 0.16rem 0.22rem; }
+  }
+
   /* ── Group standings ─────────────────────────────────────────────── */
   .standings-wrap { margin-top: 2.5rem; }
   .standings-toggle {
@@ -2262,6 +2404,9 @@
   {% endfor %}
   {% if group_standings %}
     <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
+  {% endif %}
+  {% if show_bracket %}
+    <a class="stage-tab" href="#bracket-section" data-stage="bracket">BRACKET</a>
   {% endif %}
   {# Odds format picker removed — site uses decimal multipliers everywhere. #}
   {# Per-stage "Hide picks" toggle lives in each stage's heading below,
@@ -3296,6 +3441,113 @@
         {% endfor %}
       {% else %}
         <div style="color:var(--text-dim);font-size:0.82rem">No fixtures loaded yet.</div>
+      {% endif %}
+
+      <!-- ── Bracket view ─────────────────────────────────────────
+           Read-only render of the KO bracket. Each cell anchors to its
+           fixture row in the table view so taps still take the user to
+           the bet pill. SVG connectors are drawn client-side from cell
+           positions; recompute on resize. -->
+      {% if show_bracket %}
+      <div class="bracket-section" id="bracket-section">
+        <div class="stage-heading bracket-heading"
+             onclick="toggleStageHeading(this)">
+          <span class="caret">▼</span>
+          <span>Bracket</span>
+          <span class="stage-heading-right">
+            <span class="stage-meta">read-only · tap any match to bet</span>
+          </span>
+        </div>
+        <div class="stage-section">
+          <div class="bracket-scroll">
+            <div class="bracket-grid" id="bracket-grid">
+              <svg class="bracket-connectors" aria-hidden="true"></svg>
+              {% for col in bracket_columns %}
+                <div class="bracket-col bracket-col-{{ col.key }}">
+                  <div class="bracket-col-head">{{ SHORT.get(col.stage, col.stage) }}</div>
+                  {% for c in col.cells %}
+                    {% set ko = c.kick_off_display or c.kick_off or '' %}
+                    {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
+                    {% set when_t   = ko[11:16] if ko else '' %}
+                    <a class="bracket-cell"
+                       href="#fixture-{{ c.id }}"
+                       onclick="jumpToFixture(event, '{{ c.id }}')"
+                       title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
+                      <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
+                      {% set is_h_pick = c.my_pick == 'H' %}
+                      {% set is_a_pick = c.my_pick == 'A' %}
+                      {% set h_won = c.result == 'H' %}
+                      {% set a_won = c.result == 'A' %}
+                      <div class="bracket-pill{% if is_h_pick %} is-pick{% endif %}{% if h_won %} is-won{% endif %}">
+                        <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                        <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                        {% if c.home_score is not none %}
+                          <span class="bracket-score">{{ c.home_score }}</span>
+                        {% elif c.home_odds %}
+                          <span class="bracket-odds">{{ '%g'|format(c.home_odds) }}×</span>
+                        {% endif %}
+                        {% if is_h_pick and c.my_bet %}
+                          <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
+                        {% endif %}
+                      </div>
+                      <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
+                        <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                        <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                        {% if c.away_score is not none %}
+                          <span class="bracket-score">{{ c.away_score }}</span>
+                        {% elif c.away_odds %}
+                          <span class="bracket-odds">{{ '%g'|format(c.away_odds) }}×</span>
+                        {% endif %}
+                        {% if is_a_pick and c.my_bet %}
+                          <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
+                        {% endif %}
+                      </div>
+                    </a>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+            {% if bracket_third %}
+              {% set c = bracket_third %}
+              {% set ko = c.kick_off_display or c.kick_off or '' %}
+              {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
+              {% set when_t   = ko[11:16] if ko else '' %}
+              <div class="bracket-third">
+                <div class="bracket-col-head bracket-third-label">3rd Place</div>
+                <a class="bracket-cell" href="#fixture-{{ c.id }}"
+                   onclick="jumpToFixture(event, '{{ c.id }}')"
+                   title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
+                  <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
+                  <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
+                    <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                    <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                    {% if c.home_score is not none %}
+                      <span class="bracket-score">{{ c.home_score }}</span>
+                    {% elif c.home_odds %}
+                      <span class="bracket-odds">{{ '%g'|format(c.home_odds) }}×</span>
+                    {% endif %}
+                    {% if c.my_pick == 'H' and c.my_bet %}
+                      <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
+                    {% endif %}
+                  </div>
+                  <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
+                    <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                    <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                    {% if c.away_score is not none %}
+                      <span class="bracket-score">{{ c.away_score }}</span>
+                    {% elif c.away_odds %}
+                      <span class="bracket-odds">{{ '%g'|format(c.away_odds) }}×</span>
+                    {% endif %}
+                    {% if c.my_pick == 'A' and c.my_bet %}
+                      <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
+                    {% endif %}
+                  </div>
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
       {% endif %}
 
       <!-- ── Group standings ─────────────────────────────────────── -->
@@ -4426,13 +4678,11 @@
   stageTabs.forEach(tab => {
     tab.addEventListener('click', e => {
       e.preventDefault();
-      // The TBL tab targets the group-standings section; everything else
-      // is a normal stage section. Without this special-case, clicking TBL
-      // looked up #stage-standings (which doesn't exist) and silently
-      // failed to scroll.
-      const targetId = tab.dataset.stage === 'standings'
-        ? 'group-standings'
-        : 'stage-' + tab.dataset.stage;
+      // Two special cases: TBL → group-standings, BRACKET → bracket-section.
+      // Everything else is a normal stage section.
+      const targetId = tab.dataset.stage === 'standings' ? 'group-standings'
+                     : tab.dataset.stage === 'bracket'   ? 'bracket-section'
+                     : 'stage-' + tab.dataset.stage;
       const target = document.getElementById(targetId);
       if (!target) return;
       // The heading sits ABOVE .stage-section in the DOM but visually
@@ -4466,6 +4716,59 @@
     document.querySelectorAll(`.player-pill[data-player="${CSS.escape(email)}"]`)
       .forEach(p => p.classList.add('player-hidden'));
   }
+
+  // ── Bracket SVG connectors ────────────────────────────────────────
+  // Draw faint lines between each pair of source cells (column N) and
+  // their merged destination cell (column N+1). Recompute on load and
+  // on resize since the grid heights are responsive.
+  function drawBracketConnectors() {
+    const grid = document.getElementById('bracket-grid');
+    if (!grid) return;
+    const svg  = grid.querySelector('.bracket-connectors');
+    if (!svg)  return;
+    const gridRect = grid.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${gridRect.width} ${gridRect.height}`);
+    svg.setAttribute('width', gridRect.width);
+    svg.setAttribute('height', gridRect.height);
+    svg.innerHTML = '';
+    const cols = ['r32', 'r16', 'qf', 'sf', 'final'];
+    const NS = 'http://www.w3.org/2000/svg';
+    for (let i = 0; i < cols.length - 1; i++) {
+      const srcCells = document.querySelectorAll(`.bracket-col-${cols[i]} .bracket-cell`);
+      const dstCells = document.querySelectorAll(`.bracket-col-${cols[i + 1]} .bracket-cell`);
+      for (let j = 0; j < dstCells.length; j++) {
+        const src1 = srcCells[2 * j];
+        const src2 = srcCells[2 * j + 1];
+        const dst  = dstCells[j];
+        if (!src1 || !src2 || !dst) continue;
+        const r1 = src1.getBoundingClientRect();
+        const r2 = src2.getBoundingClientRect();
+        const rd = dst.getBoundingClientRect();
+        const x1 = r1.right - gridRect.left;
+        const y1 = r1.top + r1.height / 2 - gridRect.top;
+        const x2 = r2.right - gridRect.left;
+        const y2 = r2.top + r2.height / 2 - gridRect.top;
+        const xd = rd.left  - gridRect.left;
+        const yd = rd.top + rd.height / 2 - gridRect.top;
+        const midX = (Math.max(x1, x2) + xd) / 2;
+        // Each pair = two L-shaped lines joining at midX, then one
+        // horizontal stub into the destination.
+        const d = `M${x1} ${y1} H${midX} V${yd} H${xd}` +
+                  ` M${x2} ${y2} H${midX}`;
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+      }
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    drawBracketConnectors();
+    window.addEventListener('resize', () => {
+      // Debounce a bit so resize doesn't redraw 30 times per second.
+      clearTimeout(window._bracketResizeT);
+      window._bracketResizeT = setTimeout(drawBracketConnectors, 80);
+    });
+  });
 
   // ── KO odds-status line (sibling of the countdown) ─────────────────
   // "Odds live · locks in Xh" until kick_off − 12 h; "Odds locking" inside
