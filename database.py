@@ -691,28 +691,28 @@ def upsert_fixture(fixture):
                 WHEN excluded.home_team IS NULL
                   OR excluded.home_team = ''
                   OR excluded.home_team = 'TBD'
-                THEN home_team
+                THEN fixtures.home_team
                 ELSE excluded.home_team
             END,
             away_team      = CASE
                 WHEN excluded.away_team IS NULL
                   OR excluded.away_team = ''
                   OR excluded.away_team = 'TBD'
-                THEN away_team
+                THEN fixtures.away_team
                 ELSE excluded.away_team
             END,
             home_flag_code = CASE
                 WHEN excluded.home_flag_code IS NULL
                   OR excluded.home_flag_code = ''
                   OR excluded.home_flag_code = 'un'
-                THEN home_flag_code
+                THEN fixtures.home_flag_code
                 ELSE excluded.home_flag_code
             END,
             away_flag_code = CASE
                 WHEN excluded.away_flag_code IS NULL
                   OR excluded.away_flag_code = ''
                   OR excluded.away_flag_code = 'un'
-                THEN away_flag_code
+                THEN fixtures.away_flag_code
                 ELSE excluded.away_flag_code
             END,
             kick_off       = excluded.kick_off,
