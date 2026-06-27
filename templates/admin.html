@@ -363,6 +363,18 @@
                   <button type="submit" class="btn btn-ghost btn-sm">Save</button>
                 </div>
               </form>
+              {% if f.result %}
+              {# Re-process payouts without changing the score. Useful when
+                 the score was corrected via SQL but balances need refresh. #}
+              <form method="POST" action="{{ url_for('admin_rescore_fixture', fixture_id=f.id) }}"
+                    style="margin-top:0.25rem">
+                <button type="submit" class="btn btn-ghost btn-sm"
+                        title="Reverse old payouts and re-derive from current score"
+                        onclick="return confirm('Re-process payouts for this fixture?')">
+                  ↻ Re-score
+                </button>
+              </form>
+              {% endif %}
             </td>
             <td>
               {% if is_ko %}

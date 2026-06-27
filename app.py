@@ -2202,6 +2202,25 @@ def set_fixture_result(fixture_id):
     return redirect(url_for("admin_page"))
 
 
+@app.route("/admin/fixture/<fixture_id>/rescore", methods=["POST"])
+@admin_required
+def admin_rescore_fixture(fixture_id):
+    """Re-run process_fixture_result on a fixture without changing its
+    score. Useful when the score has been corrected via SQL but payouts
+    haven't been re-derived (the auto-score cron only self-heals when
+    API and DB disagree, so a manual DB fix needs a separate trigger).
+
+    process_fixture_result is idempotent — reverses every existing payout
+    on the fixture, then re-applies based on the current home_score /
+    away_score / result. Safe to click any time."""
+    processed = db.process_fixture_result(fixture_id)
+    if processed:
+        flash(f"Re-processed {processed} picks.", "success")
+    else:
+        flash("Nothing to re-process (no result set on this fixture).", "error")
+    return redirect(url_for("admin_page"))
+
+
 @app.route("/admin/fixture/<fixture_id>/odds", methods=["POST"])
 @admin_required
 def set_fixture_odds(fixture_id):
