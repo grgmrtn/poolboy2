@@ -942,11 +942,25 @@ def pool_page(pool_id):
         ("Semi-Finals", "sf"),
         ("Final", "final"),
     ]
+    # Bracket cell order matters — adjacent cells in column N visually
+    # pair into one cell in column N+1. football-data's numeric match
+    # IDs reflect the official FIFA bracket numbering, so sorting by ID
+    # (numeric where possible, alphabetic as a fallback for non-numeric
+    # IDs like the seed-script UUIDs) gives a more accurate bracket
+    # layout than sorting by kick_off (which can interleave across
+    # bracket halves).
+    def _bracket_sort_key(fixture):
+        fid = fixture.get("id") or ""
+        try:
+            return (0, int(fid))
+        except (TypeError, ValueError):
+            return (1, fid)
+
     bracket_columns = []
     for stage_name, col_key in _BRACKET_ROUNDS:
         fixes = grouped_fixtures.get(stage_name, [])
         cells = []
-        for f in sorted(fixes, key=lambda x: x.get("kick_off") or ""):
+        for f in sorted(fixes, key=_bracket_sort_key):
             home_abbr = TEAM_ABBR.get(f.get("home_team") or "") or (f.get("home_team") or "TBD")[:3].upper()
             away_abbr = TEAM_ABBR.get(f.get("away_team") or "") or (f.get("away_team") or "TBD")[:3].upper()
             pick = existing_picks.get(f["id"])

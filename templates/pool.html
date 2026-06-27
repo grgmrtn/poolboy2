@@ -2194,29 +2194,37 @@
     text-align: center; padding: 0 0 0.4rem;
     scroll-snap-align: start;
   }
-  /* The bracket cell: a date/time strip + two team pills stacked. Pure
-     anchor → taps jump to the fixture row in the table view. */
+  /* The bracket cell: a date/time strip (outside the visual card) + a
+     card containing two team pills stacked. Pure anchor → taps jump to
+     the fixture row in the table view. */
   .bracket-cell {
     display: flex; flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    align-self: center;
+    margin: 0.18rem 0;
+  }
+  .bracket-cell:hover .bracket-cell-card { border-color: var(--border-hi); background: rgba(255,255,255,0.04); }
+  .bracket-cell-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
-    text-decoration: none;
-    color: inherit;
     padding: 0.25rem 0.35rem;
-    align-self: center;
-    margin: 0.18rem 0;
     transition: border-color 0.12s, background 0.12s;
   }
-  .bracket-cell:hover { border-color: var(--border-hi); background: rgba(255,255,255,0.04); }
+  /* Date/time strip — sits OUTSIDE the cell card, left-aligned. */
   .bracket-when {
-    font-size: 0.5rem; color: var(--text-dim);
-    letter-spacing: 0.02em; text-align: center;
-    margin-bottom: 0.18rem;
+    font-size: 0.52rem; color: var(--text-dim);
+    letter-spacing: 0.02em; text-align: left;
+    padding: 0 0.25rem 0.18rem;
   }
+  /* Pill grid: flag · abbr (flex) · odds (fixed-width) · bet (fixed-width).
+     Fixed-width odds + bet columns keep the numbers aligned across both
+     pills in the cell — adding a bet to one side no longer pushes the
+     other side's odds left. */
   .bracket-pill {
     display: grid;
-    grid-template-columns: 14px minmax(0, 1fr) auto auto;
+    grid-template-columns: 14px minmax(0, 1fr) 2.2rem 2.2rem;
     align-items: center;
     gap: 0.3rem;
     padding: 0.18rem 0.25rem;
@@ -2228,14 +2236,22 @@
   .bracket-pill + .bracket-pill { margin-top: 0.1rem; }
   .bracket-flag { width: 14px; height: 10px; object-fit: cover; border-radius: 2px; }
   .bracket-abbr { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bracket-odds { color: var(--text-dim); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.6rem; }
+  .bracket-odds {
+    color: var(--text-dim); font-weight: 600;
+    font-variant-numeric: tabular-nums; font-size: 0.6rem;
+    text-align: right;
+  }
   .bracket-score {
     color: var(--text); font-weight: 800;
     font-variant-numeric: tabular-nums;
     background: rgba(255,255,255,0.06);
     padding: 0 0.25rem; border-radius: 3px;
   }
-  .bracket-bet { color: var(--lilac); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .bracket-bet {
+    color: var(--lilac); font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
   .bracket-pill.is-pick {
     background: rgba(200,255,87,0.08);
     box-shadow: 0 0 0 1px rgba(200,255,87,0.45) inset;
@@ -3478,29 +3494,19 @@
                       {% set is_a_pick = c.my_pick == 'A' %}
                       {% set h_won = c.result == 'H' %}
                       {% set a_won = c.result == 'A' %}
-                      <div class="bracket-pill{% if is_h_pick %} is-pick{% endif %}{% if h_won %} is-won{% endif %}">
-                        <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                        <span class="bracket-abbr">{{ c.home_abbr }}</span>
-                        {% if c.home_score is not none %}
-                          <span class="bracket-score">{{ c.home_score }}</span>
-                        {% elif c.home_odds %}
-                          <span class="bracket-odds">{{ '%g'|format(c.home_odds) }}×</span>
-                        {% endif %}
-                        {% if is_h_pick and c.my_bet %}
-                          <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
-                        {% endif %}
-                      </div>
-                      <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
-                        <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                        <span class="bracket-abbr">{{ c.away_abbr }}</span>
-                        {% if c.away_score is not none %}
-                          <span class="bracket-score">{{ c.away_score }}</span>
-                        {% elif c.away_odds %}
-                          <span class="bracket-odds">{{ '%g'|format(c.away_odds) }}×</span>
-                        {% endif %}
-                        {% if is_a_pick and c.my_bet %}
-                          <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
-                        {% endif %}
+                      <div class="bracket-cell-card">
+                        <div class="bracket-pill{% if is_h_pick %} is-pick{% endif %}{% if h_won %} is-won{% endif %}">
+                          <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                          <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                          <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
+                          <span class="bracket-bet">{% if is_h_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                        </div>
+                        <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
+                          <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                          <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                          <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
+                          <span class="bracket-bet">{% if is_a_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                        </div>
                       </div>
                     </a>
                   {% endfor %}
@@ -3518,29 +3524,19 @@
                    onclick="jumpToFixture(event, '{{ c.id }}')"
                    title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
                   <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
-                  <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
-                    <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                    <span class="bracket-abbr">{{ c.home_abbr }}</span>
-                    {% if c.home_score is not none %}
-                      <span class="bracket-score">{{ c.home_score }}</span>
-                    {% elif c.home_odds %}
-                      <span class="bracket-odds">{{ '%g'|format(c.home_odds) }}×</span>
-                    {% endif %}
-                    {% if c.my_pick == 'H' and c.my_bet %}
-                      <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
-                    {% endif %}
-                  </div>
-                  <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
-                    <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                    <span class="bracket-abbr">{{ c.away_abbr }}</span>
-                    {% if c.away_score is not none %}
-                      <span class="bracket-score">{{ c.away_score }}</span>
-                    {% elif c.away_odds %}
-                      <span class="bracket-odds">{{ '%g'|format(c.away_odds) }}×</span>
-                    {% endif %}
-                    {% if c.my_pick == 'A' and c.my_bet %}
-                      <span class="bracket-bet">${{ '%.0f'|format(c.my_bet) }}</span>
-                    {% endif %}
+                  <div class="bracket-cell-card">
+                    <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
+                      <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                      <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                      <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
+                      <span class="bracket-bet">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                    </div>
+                    <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
+                      <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                      <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                      <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
+                      <span class="bracket-bet">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                    </div>
                   </div>
                 </a>
               </div>
@@ -4751,10 +4747,14 @@
         const xd = rd.left  - gridRect.left;
         const yd = rd.top + rd.height / 2 - gridRect.top;
         const midX = (Math.max(x1, x2) + xd) / 2;
-        // Each pair = two L-shaped lines joining at midX, then one
-        // horizontal stub into the destination.
-        const d = `M${x1} ${y1} H${midX} V${yd} H${xd}` +
-                  ` M${x2} ${y2} H${midX}`;
+        // Three line segments:
+        //   1) upper source → right to midX, then down to lower source's
+        //      level, then left to lower source's edge (the outer U).
+        //   2) midpoint → right to destination's left edge.
+        // The vertical segment fully spans y1..y2; the stub from midX,yd
+        // (which falls between y1 and y2) goes to xd.
+        const d = `M${x1} ${y1} H${midX} V${y2} H${x2}` +
+                  ` M${midX} ${yd} H${xd}`;
         const path = document.createElementNS(NS, 'path');
         path.setAttribute('d', d);
         svg.appendChild(path);
