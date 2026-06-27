@@ -411,6 +411,74 @@
 </head>
 <body>
 
+  <!-- Top progress bar — fires on internal navigations / form submits /
+       refresh button so the user gets immediate feedback that something
+       is happening before the next page paints. -->
+  <div id="loading-bar" aria-hidden="true"></div>
+  <style>
+    #loading-bar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 3px; z-index: 9999;
+      background: var(--accent);
+      transform: scaleX(0); transform-origin: 0 50%;
+      transition: transform 0.18s ease-out, opacity 0.22s ease;
+      opacity: 0; pointer-events: none;
+      box-shadow: 0 0 8px rgba(200,255,87,0.5);
+    }
+    #loading-bar.is-loading {
+      opacity: 1;
+      transform: scaleX(0.85);
+      transition: transform 8s cubic-bezier(0,0.5,0.1,1), opacity 0.18s ease;
+    }
+    #loading-bar.is-done {
+      opacity: 0;
+      transform: scaleX(1);
+      transition: transform 0.18s ease, opacity 0.3s ease;
+    }
+    /* Spinner state for the navbar refresh button while a reload is in flight. */
+    .nav-action.is-loading svg { animation: navSpin 0.8s linear infinite; }
+    @keyframes navSpin { to { transform: rotate(360deg); } }
+  </style>
+  <script>
+  (function () {
+    var bar = document.getElementById('loading-bar');
+    if (!bar) return;
+    function show() {
+      bar.classList.remove('is-done');
+      // Reflow to restart CSS transitions cleanly
+      // eslint-disable-next-line no-unused-expressions
+      bar.offsetWidth;
+      bar.classList.add('is-loading');
+    }
+    function hide() {
+      bar.classList.remove('is-loading');
+      bar.classList.add('is-done');
+      setTimeout(function () { bar.classList.remove('is-done'); }, 320);
+    }
+    // Fire on link clicks that lead off-page (skip external + anchors +
+    // new-tab modifiers + javascript: hrefs).
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (a.target && a.target !== '_self') return;
+      var href = a.getAttribute('href') || '';
+      if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
+      // External link?
+      try {
+        var u = new URL(href, window.location.href);
+        if (u.origin !== window.location.origin) return;
+      } catch (err) { return; }
+      show();
+    }, true);
+    document.addEventListener('submit', show, true);
+    // pageshow fires on both fresh loads and bfcache restores.
+    window.addEventListener('pageshow', hide);
+    window.addEventListener('beforeunload', show);
+  })();
+  </script>
+
+
   {% if current_user %}
   <!-- ── Navbar (only shown when logged in) ─────────────────────────── -->
   <nav class="navbar">
@@ -465,6 +533,9 @@
         <a href="#" class="nav-action" title="Force refresh (clears stale cache)"
            aria-label="Refresh"
            onclick="event.preventDefault();
+                    this.classList.add('is-loading');
+                    var bar = document.getElementById('loading-bar');
+                    if (bar) { bar.classList.add('is-loading'); }
                     try { localStorage.removeItem('wc26_app_build'); } catch(e) {}
                     var u = new URL(window.location.href);
                     u.searchParams.set('_r', Date.now());

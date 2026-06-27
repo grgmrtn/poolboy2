@@ -92,7 +92,11 @@
     margin-bottom: 1.75rem;
     font-variant-numeric: tabular-nums;
   }
-  .lb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* No overflow context here — `overflow-x: auto` would establish a new
+     scrolling box and trap position:sticky inside, defeating the head
+     pinning. On detail-mode pages that exceed viewport width, the page
+     itself scrolls horizontally (rare except at very narrow widths). */
+  .lb-scroll { }
   .lb-table {
     display: flex; flex-direction: column;
     font-family: var(--mono);

@@ -2202,6 +2202,73 @@ def set_fixture_result(fixture_id):
     return redirect(url_for("admin_page"))
 
 
+@app.route("/admin/debug/user/<email>")
+@admin_required
+def admin_debug_user(email):
+    """Plain-text dump of what a given user 'sees': pool memberships,
+    KO fixture render counts, current localStorage-style filters can't be
+    inspected from the server, so this is for cross-checking the user's
+    server-side state when they report missing fixtures."""
+    target = db.get_user_by_email(email)
+    if not target:
+        return f"No user with email {email!r}.", 404
+    lines = [f"=== Debug: {email} (id={target['id']}) ===\n"]
+    conn = db.get_db()
+    pools = conn.execute(
+        "SELECT p.id, p.name, pm.balance, pm.has_paid, pm.joined_at "
+        "FROM pool_members pm JOIN pools p ON p.id = pm.pool_id "
+        "WHERE pm.user_id = ?",
+        (target["id"],),
+    ).fetchall()
+    lines.append(f"-- Pool memberships ({len(pools)}) --")
+    for p in pools:
+        lines.append(f"  {p['id'][:8]}  {p['name']:<24}  bal=${p['balance']:.2f}  paid={p['has_paid']}  joined={p['joined_at']}")
+    lines.append("")
+
+    KO_STAGES = (
+        "Round of 32", "Round of 16", "Quarter-Finals",
+        "Semi-Finals", "Third Place", "Final",
+    )
+    # KO fixtures the system has at all
+    ph = ",".join("?" * len(KO_STAGES))
+    ko_rows = conn.execute(
+        f"SELECT id, home_team, away_team, kick_off, result, home_odds, away_odds "
+        f"FROM fixtures WHERE stage IN ({ph}) ORDER BY kick_off",
+        KO_STAGES,
+    ).fetchall()
+    lines.append(f"-- KO fixtures in DB ({len(ko_rows)}) --")
+    real_count = 0
+    bettable_count = 0
+    for r in ko_rows:
+        h = (r["home_team"] or "").upper()
+        a = (r["away_team"] or "").upper()
+        teams_real = h and a and not h.startswith("TBD") and not a.startswith("TBD")
+        if teams_real:
+            real_count += 1
+        if teams_real and r["home_odds"] is not None and r["away_odds"] is not None:
+            bettable_count += 1
+    lines.append(f"  with real teams set:  {real_count}")
+    lines.append(f"  with odds posted too: {bettable_count}")
+    lines.append(f"  bet form would gate is_bettable on (teams real) — currently {real_count}")
+    lines.append("")
+
+    # User's existing KO picks
+    picks = conn.execute(
+        f"""SELECT f.home_team, f.away_team, p.predicted_result, p.bet_amount, f.result
+              FROM picks p JOIN fixtures f ON f.id = p.fixture_id
+             WHERE p.user_id = ? AND f.stage IN ({ph})
+             ORDER BY f.kick_off""",
+        (target["id"], *KO_STAGES),
+    ).fetchall()
+    lines.append(f"-- User's KO picks ({len(picks)}) --")
+    for r in picks:
+        lines.append(f"  {r['home_team']} vs {r['away_team']:<20}  pick={r['predicted_result']}  bet=${(r['bet_amount'] or 0):.2f}  result={r['result']}")
+    conn.close()
+
+    body = "\n".join(lines)
+    return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
 @app.route("/admin/fixture/<fixture_id>/rescore", methods=["POST"])
 @admin_required
 def admin_rescore_fixture(fixture_id):
