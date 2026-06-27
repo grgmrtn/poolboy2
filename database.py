@@ -1565,6 +1565,71 @@ def get_pick_for_user_fixture(user_id, pool_id, fixture_id):
     return dict(row) if row else None
 
 
+def get_spy_activity_by_day(days=14):
+    """
+    Daily roll-up of spy activity across BOTH spy_log (per-target) and
+    aggregate_spy_log (whole-fixture). Returns most-recent first.
+
+    Returns: [
+        {"day": "2026-06-27",
+         "target_spies": int, "target_spend": float,
+         "field_spies":  int, "field_spend":  float,
+         "total_spies":  int, "total_spend":  float},
+        ...
+    ]
+    Always returns `days` rows, padded with zeros where there was no
+    activity, so the ticker shows a stable timeline.
+    """
+    conn = get_db()
+    # Both tables use a TEXT created_at (ISO-ish "YYYY-MM-DD HH:MM:SS"
+    # from CURRENT_TIMESTAMP) so substr(...,1,10) gives a portable day
+    # bucket on both SQLite and Postgres.
+    target_rows = conn.execute("""
+        SELECT substr(created_at, 1, 10) AS day,
+               COUNT(*) AS n, COALESCE(SUM(cost), 0) AS spend
+        FROM spy_log
+        GROUP BY substr(created_at, 1, 10)
+    """).fetchall()
+    field_rows = conn.execute("""
+        SELECT substr(created_at, 1, 10) AS day,
+               COUNT(*) AS n, COALESCE(SUM(cost), 0) AS spend
+        FROM aggregate_spy_log
+        GROUP BY substr(created_at, 1, 10)
+    """).fetchall()
+    conn.close()
+
+    by_day = {}
+    for r in target_rows:
+        d = dict(r)
+        by_day.setdefault(d["day"], {"target_spies": 0, "target_spend": 0.0,
+                                      "field_spies": 0, "field_spend": 0.0})
+        by_day[d["day"]]["target_spies"] = int(d["n"])
+        by_day[d["day"]]["target_spend"] = float(d["spend"])
+    for r in field_rows:
+        d = dict(r)
+        by_day.setdefault(d["day"], {"target_spies": 0, "target_spend": 0.0,
+                                      "field_spies": 0, "field_spend": 0.0})
+        by_day[d["day"]]["field_spies"] = int(d["n"])
+        by_day[d["day"]]["field_spend"] = float(d["spend"])
+
+    # Pad with the last `days` calendar days so the timeline is stable
+    # even on quiet days.
+    from datetime import datetime, timedelta, timezone
+    today = datetime.now(timezone.utc).date()
+    out = []
+    for i in range(days):
+        d = (today - timedelta(days=i)).isoformat()
+        row = by_day.get(d, {"target_spies": 0, "target_spend": 0.0,
+                              "field_spies": 0, "field_spend": 0.0})
+        out.append({
+            "day": d,
+            **row,
+            "total_spies": row["target_spies"] + row["field_spies"],
+            "total_spend": row["target_spend"] + row["field_spend"],
+        })
+    return out
+
+
 def record_spy(spy_id, tx_id, buyer_id, target_id, pool_id, fixture_id, cost):
     """
     Atomically purchase spy access for one target on one fixture.

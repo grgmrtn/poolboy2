@@ -1958,6 +1958,8 @@ def admin_page():
                 })
         user_memberships[uid] = m_for_user
 
+    spy_daily = db.get_spy_activity_by_day(days=14)
+
     return render_template("admin.html",
         config=config,
         fixtures=fixtures,
@@ -1968,6 +1970,7 @@ def admin_page():
         pool_members=pool_members,
         pool_balances=pool_balances,
         pool_transactions=pool_transactions,
+        spy_daily=spy_daily,
     )
 
 

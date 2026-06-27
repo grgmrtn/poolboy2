@@ -285,7 +285,14 @@ def get_all_fixtures():
     within each group to assign position: games 1-2 = MD1, 3-4 = MD2, 5-6 = MD3).
     Knockout fixtures follow in tournament order.
     """
-    sync_fixtures()
+    # Wrap the sync so an upstream/API/DB failure can't take down every
+    # page that touches fixtures. If sync fails we serve whatever's
+    # already in the DB -- stale beats 500. Logged loudly so it shows
+    # up in `railway logs`.
+    try:
+        sync_fixtures()
+    except Exception as e:
+        print(f"[fixtures] sync_fixtures FAILED -- serving stale DB data: {e!r}")
     rows = get_fixtures()
 
     group_buckets = {}  # "Group A" → [fixtures sorted by kick_off]

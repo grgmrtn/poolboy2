@@ -91,6 +91,44 @@
     {% endif %}
   {% endwith %}
 
+  <!-- ── Spy activity ticker ─────────────────────────────────────────── -->
+  <div class="admin-section">
+    <h2>Spy activity — last 14 days</h2>
+    <div class="card" style="max-width:760px;padding:0">
+      <table class="spy-ticker" style="width:100%;border-collapse:collapse;font-size:0.78rem">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04);text-align:left">
+            <th style="padding:0.6rem 0.85rem;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;font-size:0.66rem;text-transform:uppercase">Day</th>
+            <th style="padding:0.6rem 0.85rem;text-align:right;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;font-size:0.66rem;text-transform:uppercase">Target spies</th>
+            <th style="padding:0.6rem 0.85rem;text-align:right;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;font-size:0.66rem;text-transform:uppercase">Field spies</th>
+            <th style="padding:0.6rem 0.85rem;text-align:right;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;font-size:0.66rem;text-transform:uppercase">Total spies</th>
+            <th style="padding:0.6rem 0.85rem;text-align:right;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;font-size:0.66rem;text-transform:uppercase">Total spend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(spies_sum=0, spend_sum=0.0) %}
+          {% for row in spy_daily %}
+            {% set ns.spies_sum = ns.spies_sum + row.total_spies %}
+            {% set ns.spend_sum = ns.spend_sum + row.total_spend %}
+            <tr style="border-top:1px solid var(--border){% if row.total_spies == 0 %};color:var(--text-dim){% endif %}">
+              <td style="padding:0.45rem 0.85rem;font-variant-numeric:tabular-nums">{{ row.day }}</td>
+              <td style="padding:0.45rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums">{{ row.target_spies }}<span style="color:var(--text-dim)"> · ${{ '%.0f'|format(row.target_spend) }}</span></td>
+              <td style="padding:0.45rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums">{{ row.field_spies }}<span style="color:var(--text-dim)"> · ${{ '%.0f'|format(row.field_spend) }}</span></td>
+              <td style="padding:0.45rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">{{ row.total_spies }}</td>
+              <td style="padding:0.45rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)">${{ '%.0f'|format(row.total_spend) }}</td>
+            </tr>
+          {% endfor %}
+          <tr style="border-top:2px solid var(--border);background:rgba(255,255,255,0.02)">
+            <td style="padding:0.55rem 0.85rem;font-weight:700;text-transform:uppercase;font-size:0.66rem;letter-spacing:0.04em;color:var(--text-muted)">14-day total</td>
+            <td colspan="2"></td>
+            <td style="padding:0.55rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums;font-weight:800">{{ ns.spies_sum }}</td>
+            <td style="padding:0.55rem 0.85rem;text-align:right;font-variant-numeric:tabular-nums;font-weight:800;color:var(--accent)">${{ '%.0f'|format(ns.spend_sum) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ── User management ────────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>User management</h2>
