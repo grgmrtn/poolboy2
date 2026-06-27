@@ -2422,7 +2422,7 @@
     <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
   {% endif %}
   {% if show_bracket %}
-    <a class="stage-tab" href="#bracket-section" data-stage="bracket">BRACKET</a>
+    <a class="stage-tab" href="#bracket-section" data-stage="bracket">BRK</a>
   {% endif %}
   {# Odds format picker removed — site uses decimal multipliers everywhere. #}
   {# Per-stage "Hide picks" toggle lives in each stage's heading below,
@@ -2825,8 +2825,98 @@
     <!-- ── Fixtures ──────────────────────────────────────────────── -->
     <div>
       {% if grouped_fixtures %}
+        {# Bracket gets injected mid-loop, right after Completed and before
+           the first non-Completed stage. Renders auto-collapsed. The
+           namespace flag prevents double-render across loop iterations. #}
+        {% set br_ns = namespace(rendered=False) %}
         {% for stage, fixtures in grouped_fixtures.items() %}
           {% set is_ko_stage = not stage.startswith('Group ') and stage not in ('Matchday 1','Matchday 2','Matchday 3') %}
+
+          {% if show_bracket and not br_ns.rendered and stage != 'Completed' %}
+            {# Bracket -- auto-collapsed (per user request), slotted here so
+               it sits between Completed and the next round (typically MD3
+               or R32). Cells are read-only anchors back to the betting row. #}
+            <div class="bracket-section" id="bracket-section">
+              <div class="stage-heading bracket-heading collapsed"
+                   onclick="toggleStageHeading(this)">
+                <span class="caret">▼</span>
+                <span>Bracket</span>
+                <span class="stage-heading-right">
+                  <span class="stage-meta">read-only · tap any match to bet</span>
+                </span>
+              </div>
+              <div class="stage-section">
+                <div class="bracket-scroll">
+                  <div class="bracket-grid" id="bracket-grid">
+                    <svg class="bracket-connectors" aria-hidden="true"></svg>
+                    {% for col in bracket_columns %}
+                      <div class="bracket-col bracket-col-{{ col.key }}">
+                        <div class="bracket-col-head">{{ SHORT.get(col.stage, col.stage) }}</div>
+                        {% for c in col.cells %}
+                          {% set ko = c.kick_off_display or c.kick_off or '' %}
+                          {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
+                          {% set when_t   = ko[11:16] if ko else '' %}
+                          <a class="bracket-cell"
+                             href="#fixture-{{ c.id }}"
+                             onclick="jumpToFixture(event, '{{ c.id }}')"
+                             title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
+                            <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
+                            {% set is_h_pick = c.my_pick == 'H' %}
+                            {% set is_a_pick = c.my_pick == 'A' %}
+                            {% set h_won = c.result == 'H' %}
+                            {% set a_won = c.result == 'A' %}
+                            <div class="bracket-cell-card">
+                              <div class="bracket-pill{% if is_h_pick %} is-pick{% endif %}{% if h_won %} is-won{% endif %}">
+                                <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                                <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                                <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
+                                <span class="bracket-bet">{% if is_h_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                              </div>
+                              <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
+                                <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                                <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                                <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
+                                <span class="bracket-bet">{% if is_a_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                              </div>
+                            </div>
+                          </a>
+                        {% endfor %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                  {% if bracket_third %}
+                    {% set c = bracket_third %}
+                    {% set ko = c.kick_off_display or c.kick_off or '' %}
+                    {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
+                    {% set when_t   = ko[11:16] if ko else '' %}
+                    <div class="bracket-third">
+                      <div class="bracket-col-head bracket-third-label">3rd Place</div>
+                      <a class="bracket-cell" href="#fixture-{{ c.id }}"
+                         onclick="jumpToFixture(event, '{{ c.id }}')"
+                         title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
+                        <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
+                        <div class="bracket-cell-card">
+                          <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
+                            <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                            <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                            <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
+                            <span class="bracket-bet">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                          </div>
+                          <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
+                            <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                            <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                            <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
+                            <span class="bracket-bet">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                          </div>
+                        </div>
+                      </a>
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% set br_ns.rendered = True %}
+          {% endif %}
 
           {% set is_completed_stage = stage == 'Completed' or stage in fully_complete_stages %}
           {% set is_future_stage = stage in future_collapsed_stages %}
@@ -3477,91 +3567,58 @@
         <div style="color:var(--text-dim);font-size:0.82rem">No fixtures loaded yet.</div>
       {% endif %}
 
-      <!-- ── Bracket view ─────────────────────────────────────────
-           Read-only render of the KO bracket. Each cell anchors to its
-           fixture row in the table view so taps still take the user to
-           the bet pill. SVG connectors are drawn client-side from cell
-           positions; recompute on resize. -->
-      {% if show_bracket %}
-      <div class="bracket-section" id="bracket-section">
-        <div class="stage-heading bracket-heading"
-             onclick="toggleStageHeading(this)">
-          <span class="caret">▼</span>
-          <span>Bracket</span>
-          <span class="stage-heading-right">
-            <span class="stage-meta">read-only · tap any match to bet</span>
-          </span>
-        </div>
-        <div class="stage-section">
-          <div class="bracket-scroll">
-            <div class="bracket-grid" id="bracket-grid">
-              <svg class="bracket-connectors" aria-hidden="true"></svg>
-              {% for col in bracket_columns %}
-                <div class="bracket-col bracket-col-{{ col.key }}">
-                  <div class="bracket-col-head">{{ SHORT.get(col.stage, col.stage) }}</div>
-                  {% for c in col.cells %}
-                    {% set ko = c.kick_off_display or c.kick_off or '' %}
-                    {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
-                    {% set when_t   = ko[11:16] if ko else '' %}
-                    <a class="bracket-cell"
-                       href="#fixture-{{ c.id }}"
-                       onclick="jumpToFixture(event, '{{ c.id }}')"
-                       title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
-                      <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
-                      {% set is_h_pick = c.my_pick == 'H' %}
-                      {% set is_a_pick = c.my_pick == 'A' %}
-                      {% set h_won = c.result == 'H' %}
-                      {% set a_won = c.result == 'A' %}
-                      <div class="bracket-cell-card">
-                        <div class="bracket-pill{% if is_h_pick %} is-pick{% endif %}{% if h_won %} is-won{% endif %}">
-                          <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                          <span class="bracket-abbr">{{ c.home_abbr }}</span>
-                          <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
-                          <span class="bracket-bet">{% if is_h_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+      {# Bracket section was moved up into the stage loop, between
+         Completed and the next round, per user request. Fallback below
+         covers the edge case where Completed is the only stage (so the
+         loop never hits the non-Completed branch that triggers the
+         in-loop render). #}
+      {% if show_bracket and grouped_fixtures|length <= 1 %}
+        <div class="bracket-section" id="bracket-section">
+          <div class="stage-heading bracket-heading collapsed"
+               onclick="toggleStageHeading(this)">
+            <span class="caret">▼</span>
+            <span>Bracket</span>
+            <span class="stage-heading-right">
+              <span class="stage-meta">read-only · tap any match to bet</span>
+            </span>
+          </div>
+          <div class="stage-section" style="display:none">
+            <div class="bracket-scroll">
+              <div class="bracket-grid" id="bracket-grid">
+                <svg class="bracket-connectors" aria-hidden="true"></svg>
+                {% for col in bracket_columns %}
+                  <div class="bracket-col bracket-col-{{ col.key }}">
+                    <div class="bracket-col-head">{{ SHORT.get(col.stage, col.stage) }}</div>
+                    {% for c in col.cells %}
+                      {% set ko = c.kick_off_display or c.kick_off or '' %}
+                      {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
+                      {% set when_t   = ko[11:16] if ko else '' %}
+                      <a class="bracket-cell" href="#fixture-{{ c.id }}"
+                         onclick="jumpToFixture(event, '{{ c.id }}')"
+                         title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
+                        <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
+                        <div class="bracket-cell-card">
+                          <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
+                            <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
+                            <span class="bracket-abbr">{{ c.home_abbr }}</span>
+                            <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
+                            <span class="bracket-bet">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                          </div>
+                          <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
+                            <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
+                            <span class="bracket-abbr">{{ c.away_abbr }}</span>
+                            <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
+                            <span class="bracket-bet">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                          </div>
                         </div>
-                        <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
-                          <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                          <span class="bracket-abbr">{{ c.away_abbr }}</span>
-                          <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
-                          <span class="bracket-bet">{% if is_a_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
-                        </div>
-                      </div>
-                    </a>
-                  {% endfor %}
-                </div>
-              {% endfor %}
-            </div>
-            {% if bracket_third %}
-              {% set c = bracket_third %}
-              {% set ko = c.kick_off_display or c.kick_off or '' %}
-              {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
-              {% set when_t   = ko[11:16] if ko else '' %}
-              <div class="bracket-third">
-                <div class="bracket-col-head bracket-third-label">3rd Place</div>
-                <a class="bracket-cell" href="#fixture-{{ c.id }}"
-                   onclick="jumpToFixture(event, '{{ c.id }}')"
-                   title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
-                  <div class="bracket-when">{{ when_day }} · {{ when_t }}</div>
-                  <div class="bracket-cell-card">
-                    <div class="bracket-pill{% if c.my_pick == 'H' %} is-pick{% endif %}{% if c.result == 'H' %} is-won{% endif %}">
-                      <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                      <span class="bracket-abbr">{{ c.home_abbr }}</span>
-                      <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
-                      <span class="bracket-bet">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
-                    </div>
-                    <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
-                      <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                      <span class="bracket-abbr">{{ c.away_abbr }}</span>
-                      <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
-                      <span class="bracket-bet">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
-                    </div>
+                      </a>
+                    {% endfor %}
                   </div>
-                </a>
+                {% endfor %}
               </div>
-            {% endif %}
+            </div>
           </div>
         </div>
-      </div>
       {% endif %}
 
       <!-- ── Group standings ─────────────────────────────────────── -->

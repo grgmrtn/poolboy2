@@ -271,7 +271,8 @@
           <span class="wr-recap-team is-home{% if win == 'H' %} is-winner{% endif %}">
             {{ f.home_team }}
           </span>
-          <span class="wr-recap-score">{{ f.home_score|default('-', true) }}–{{ f.away_score|default('-', true) }}</span>
+          {# Render 0 as 0, not as dash. Only fall back to '-' when truly missing (None). #}
+          <span class="wr-recap-score">{{ '-' if f.home_score is none else f.home_score }}–{{ '-' if f.away_score is none else f.away_score }}</span>
           <span class="wr-recap-team{% if win == 'A' %} is-winner{% endif %}">
             {{ f.away_team }}
           </span>
