@@ -10,18 +10,21 @@
      iPad/desktop value shrinks slightly because the stage-nav is denser
      there. */
   .stage-section,
-  .stage-heading {
+  .stage-heading,
+  .fixture-row {
     scroll-margin-top: calc(56px + 46px + env(safe-area-inset-top, 0));
   }
   @media (min-width: 768px) {
     .stage-section,
-    .stage-heading {
+    .stage-heading,
+    .fixture-row {
       scroll-margin-top: calc(56px + 40px + env(safe-area-inset-top, 0));
     }
   }
   @media (max-width: 400px) {
     .stage-section,
-    .stage-heading {
+    .stage-heading,
+    .fixture-row {
       scroll-margin-top: calc(56px + 50px + env(safe-area-inset-top, 0));
     }
   }
@@ -1225,7 +1228,12 @@
   }
 
   /* ── Fixture content col ─────────────────────────────────────────── */
-  .fixture-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+  .fixture-col {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.45rem;
+    /* position:relative so the absolutely-positioned .saved-flash anchors
+       here even when the optional .match-row is skipped (upcoming KO). */
+    position: relative;
+  }
 
   /* Match row holds the (bigger) match pill on its own line. */
   .match-row {
@@ -1629,13 +1637,15 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    /* Sits below the picker now (was above) — push it up a hair and away
-       from the next fixture. */
-    margin: 0.25rem 0 0.5rem;
+    margin: 0.5rem 0;
     font-family: var(--mono);
     font-size: 0.7rem;
     color: var(--text-muted);
-    padding: 0.25rem 0;
+    /* Sits directly below the bet-row formula; a hairline divider on top
+       separates the formula from the spy bar so they read as paired but
+       distinct. */
+    border-top: 1px solid var(--border);
+    padding: 0.55rem 0 0.45rem;
   }
   .ko-spy-side {
     display: inline-flex; align-items: center; gap: 0.35rem;
@@ -2504,6 +2514,7 @@
             <a class="ps-placed-row is-pick-{{ b.pick }}"
                href="#fixture-{{ b.fixture_id }}"
                role="row"
+               onclick="jumpToFixture(event, '{{ b.fixture_id }}')"
                title="Jump to {{ b.home_abbr }} vs {{ b.away_abbr }}">
               <span role="cell" class="psp-when">
                 <span class="psp-when-day">{{ when_day }}/{{ when_mo }}</span>
@@ -2924,11 +2935,14 @@
                   {% set _container_has_reveal = field_revealed and has_any_visible_other.val %}
                   {% set _render_match_container = _container_has_pill or _container_has_reveal %}
 
-                  <!-- Match pill (top) + reveal grid (bottom) unified into one card -->
+                  <!-- Match pill (top) + reveal grid (bottom) unified into
+                       one card. Gated on _render_match_container — for
+                       upcoming KO without any spy data there's nothing to
+                       show, so we skip the wrapper entirely. -->
+                  {%- if _render_match_container -%}
                   <div class="match-row">
-                    {% if _render_match_container %}
                     <div class="match-container">
-                    {% endif %}
+                  {%- endif -%}
                     {% set home_abbr = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
                     {% set away_abbr = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
 
@@ -3067,13 +3081,13 @@
                     <div class="reveal-col reveal-away">{{ side_render('A') }}</div>
                   </div>
                   {% endif %}
-                    {% if _render_match_container %}
+                  {%- if _render_match_container -%}
                     </div><!-- /.match-container -->
-                    {% endif %}
-                    {% if not is_completed %}
-                      <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
-                    {% endif %}
                   </div><!-- /.match-row -->
+                  {%- endif -%}
+                  {% if not is_completed %}
+                    <span class="saved-flash" id="status-{{ f.id }}">Saved ✓</span>
+                  {% endif %}
 
                   <!-- Action area (everything else lives below the match pill) -->
                   <div class="fixture-actions">
@@ -4694,6 +4708,35 @@
   function toggleStageHeading(el) {
     el.classList.toggle('collapsed');
   }
+
+  // Placed-bets row click handler: future rounds collapse by default, so
+  // a raw anchor jump can land on a hidden .fixture-row. Expand the
+  // parent .stage-heading (if any) first, then smooth-scroll with the
+  // navbar+stage-nav offset so the fixture lands flush under the bars.
+  window.jumpToFixture = function (e, fixtureId) {
+    e && e.preventDefault();
+    const target = document.getElementById('fixture-' + fixtureId);
+    if (!target) return;
+    // Walk up to the .stage-section, find the previous .stage-heading,
+    // and uncollapse if needed.
+    const section = target.closest('.stage-section');
+    if (section) {
+      const heading = section.previousElementSibling;
+      if (heading && heading.classList.contains('stage-heading')) {
+        heading.classList.remove('collapsed');
+      }
+    }
+    // Wait one frame so the unfolded section is laid out before measuring.
+    requestAnimationFrame(() => {
+      const mainNav  = document.querySelector('.navbar');
+      const stageNav = document.querySelector('.stage-nav');
+      const navH   = mainNav  ? mainNav.getBoundingClientRect().height  : 56;
+      const stageH = stageNav ? stageNav.getBoundingClientRect().height : 44;
+      const top = target.getBoundingClientRect().top + window.scrollY
+                  - navH - stageH - 12;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  };
   // Restore each stage's hide-picks state on load.
   document.addEventListener('DOMContentLoaded', () => {
     const state = _loadHidePicksState();
