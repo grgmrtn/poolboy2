@@ -2671,7 +2671,7 @@
             {% set ko = b.kick_off_display or b.kick_off or '' %}
             {% set when_day = ko[8:10] if ko else '' %}
             {% set when_mo  = ko[5:7]  if ko else '' %}
-            {% set when_t   = ko[11:16] if ko else '' %}
+            {% set when_t   = (ko[11:16] | friendly_time) if ko else '' %}
             <a class="ps-placed-row is-pick-{{ b.pick }}"
                href="#fixture-{{ b.fixture_id }}"
                role="row"
@@ -2855,7 +2855,7 @@
                         {% for c in col.cells %}
                           {% set ko = c.kick_off_display or c.kick_off or '' %}
                           {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
-                          {% set when_t   = ko[11:16] if ko else '' %}
+                          {% set when_t   = (ko[11:16] | friendly_time) if ko else '' %}
                           <a class="bracket-cell"
                              href="#fixture-{{ c.id }}"
                              onclick="jumpToFixture(event, '{{ c.id }}')"
@@ -2888,7 +2888,7 @@
                     {% set c = bracket_third %}
                     {% set ko = c.kick_off_display or c.kick_off or '' %}
                     {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
-                    {% set when_t   = ko[11:16] if ko else '' %}
+                    {% set when_t   = (ko[11:16] | friendly_time) if ko else '' %}
                     <div class="bracket-third">
                       <div class="bracket-col-head bracket-third-label">3rd Place</div>
                       <a class="bracket-cell" href="#fixture-{{ c.id }}"
@@ -2982,7 +2982,7 @@
                 {% set ko_d   = f.kick_off_display or f.kick_off or '' %}
                 {% set ct_mo  = (ko_d[5:7]|int) if ko_d else 0 %}
                 {% set ct_dy  = (ko_d[8:10]|int) if ko_d else 0 %}
-                {% set ct_time = ko_d[11:16] if ko_d else '—' %}
+                {% set ct_time = (ko_d[11:16] | friendly_time) if ko_d else '—' %}
                 {% set ct_home = ABBR.get(f.home_team) or (f.home_team or 'HME')[:3].upper() %}
                 {% set ct_away = ABBR.get(f.away_team) or (f.away_team or 'AWY')[:3].upper() %}
                 {% if f.stage and f.stage.startswith('Group ') %}
@@ -3111,7 +3111,7 @@
                 {% set is_started   = f.kick_off and f.kick_off[:19] < now_iso[:19] %}
                 {% set mo  = ko_display[5:7]|int %}
                 {% set dy  = ko_display[8:10]|int %}
-                {% set ko_time = ko_display[11:16] %}
+                {% set ko_time = ko_display[11:16] | friendly_time %}
               {% else %}
                 {% set is_started = false %}
               {% endif %}
@@ -3592,7 +3592,7 @@
                     {% for c in col.cells %}
                       {% set ko = c.kick_off_display or c.kick_off or '' %}
                       {% set when_day = ko[8:10] ~ '/' ~ ko[5:7] if ko else '' %}
-                      {% set when_t   = ko[11:16] if ko else '' %}
+                      {% set when_t   = (ko[11:16] | friendly_time) if ko else '' %}
                       <a class="bracket-cell" href="#fixture-{{ c.id }}"
                          onclick="jumpToFixture(event, '{{ c.id }}')"
                          title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">

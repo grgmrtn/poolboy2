@@ -98,6 +98,45 @@ def _attach_display_times(fixtures):
     return fixtures
 
 
+def _friendly_time(s):
+    """
+    Convert '17:30' (or any string containing HH:MM) into a colloquial
+    time string. Every user is in EST so we drop the timezone suffix.
+
+      '17:30' -> '5:30pm'
+      '17:00' -> '5pm'
+      '12:00' -> 'noon'
+      '00:00' -> 'midnight'
+      '00:30' -> '12:30am'
+
+    Accepts both bare 'HH:MM' and a longer ISO-ish string -- in the
+    latter case it looks for the FIRST colon and treats the two chars
+    before it as the hour. Returns the input unchanged if it can't be
+    parsed (so templates degrade gracefully on bad data).
+    """
+    if not s:
+        return s or ""
+    try:
+        # Find first ':' for the HH:MM split. Handles 'HH:MM' AND
+        # 'YYYY-MM-DDTHH:MM[:SS]'.
+        idx = s.find(":")
+        if idx < 2:
+            return s
+        h = int(s[idx - 2:idx])
+        m = int(s[idx + 1:idx + 3])
+    except (ValueError, TypeError):
+        return s
+    if h == 12 and m == 0:
+        return "noon"
+    if h == 0 and m == 0:
+        return "midnight"
+    suffix = "am" if h < 12 else "pm"
+    h12 = h % 12 or 12
+    if m == 0:
+        return f"{h12}{suffix}"
+    return f"{h12}:{m:02d}{suffix}"
+
+
 # ── Auth helpers ───────────────────────────────────────────────────────────
 
 def login_required(f):
@@ -299,6 +338,7 @@ def inject_releases():
 
 
 app.jinja_env.globals['enumerate'] = enumerate
+app.jinja_env.filters['friendly_time'] = _friendly_time
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

@@ -377,8 +377,10 @@
               </div>
             </td>
             <td style="color:var(--text-muted);white-space:nowrap">
-              {{ (f.kick_off_display or f.kick_off or 'TBC')[:16].replace('T',' ') }}
-              {% if f.kick_off_display %}<span style="color:var(--text-dim);font-size:0.66rem">ET</span>{% endif %}
+              {% set _ko = f.kick_off_display or f.kick_off or '' %}
+              {% if _ko %}
+                {{ _ko[:10] }} · {{ _ko[11:16] | friendly_time }}
+              {% else %}TBC{% endif %}
             </td>
             <td>
               {% if f.result %}

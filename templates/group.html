@@ -228,7 +228,7 @@
       {% set ko_iso = (f.kick_off or '')[:19] %}
       {% set mo = (ko_d[5:7]|int) if ko_d else 0 %}
       {% set dy = (ko_d[8:10]|int) if ko_d else 0 %}
-      {% set tm = ko_d[11:16] if ko_d else '—' %}
+      {% set tm = (ko_d[11:16] | friendly_time) if ko_d else '—' %}
       {% set is_completed = f.result is not none and f.result != '' %}
       {% set is_started   = f.kick_off and ko_iso < now_iso[:19] %}
       {% set is_ko_stage  = false %}
