@@ -73,9 +73,10 @@
     background: rgba(200,255,87,0.08);
   }
   .sc-stat-icon { font-size: 0.9rem; line-height: 1; }
-  /* Label hidden until the button becomes active. */
-  .sc-stat-btn .sc-stat-label { display: none; }
-  .sc-stat-btn.is-active .sc-stat-label { display: inline; }
+  /* All four buttons show icon + label all the time so the user can
+     read what each one is without first selecting it. Active state is
+     just a lime tint. */
+  .sc-stat-btn .sc-stat-label { display: inline; }
 
   /* ── Leaderboard, completed-table style ───────────────────────────────
      Single-row-per-player CSS grid. Detail-mode adds 5 more columns; the
@@ -172,10 +173,14 @@
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     margin-top: 0.08rem;
   }
-  .lb-balance {
+  /* Data cells only — the column header inherits the lb-head styles
+     so the 'TOTAL' label matches the other headers (small caps grey)
+     instead of being big and lime. */
+  .lb-row:not(.lb-head) .lb-balance {
     color: var(--accent); font-weight: 800; font-size: 0.95rem;
     text-align: right; letter-spacing: -0.01em;
   }
+  .lb-head .lb-balance { text-align: right; }
   /* Detail cells — hidden by default. Each body.show-stat-* class reveals
      exactly one stat column (or pair, for Streak which also shows Correct).
      Only one is active at a time; toggling the same button twice clears. */
@@ -184,14 +189,19 @@
   .lb-head .lb-risk-h, .lb-head .lb-win-h {
     display: none;
   }
+  /* In all detail modes the Total column moves to the FAR RIGHT so it
+     never visually jumps when the user switches between stats. Markup
+     order is fixed (Total is the last child); display:none on the
+     unused stat cells lets the grid auto-flow handle placement. */
+
   /* Streak picker reveals BOTH Correct and Streak (they're a pair). */
   body.show-stat-streak .lb-row {
     grid-template-columns:
       2rem              /* rank */
       minmax(0, 1.4fr)  /* player */
-      4.2rem            /* total */
       3.4rem            /* correct */
-      3.6rem;           /* streak */
+      3.6rem            /* streak */
+      4.2rem;           /* total (always last) */
   }
   body.show-stat-streak .lb-pct,
   body.show-stat-streak .lb-streak,
@@ -202,8 +212,8 @@
     grid-template-columns:
       2rem
       minmax(0, 1.4fr)
-      4.2rem
-      minmax(7rem, 1.2fr); /* riskiest */
+      minmax(7rem, 1.2fr) /* riskiest */
+      4.2rem;             /* total */
   }
   body.show-stat-risk .lb-risk,
   body.show-stat-risk .lb-head .lb-risk-h { display: block; }
@@ -212,8 +222,8 @@
     grid-template-columns:
       2rem
       minmax(0, 1.4fr)
-      4.2rem
-      minmax(7rem, 1.2fr); /* largest win */
+      minmax(7rem, 1.2fr) /* largest win */
+      4.2rem;             /* total */
   }
   body.show-stat-large .lb-win,
   body.show-stat-large .lb-head .lb-win-h { display: block; }
@@ -222,8 +232,8 @@
     grid-template-columns:
       2rem
       minmax(0, 1.4fr)
-      4.2rem
-      minmax(7rem, 1.2fr); /* rarest win */
+      minmax(7rem, 1.2fr) /* rarest win */
+      4.2rem;             /* total */
   }
   body.show-stat-rare .lb-rare,
   body.show-stat-rare .lb-head .lb-rare-h { display: block; }
@@ -496,12 +506,12 @@
         <div class="lb-row lb-head" role="row">
           <span role="columnheader" class="lb-rank">#</span>
           <span role="columnheader">Player</span>
-          <span role="columnheader" class="lb-balance">Total</span>
           <span role="columnheader" class="lb-pct lb-pct-h">Correct</span>
           <span role="columnheader" class="lb-streak lb-streak-h">Streak</span>
           <span role="columnheader" class="lb-rare lb-rare-h">Rarest Win</span>
           <span role="columnheader" class="lb-risk lb-risk-h">Riskiest</span>
           <span role="columnheader" class="lb-win lb-win-h">Largest Win</span>
+          <span role="columnheader" class="lb-balance">Total</span>
         </div>
         {% for row in leaderboard %}
         <div class="lb-row{% if row.email == current_user.email %} is-me{% endif %}" role="row">
@@ -514,7 +524,6 @@
               <span class="lb-name-team">{{ row.display_name }}</span>
             {% endif %}
           </span>
-          <span role="cell" class="lb-balance">${{ row.balance | round(0, 'ceil') | int }}</span>
           <span role="cell" class="lb-pct">
             {% if row.pct is not none %}
               {{ row.correct }}/{{ row.total }}<span class="lb-pct-pct">({{ row.pct|int }}%)</span>
@@ -553,6 +562,7 @@
               <span class="lb-empty">—</span>
             {% endif %}
           </span>
+          <span role="cell" class="lb-balance">${{ row.balance | round(0, 'ceil') | int }}</span>
         </div>
         {% endfor %}
       </div>
