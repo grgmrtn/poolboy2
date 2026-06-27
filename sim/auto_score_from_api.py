@@ -218,6 +218,7 @@ def main():
     live_clears  = []  # FINISHED + has stale live_* rows we should wipe
     skipped_not_in_db = 0
     skipped_no_score  = 0
+    corrections = []   # FINISHED but our existing scores disagree with the API
 
     for m in matches:
         fid    = str(m["id"])
@@ -231,11 +232,24 @@ def main():
 
         if status == "FINISHED":
             if existing.get("result"):
-                # Already settled in our DB — but if a stale live_* row is
-                # still hanging around from an earlier IN_PLAY poll, clear it
-                # so the pill stops rendering the live readout.
+                # Already settled in our DB. Clear any stale live_* snapshot.
                 if existing.get("live_status") is not None:
                     live_clears.append(fid)
+                # Self-heal: if football-data now shows a different score
+                # than what we settled with (e.g. mid-game snapshot got
+                # frozen, or an admin corrected the API record), schedule
+                # a re-score so process_fixture_result can reverse old
+                # payouts and re-apply with the correct line.
+                if home is not None and away is not None and (
+                    existing.get("home_score") != home or existing.get("away_score") != away
+                ):
+                    corrections.append({
+                        "id": fid, "home": home, "away": away,
+                        "old_home": existing.get("home_score"),
+                        "old_away": existing.get("away_score"),
+                        "result": derive_result(home, away),
+                        "label": f'{m["homeTeam"]["name"]} {home}-{away} {m["awayTeam"]["name"]}',
+                    })
                 continue
             if home is None or away is None:
                 skipped_no_score += 1
@@ -258,6 +272,7 @@ def main():
             })
 
     print(f"finalise (FINISHED, not yet scored): {len(finalise)}")
+    print(f"corrections (score now differs):     {len(corrections)}")
     print(f"live updates (IN_PLAY / PAUSED):     {len(live_updates)}")
     print(f"stale live rows to clear:            {len(live_clears)}")
     print(f"not in our fixtures table:           {skipped_not_in_db}")
@@ -265,6 +280,9 @@ def main():
 
     for w in finalise:
         print(f"  FINALISE  {w['label']}   →  result={w['result']}")
+    for w in corrections:
+        print(f"  CORRECT   {w['label']}   (was {w['old_home']}-{w['old_away']}, "
+              f"now {w['home']}-{w['away']}, result={w['result']})")
     for w in live_updates:
         print(f"  LIVE      {w['label']}    [{w['status']}]")
     for fid in live_clears:
@@ -280,6 +298,14 @@ def main():
         db.clear_live_score(w["id"])
         n_picks = db.process_fixture_result(w["id"])
         print(f"  ✓ scored {w['label']}  ({n_picks} picks processed)")
+    for w in corrections:
+        # Overwrite the wrong scores. process_fixture_result is idempotent —
+        # it reverses prior payouts and re-applies based on the new result,
+        # so every affected user's balance reconciles cleanly.
+        db.update_fixture_result(w["id"], w["home"], w["away"])
+        db.clear_live_score(w["id"])
+        n_picks = db.process_fixture_result(w["id"])
+        print(f"  ✓ corrected {w['label']}  ({n_picks} picks re-processed)")
     for w in live_updates:
         db.update_live_score(w["id"], w["home"], w["away"], w["status"], w["updated_at"])
     for fid in live_clears:
