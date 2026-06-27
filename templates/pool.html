@@ -2612,7 +2612,7 @@
     </div>
     <h1 style="font-size:1.3rem;font-weight:700;margin-top:0.4rem">{{ pool.name }}</h1>
     <p style="color:var(--text-dim);font-size:0.62rem;margin-top:0.3rem;letter-spacing:0.06em;text-transform:uppercase">
-      All times EST; picks lock 15 minutes before kickoff
+      Picks lock 15 minutes before kickoff
     </p>
   </div>
 
@@ -4810,22 +4810,10 @@
     if (diff <= 0) {
       el.className = 'meta-odds is-locked';
       el.textContent = 'Odds locked';
-      return;
+    } else {
+      el.className = 'meta-odds is-live';
+      el.textContent = 'Odds moving';
     }
-    if (diff < 60 * 60 * 1000) {
-      el.className = 'meta-odds is-locking';
-      el.textContent = `Odds lock ${Math.max(1, Math.round(diff / 60000))}m`;
-      return;
-    }
-    // Same Xd Xh / Xh Xm pattern as the picks countdown.
-    const totalSec = Math.floor(diff / 1000);
-    const days     = Math.floor(totalSec / 86400);
-    const hours    = Math.floor((totalSec %  86400) / 3600);
-    const minutes  = Math.floor((totalSec %   3600) /   60);
-    el.className = 'meta-odds is-live';
-    el.textContent = days > 0
-      ? `Odds lock ${days}d ${hours}h`
-      : `Odds lock ${hours}h ${minutes}m`;
   }
 
   // ── Countdown timers ───────────────────────────────────────────────────
@@ -4859,10 +4847,9 @@
         revealFixturePicks(fixtureId, poolId);
         return;
       }
-      // Compact two-unit countdown. Always flattens to days+hours when at
-      // least a day remains (no separate weeks unit) for consistency with
-      // the odds-lock counter. Refreshes every 60s far out, every 1s in
-      // the final minute (per-second urgency).
+      // Compact two-unit countdown. Reads as "<time> to pick" so it
+      // pairs naturally with the "Odds moving / Odds locked" line above.
+      // Refreshes every 60s far out, every 1s in the final minute.
       const totalSec  = Math.floor(remaining / 1000);
       const days      = Math.floor(totalSec / 86400);
       const hours     = Math.floor((totalSec %  86400) / 3600);
@@ -4870,13 +4857,13 @@
       const seconds   =  totalSec %     60;
       let label;
       if (days > 0) {
-        label = `Picks lock ${days}d ${hours}h`;
+        label = `${days}d ${hours}h to pick`;
       } else if (hours > 0) {
-        label = `Picks lock ${hours}h ${minutes}m`;
+        label = `${hours}h ${minutes}m to pick`;
       } else if (minutes > 0) {
-        label = `Picks lock ${minutes}m ${seconds}s`;
+        label = `${minutes}m ${seconds}s to pick`;
       } else {
-        label = `Picks lock ${seconds}s`;
+        label = `${seconds}s to pick`;
         el.style.color = 'var(--red)';
       }
       el.textContent = label;
