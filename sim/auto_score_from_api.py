@@ -286,6 +286,22 @@ def main():
                 # differs. Includes pens so a row that picked up a
                 # conflated fullTime score gets fixed once we capture
                 # the proper regulation + pens split.
+                #
+                # Safety guard for unreliable shootout data: when
+                # duration=PENALTY_SHOOTOUT but score.winner is null,
+                # the API itself can't tell who won (e.g. NL-MAR R32:
+                # fullTime said 4-3 NL while ESPN had MAR winning the
+                # shootout 3-2). In that case the existing DB row may
+                # have been manually corrected by an admin -- don't
+                # auto-flip it back to the wrong winner. The fixture is
+                # already settled, so leaving it as-is is the safe
+                # default. Live scores and IN_PLAY snapshots are
+                # unaffected; only the FINISHED correction branch skips.
+                api_winner_known = bool(score_obj.get("winner"))
+                if (duration == "PENALTY_SHOOTOUT"
+                        and not api_winner_known
+                        and existing.get("result")):
+                    continue
                 if home is not None and away is not None and (
                     existing.get("home_score") != home
                     or existing.get("away_score") != away
