@@ -210,6 +210,8 @@ def main():
     conn = db.get_db()
     rows = conn.execute(
         "SELECT id, home_team, away_team, result, "
+        "       home_score, away_score, "
+        "       home_penalties, away_penalties, "
         "       live_home_score, live_away_score, live_status "
         "FROM fixtures"
     ).fetchall()
@@ -280,8 +282,15 @@ def main():
                 # frozen, or an admin corrected the API record), schedule
                 # a re-score so process_fixture_result can reverse old
                 # payouts and re-apply with the correct line.
+                # Trigger a correction only when the score actually
+                # differs. Includes pens so a row that picked up a
+                # conflated fullTime score gets fixed once we capture
+                # the proper regulation + pens split.
                 if home is not None and away is not None and (
-                    existing.get("home_score") != home or existing.get("away_score") != away
+                    existing.get("home_score") != home
+                    or existing.get("away_score") != away
+                    or (h_pens is not None and existing.get("home_penalties") != h_pens)
+                    or (a_pens is not None and existing.get("away_penalties") != a_pens)
                 ):
                     corrections.append({
                         "id": fid, "home": home, "away": away,
