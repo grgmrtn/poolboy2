@@ -3813,9 +3813,13 @@
       </div>
     </div>
 
-    <!-- Section 2: Spy on a specific player — hidden on KO matches
-         (targeted spies are too cheap relative to KO antes; field spy
-         only). #spy-modal-unified[data-is-ko="1"] hides this. -->
+    <!-- Section 2: Spy on a specific player — DEPRECATED for this
+         pool. Field-spy now reveals every name + bet, so targeted-spy
+         is mostly redundant. Endpoint, DB schema, and pricing knobs
+         (spy_base_cost, spy_increment) are preserved so a future pool
+         can re-enable it; the section is just hidden in the modal.
+         Set targeted_spy_enabled=True in the route to bring it back. -->
+    {% if targeted_spy_enabled %}
     <div class="spy-modal-section" data-section="player">
       <h4>🕵️ Spy on a Player</h4>
       <div class="modal-body" style="margin-bottom:0.5rem">
@@ -3824,6 +3828,7 @@
       </div>
       <div id="spy-someone-list"></div>
     </div>
+    {% endif %}
 
   </div>
 </div>

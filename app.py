@@ -861,7 +861,7 @@ def pool_page(pool_id):
                 _top_other_by_fix[fid] = amt
     field_spy_cost_by_fixture = {}
     _base   = 5.0  # KO base; group stage still uses the config value below
-    _g_base = float(scoring_config.get("aggregate_spy_cost", 2.0))
+    _g_base = float(scoring_config.get("aggregate_spy_cost", 5.0))
     for fix in fixture_lookup.values():
         if db.is_knockout_stage(fix.get("stage") or ""):
             pot = pots.get(fix["id"], 0.0)
@@ -1111,6 +1111,10 @@ def pool_page(pool_id):
         pick_accuracy=pick_accuracy,
         wrapped_ready=db.is_group_stage_complete(pool_id),
         wrapped_seen=db.has_seen_wrapped(user["id"], pool_id),
+        # Per-pool targeted-spy toggle. Off for the current pool now
+        # that field-spy reveals everything; flip to True to bring back
+        # the "Spy on a Player" modal section.
+        targeted_spy_enabled=False,
     )
 
 
@@ -1816,7 +1820,7 @@ def field_spy(pool_id, fixture_id):
     locked_or_done = _is_locked(fixture["kick_off"]) or fixture["result"]
     already_bought = db.has_bought_aggregate_spy(user["id"], pool_id, fixture_id)
     config = db.get_active_scoring_config()
-    base_cost = float(config.get("aggregate_spy_cost", 2.0))
+    base_cost = float(config.get("aggregate_spy_cost", 5.0))
 
     # Dynamic field-spy pricing on knockouts:
     #   max( base_cost, min( ko_spy_pct * pot, ko_spy_cap ) )
@@ -1824,8 +1828,8 @@ def field_spy(pool_id, fixture_id):
     pricing_explain = None
     if knockout:
         pot = db.get_fixture_pot(pool_id, fixture_id)
-        pct = float(config.get("ko_spy_pct", 0.10))
-        cap = float(config.get("ko_spy_cap", 20.0))
+        pct = float(config.get("ko_spy_pct", 0.20))
+        cap = float(config.get("ko_spy_cap", 200.0))
         dynamic = min(pct * pot, cap)
         cost = round(max(base_cost, dynamic), 2)
         pricing_explain = {

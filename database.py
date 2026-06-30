@@ -956,9 +956,13 @@ _CONFIG_DEFAULTS = {
     "spy_base_cost":                   1.0,
     "spy_increment":                   1.0,
     "knockout_flat_payout_multiplier": 2.0,
-    "aggregate_spy_cost":              2.0,
-    "ko_spy_pct":                      0.10,
-    "ko_spy_cap":                      20.0,
+    # Field-spy pricing. Reveals every pick + bet across the pool for
+    # a fixture (was H/D/A counts only -- info value is much higher
+    # now, so the percentage and cap moved up). Floor stays at $5 so
+    # the smallest matches still cost something.
+    "aggregate_spy_cost":              5.0,
+    "ko_spy_pct":                      0.20,
+    "ko_spy_cap":                      200.0,
 }
 
 
