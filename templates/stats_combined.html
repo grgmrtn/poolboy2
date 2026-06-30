@@ -469,6 +469,97 @@
     color: var(--accent); white-space: nowrap;
   }
 
+  /* ── The Chase ─────────────────────────────────────────────────────
+     SVG-rendered curved S-path with players spaced proportionally to
+     the dollar gap between them. Dots ride on the path; labels float
+     beside each dot via absolute positioning over the wrap. */
+  .chase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.4rem 1.25rem 1.2rem;
+    margin-top: 1rem;
+  }
+  .chase-header { margin-bottom: 1rem; }
+  .chase-wrap {
+    position: relative;
+    width: 100%;
+  }
+  .chase-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .chase-svg .chase-path {
+    fill: none;
+    stroke: rgba(160, 160, 192, 0.32);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 2 6;
+  }
+  .chase-svg .chase-dot {
+    fill: var(--text-muted);
+    stroke: rgba(10, 10, 15, 0.9);
+    stroke-width: 2;
+  }
+  .chase-svg .chase-dot.is-me {
+    fill: var(--accent);
+    r: 8;
+    stroke-width: 3;
+  }
+  .chase-svg .chase-dot.is-ghost {
+    fill: rgba(255, 87, 119, 0.4);
+    stroke-dasharray: 2 2;
+  }
+  .chase-labels {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    /* Labels are absolute children; pointer-events:auto re-enabled
+       on each label so hover works without blocking SVG taps. */
+  }
+  .chase-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+    display: flex; flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.15;
+    font-size: 0.72rem;
+    color: var(--text);
+    background: rgba(20, 20, 28, 0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.32rem 0.55rem;
+    white-space: nowrap;
+    max-width: 11rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
+  .chase-label.is-me {
+    border-color: var(--accent);
+    background: rgba(200,255,87,0.08);
+  }
+  .chase-label.is-ghost { opacity: 0.55; }
+  .chase-label-name {
+    font-weight: 800;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .chase-label-row {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted); font-size: 0.66rem;
+  }
+  .chase-label-arrow { font-size: 0.7rem; line-height: 1; }
+  .chase-label-arrow.is-up   { color: var(--accent); }
+  .chase-label-arrow.is-down { color: #ff5577; }
+  .chase-label-arrow.is-flat { color: var(--text-dim); }
+  /* Thin connector line from label to its dot for clarity */
+  .chase-svg .chase-leader {
+    stroke: rgba(160, 160, 192, 0.3);
+    stroke-width: 1;
+    fill: none;
+  }
+
   .empty-state {
     padding: 3rem 1.5rem; text-align: center;
     color: var(--text-dim); font-size: 0.82rem;
@@ -491,6 +582,8 @@
             onclick="scrollSc(this)">Leader</button>
     <button type="button" class="sc-tab" data-target="chart-section"
             onclick="scrollSc(this)">Chart</button>
+    <button type="button" class="sc-tab" data-target="chase-section"
+            onclick="scrollSc(this)">Chase</button>
   </div>
 
   {# Macro for the 2-line matchup cell used by Rarest / Riskiest / Largest
@@ -714,6 +807,29 @@
   {% endif %}
   </div><!-- /#chart-section -->
 
+  <!-- ── The Chase: bike-race style S-curve with players proportionally
+       spaced by dollar gap. Path winds top-to-bottom; each dot has a
+       callout label with first name, balance, and an up/down arrow
+       showing whether the last match moved them up or down. -->
+  <div id="chase-section">
+  {% if timeline.players|length < 2 %}
+    <div class="empty-state">
+      The Chase appears once at least two players have placed picks.
+    </div>
+  {% else %}
+    <div class="chase-card">
+      <div class="chase-header">
+        <div class="chart-title">The Chase — proportional gap from the leader</div>
+      </div>
+      <div class="chase-wrap" id="chase-wrap">
+        <svg class="chase-svg" id="chase-svg" aria-hidden="true"
+             preserveAspectRatio="xMidYMin meet"></svg>
+        <div class="chase-labels" id="chase-labels"></div>
+      </div>
+    </div>
+  {% endif %}
+  </div><!-- /#chase-section -->
+
 </div>
 
 <script>
@@ -776,7 +892,7 @@
   }
   // Scroll-spy — highlight active tab as user scrolls between sections
   document.addEventListener('DOMContentLoaded', () => {
-    const sections = ['lb-section', 'chart-section']
+    const sections = ['lb-section', 'chart-section', 'chase-section']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     if (!sections.length) return;
@@ -1216,6 +1332,177 @@
   document.getElementById("legend-hide-all").addEventListener("click", () => {
     datasets.forEach((_, i) => setVisible(i, false));
     rebuildLegend();
+  });
+})();
+</script>
+
+<script>
+// ── The Chase ─────────────────────────────────────────────────────────
+// Players plotted along a serpentine S-curve, with distance between dots
+// proportional to dollar gap from the leader. Tight clusters = peloton
+// of similar-balance players; long stretches = breakaways and ghosts.
+(function () {
+  const wrap   = document.getElementById('chase-wrap');
+  const svgEl  = document.getElementById('chase-svg');
+  const lblBox = document.getElementById('chase-labels');
+  if (!wrap || !svgEl || !lblBox) return;
+
+  const MY_UID  = {{ my_user_id      | tojson }};
+  const players = {{ timeline.players | tojson }};
+  if (!players || players.length < 2) return;
+
+  // Sort by current balance, descending. Final score IS the current
+  // total worth (free balance + open bets) -- matches the leaderboard.
+  const sorted = players
+    .map(p => ({
+      uid:     p.user_id,
+      name:    (p.display_name || '').split(' ')[0] || p.display_name || '?',
+      team:    p.team_name || null,
+      bal:     Number(p.final_score) || 0,
+      // Last-match delta: walk back through details to find the most
+      // recent non-null entry. details[0] is "Start" (null); the rest
+      // are per-match. Some entries may have delta = 0.
+      lastDelta: (function () {
+        const d = p.details || [];
+        for (let i = d.length - 1; i >= 0; i--) {
+          if (d[i] && typeof d[i].delta === 'number') return d[i].delta;
+        }
+        return 0;
+      })(),
+      isGhost: (Number(p.final_score) || 0) < 1,
+    }))
+    .sort((a, b) => b.bal - a.bal);
+
+  const leaderBal = sorted[0].bal;
+  const lastBal   = sorted[sorted.length - 1].bal;
+  // Total range. Guard against everyone tied at the same balance.
+  const range = Math.max(1, leaderBal - lastBal);
+  sorted.forEach(p => { p.t = (leaderBal - p.bal) / range; });   // 0..1 along path
+
+  function render() {
+    // Determine viewport-aware dimensions. Wider screens get a longer
+    // path; narrow phones get a more compact one.
+    const W = Math.max(320, wrap.clientWidth);
+    // Per-player vertical budget tapers with player count -- 23 players
+    // x 80px = 1840px which is too long. Cap at 110 / floor at 50.
+    const perPlayer = Math.max(50, Math.min(110, 1800 / sorted.length));
+    const H = Math.max(560, Math.round(sorted.length * perPlayer));
+
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svgEl.setAttribute('width',  W);
+    svgEl.setAttribute('height', H);
+    wrap.style.height = H + 'px';
+
+    // S-curve path. Three vertical waves so a tall pool still snakes
+    // gracefully. Top-left start, bottom-right end (or vice versa).
+    const m   = 80;             // side margin
+    const top = 40;
+    const bot = H - 40;
+    // Vertical span split into 3 wave anchors.
+    const yA = top;
+    const yB = top + (bot - top) * 0.34;
+    const yC = top + (bot - top) * 0.67;
+    const yD = bot;
+    const xL = m;
+    const xR = W - m;
+    // Bezier control points pulled out for an exaggerated wave.
+    // M start, C cp1 cp2 end (wave 1 to mid)
+    // S cp2 end                  (wave 2)
+    // S cp2 end                  (wave 3)
+    const d = [
+      `M ${xL} ${yA}`,
+      `C ${xR} ${(yA + yB) / 2}, ${xL} ${(yB + yA) / 2 + 80}, ${xR} ${yB}`,
+      `S ${xL} ${yC}, ${xL} ${yC}`,    // mirror smooth
+      `C ${xR} ${yC + 40}, ${xL} ${yD - 40}, ${xR} ${yD}`,
+    ].join(' ');
+
+    // Clear previous render
+    svgEl.innerHTML = '';
+    lblBox.innerHTML = '';
+
+    // Path element
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('d', d);
+    pathEl.setAttribute('class', 'chase-path');
+    svgEl.appendChild(pathEl);
+
+    const total = pathEl.getTotalLength();
+
+    // Place each player
+    sorted.forEach((p, i) => {
+      const dist = total * p.t;
+      const pt   = pathEl.getPointAtLength(dist);
+      // Tangent + normal for label offset
+      const eps  = Math.min(5, total / 200);
+      const t1   = pathEl.getPointAtLength(Math.max(0, dist - eps));
+      const t2   = pathEl.getPointAtLength(Math.min(total, dist + eps));
+      const tx   = t2.x - t1.x, ty = t2.y - t1.y;
+      const tl   = Math.sqrt(tx * tx + ty * ty) || 1;
+      // Normal rotated 90° counter-clockwise — gives a consistent side
+      // for the outside of the curve. Flip every other wave so labels
+      // alternate cleanly.
+      let nx = -ty / tl, ny = tx / tl;
+      // Push labels outward 70-90 px depending on width
+      const off = Math.min(110, Math.max(70, W * 0.08));
+
+      // Dot
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', pt.x);
+      c.setAttribute('cy', pt.y);
+      c.setAttribute('r',  p.uid === MY_UID ? 8 : (p.isGhost ? 4 : 5));
+      let cls = 'chase-dot';
+      if (p.uid === MY_UID) cls += ' is-me';
+      else if (p.isGhost)   cls += ' is-ghost';
+      c.setAttribute('class', cls);
+      svgEl.appendChild(c);
+
+      // Connector line from dot to label
+      const lblX = pt.x + nx * off;
+      const lblY = pt.y + ny * off;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', pt.x); line.setAttribute('y1', pt.y);
+      line.setAttribute('x2', lblX); line.setAttribute('y2', lblY);
+      line.setAttribute('class', 'chase-leader');
+      svgEl.appendChild(line);
+
+      // Label as a sibling HTML element absolutely positioned over the wrap.
+      const dollars = Math.floor(Math.max(0, p.bal));
+      const cents   = Math.round((Math.abs(p.bal) - Math.abs(dollars)) * 100);
+      const balHtml = cents === 0
+        ? `$${dollars}`
+        : `$${dollars}<small class="cents-sm">.${String(cents).padStart(2,'0')}</small>`;
+      const arrowCls = p.isGhost ? 'is-flat'
+                     : p.lastDelta > 0 ? 'is-up'
+                     : p.lastDelta < 0 ? 'is-down'
+                     : 'is-flat';
+      const arrow = p.isGhost ? '💀'
+                  : p.lastDelta > 0 ? '▲'
+                  : p.lastDelta < 0 ? '▼'
+                  : '·';
+      const lbl = document.createElement('div');
+      let lblCls = 'chase-label';
+      if (p.uid === MY_UID) lblCls += ' is-me';
+      if (p.isGhost)        lblCls += ' is-ghost';
+      lbl.className = lblCls;
+      lbl.style.left = lblX + 'px';
+      lbl.style.top  = lblY + 'px';
+      lbl.innerHTML = `
+        <div class="chase-label-name">${(p.team || p.name).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+        <div class="chase-label-row">
+          <span>${balHtml}</span>
+          <span class="chase-label-arrow ${arrowCls}">${arrow}</span>
+        </div>
+      `;
+      lblBox.appendChild(lbl);
+    });
+  }
+
+  render();
+  // Debounced resize redraw
+  let _resizeT;
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeT);
+    _resizeT = setTimeout(render, 120);
   });
 })();
 </script>
