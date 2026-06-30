@@ -53,10 +53,20 @@ def get_db():
     Open a database connection.
     Returns a psycopg2-backed _PGConn when DATABASE_URL is set, otherwise sqlite3.
     Both expose the same conn.execute() / .commit() / .close() interface.
+
+    Postgres connections get a per-session idle_in_transaction_session_timeout
+    of 60s. If a Railway container dies mid-write, Postgres usually keeps the
+    holder's locks open until a TCP keepalive eventually fires (minutes). The
+    60s timeout auto-rolls back any abandoned transaction so the next ALTER
+    or balance UPDATE doesn't get stuck behind a dead connection. This was the
+    cause of two outages on 2026-06-27 and 2026-06-29.
     """
     if _USE_POSTGRES:
         import psycopg2
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        with conn.cursor() as c:
+            c.execute("SET idle_in_transaction_session_timeout = '60s'")
+        conn.commit()
         return _PGConn(conn)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -68,11 +78,27 @@ def init_db():
     """
     Create all tables if they don't exist yet.
     Safe to run multiple times — won't wipe existing data.
+
+    Postgres only: serialised across processes via pg_advisory_lock so
+    two simultaneously-deploying containers can't deadlock each other on
+    DDL (each holds one table lock, each waits on the other). One
+    container migrates, the other waits cleanly. Also sets a lock_timeout
+    so a single ALTER fails fast (instead of hanging the boot forever)
+    if some other session is sitting on a row lock.
     """
     if not _USE_POSTGRES:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = get_db()
     c = conn
+
+    if _USE_POSTGRES:
+        # Fail fast on stuck locks (15s) instead of waiting indefinitely.
+        c.execute("SET lock_timeout = '15s'")
+        # Cross-container migration lock. Numeric key is arbitrary but
+        # must match across deploys; advisory locks are auto-released
+        # when the session ends so a crashed migrator leaves no debris.
+        c.execute("SELECT pg_advisory_lock(8675309)")
+        conn.commit()
 
     # Stores everyone who can log in. is_admin=1 unlocks the /admin page.
     c.execute("""
@@ -324,6 +350,9 @@ def init_db():
             # home_odds / away_odds are frozen and the admin form refuses
             # writes (without an override).
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS odds_locked_at TEXT",
+            # Penalty shootout score (KO only). NULL = no shootout.
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_penalties INTEGER",
+            "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_penalties INTEGER",
         ]:
             c.execute(sql)
     else:
@@ -357,6 +386,8 @@ def init_db():
             ("users",          "chat_banned INTEGER DEFAULT 0"),
             ("chat_messages",  "posted_minute INTEGER"),
             ("fixtures",       "odds_locked_at TEXT"),
+            ("fixtures",       "home_penalties INTEGER"),
+            ("fixtures",       "away_penalties INTEGER"),
         ]
         for table, col_def in migrations:
             try:
@@ -365,6 +396,12 @@ def init_db():
                 pass
 
     conn.commit()
+    if _USE_POSTGRES:
+        try:
+            c.execute("SELECT pg_advisory_unlock(8675309)")
+            conn.commit()
+        except Exception:
+            pass  # Lock is also released automatically when the session ends.
     conn.close()
     print(f"[db] Database ready at {DB_PATH}")
 
@@ -820,12 +857,21 @@ def clear_live_score(fixture_id):
     conn.close()
 
 
-def update_fixture_result(fixture_id, home_score, away_score):
+def update_fixture_result(fixture_id, home_score, away_score,
+                          home_penalties=None, away_penalties=None):
     """
     Record the final score for a fixture and derive the result code.
     result codes: "H" = home win, "A" = away win, "D" = draw.
+
+    For KO matches that go to penalties: the regulation/ET score may be
+    a draw (3-3) but the result is set by the shootout. Pass the
+    shootout score as home_penalties/away_penalties; the result code is
+    then derived from the shootout, not the regulation score.
     """
-    if home_score > away_score:
+    if home_penalties is not None and away_penalties is not None:
+        # Penalty shootout decides the result.
+        result = "H" if home_penalties > away_penalties else "A"
+    elif home_score > away_score:
         result = "H"
     elif away_score > home_score:
         result = "A"
@@ -834,8 +880,10 @@ def update_fixture_result(fixture_id, home_score, away_score):
 
     conn = get_db()
     conn.execute(
-        "UPDATE fixtures SET home_score=?, away_score=?, result=? WHERE id=?",
-        (home_score, away_score, result, fixture_id)
+        "UPDATE fixtures SET home_score=?, away_score=?, result=?, "
+        "home_penalties=?, away_penalties=? WHERE id=?",
+        (home_score, away_score, result,
+         home_penalties, away_penalties, fixture_id)
     )
     conn.commit()
     conn.close()

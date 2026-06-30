@@ -164,7 +164,10 @@ def fetch_espn_live(fixtures_by_team_pair):
     return out
 
 
-def derive_result(home, away):
+def derive_result(home, away, h_pens=None, a_pens=None):
+    """Penalty shootout overrides the regulation result if present."""
+    if h_pens is not None and a_pens is not None:
+        return "H" if h_pens > a_pens else "A"
     if home > away:  return "H"
     if away > home:  return "A"
     return "D"
@@ -227,8 +230,36 @@ def main():
             skipped_not_in_db += 1
             continue
         existing = fixtures_by_id[fid]
-        ft = (m.get("score") or {}).get("fullTime") or {}
+        score_obj = m.get("score") or {}
+        ft = score_obj.get("fullTime") or {}
         home, away = ft.get("home"), ft.get("away")
+        # Penalty shootout score (KO only). football-data exposes this as
+        # score.penalties with home/away; duration goes to PENALTY_SHOOTOUT.
+        # Defensive: some snapshots conflate pens into fullTime (a 3-3
+        # game appears as 5-4). When duration says PENALTY_SHOOTOUT but
+        # the .penalties block is absent or zero, treat the score as
+        # already-conflated and bail on penalties data rather than
+        # invent it. The fallback path below tries to recover regulation
+        # scores from the extraTime field.
+        pens = score_obj.get("penalties") or {}
+        h_pens, a_pens = pens.get("home"), pens.get("away")
+        duration = score_obj.get("duration") or ""
+        if duration == "PENALTY_SHOOTOUT" and (h_pens is None or a_pens is None):
+            # API didn't surface clean pens data. Try extraTime as the
+            # regulation+ET score; if that's also missing, leave pens
+            # null and the final fullTime score takes the H/A from
+            # whoever has more.
+            et = score_obj.get("extraTime") or {}
+            if et.get("home") is not None and et.get("away") is not None:
+                home, away = et["home"], et["away"]
+            # Mark winner via penalties so result code is correct even
+            # when we can't recover the shootout score.
+            if home is not None and away is not None and home == away:
+                winner = score_obj.get("winner") or ""
+                if winner == "HOME_TEAM":
+                    h_pens, a_pens = 1, 0  # synthetic: just marks the winner
+                elif winner == "AWAY_TEAM":
+                    h_pens, a_pens = 0, 1
 
         if status == "FINISHED":
             if existing.get("result"):
@@ -245,10 +276,13 @@ def main():
                 ):
                     corrections.append({
                         "id": fid, "home": home, "away": away,
+                        "h_pens": h_pens, "a_pens": a_pens,
                         "old_home": existing.get("home_score"),
                         "old_away": existing.get("away_score"),
-                        "result": derive_result(home, away),
-                        "label": f'{m["homeTeam"]["name"]} {home}-{away} {m["awayTeam"]["name"]}',
+                        "result": derive_result(home, away, h_pens, a_pens),
+                        "label": (f'{m["homeTeam"]["name"]} {home}-{away}'
+                                  + (f' ({h_pens}-{a_pens} pens)' if h_pens is not None else '')
+                                  + f' {m["awayTeam"]["name"]}'),
                     })
                 continue
             if home is None or away is None:
@@ -256,8 +290,11 @@ def main():
                 continue
             finalise.append({
                 "id": fid, "home": home, "away": away,
-                "result": derive_result(home, away),
-                "label": f'{m["homeTeam"]["name"]} {home}-{away} {m["awayTeam"]["name"]}',
+                "h_pens": h_pens, "a_pens": a_pens,
+                "result": derive_result(home, away, h_pens, a_pens),
+                "label": (f'{m["homeTeam"]["name"]} {home}-{away}'
+                          + (f' ({h_pens}-{a_pens} pens)' if h_pens is not None else '')
+                          + f' {m["awayTeam"]["name"]}'),
             })
         elif status in LIVE_STATUSES:
             if home is None or away is None:
@@ -293,7 +330,8 @@ def main():
         return
 
     for w in finalise:
-        db.update_fixture_result(w["id"], w["home"], w["away"])
+        db.update_fixture_result(w["id"], w["home"], w["away"],
+                                  w.get("h_pens"), w.get("a_pens"))
         # Wipe any earlier IN_PLAY snapshot before settling.
         db.clear_live_score(w["id"])
         n_picks = db.process_fixture_result(w["id"])
@@ -302,7 +340,8 @@ def main():
         # Overwrite the wrong scores. process_fixture_result is idempotent —
         # it reverses prior payouts and re-applies based on the new result,
         # so every affected user's balance reconciles cleanly.
-        db.update_fixture_result(w["id"], w["home"], w["away"])
+        db.update_fixture_result(w["id"], w["home"], w["away"],
+                                  w.get("h_pens"), w.get("a_pens"))
         db.clear_live_score(w["id"])
         n_picks = db.process_fixture_result(w["id"])
         print(f"  ✓ corrected {w['label']}  ({n_picks} picks re-processed)")

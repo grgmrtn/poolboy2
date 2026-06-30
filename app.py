@@ -998,7 +998,12 @@ def pool_page(pool_id):
 
     bracket_columns = []
     for stage_name, col_key in _BRACKET_ROUNDS:
-        fixes = grouped_fixtures.get(stage_name, [])
+        # IMPORTANT: read from the *raw* grouped fixtures, not the
+        # post-processed `grouped_fixtures`. The latter pulls completed
+        # games out of their KO stage and into a synthetic "Completed"
+        # bucket, which made finished bracket cells silently disappear
+        # and the surrounding cells shift up to fill the gap.
+        fixes = grouped_fixtures_raw.get(stage_name, [])
         cells = []
         for f in sorted(fixes, key=_bracket_sort_key):
             home_abbr = TEAM_ABBR.get(f.get("home_team") or "") or (f.get("home_team") or "TBD")[:3].upper()
@@ -1016,6 +1021,8 @@ def pool_page(pool_id):
                 "away_odds":  f.get("away_odds"),
                 "home_score": f.get("home_score"),
                 "away_score": f.get("away_score"),
+                "home_pens":  f.get("home_penalties"),
+                "away_pens":  f.get("away_penalties"),
                 "result":     f.get("result"),
                 "kick_off":   f.get("kick_off"),
                 "kick_off_display": f.get("kick_off_display"),
@@ -1025,7 +1032,7 @@ def pool_page(pool_id):
         bracket_columns.append({"stage": stage_name, "key": col_key, "cells": cells})
     # 3rd-place hangs off the bracket separately (not connected by lines).
     bracket_third = None
-    third_list = grouped_fixtures.get("Third Place", [])
+    third_list = grouped_fixtures_raw.get("Third Place", [])
     if third_list:
         f = third_list[0]
         pick = existing_picks.get(f["id"])
@@ -1041,6 +1048,8 @@ def pool_page(pool_id):
             "away_odds":  f.get("away_odds"),
             "home_score": f.get("home_score"),
             "away_score": f.get("away_score"),
+            "home_pens":  f.get("home_penalties"),
+            "away_pens":  f.get("away_penalties"),
             "result":     f.get("result"),
             "kick_off":   f.get("kick_off"),
             "kick_off_display": f.get("kick_off_display"),
