@@ -507,6 +507,12 @@
     border-color: var(--accent); background: rgba(200,255,87,0.08);
     color: var(--accent);
   }
+  /* Step buttons (one match at a time) sit smaller than the hard-skip
+     buttons so the row reads as "outer hops, inner steps". */
+  .chase-ctrl-btn.chase-ctrl-step {
+    width: 26px; height: 26px;
+    color: var(--text-muted);
+  }
   .chase-scrubber {
     flex: 1; min-width: 10rem;
     accent-color: var(--accent);
@@ -611,9 +617,11 @@
     color: var(--text-muted);
     font-size: 0.58rem;
     font-weight: 800;
-    line-height: 18px;
-    text-align: center;
     font-variant-numeric: tabular-nums;
+    /* Flex with line-height: 1 reliably centres the glyph regardless
+       of font metrics; line-height alone was off-by-a-pixel. */
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
   }
   .chase-label.is-left .chase-label-rank { left: auto; right: -9px; }
   .chase-label.is-me .chase-label-rank {
@@ -1441,6 +1449,12 @@
     details:    p.details || [],
     isGhost:    (Number(p.final_score) || 0) < 1,
   }));
+  // Stable side assignment: alternate players (sorted by final balance
+  // order, which is the original players[] order) between right and left
+  // columns. Sticks for the whole replay so a player's label doesn't
+  // ping-pong between columns when their dot crosses the center line.
+  const sideByUid = {};
+  basePlayers.forEach((p, i) => { sideByUid[p.uid] = (i % 2 === 0) ? 1 : -1; });
 
   // Catmull-Rom to cubic Bezier conversion for a kink-free curve.
   function catmullRomPath(pts) {
@@ -1580,7 +1594,10 @@
     const items = snap.map(x => {
       const dist = total * x.t;
       const pt   = pathEl.getPointAtLength(dist);
-      const side = pt.x >= cx ? 1 : -1;
+      // Stable side per player (assigned once during init) so labels
+      // dont swap columns mid-replay. Connector line crosses the curve
+      // when the dot ends up on the opposite side -- thats acceptable.
+      const side = sideByUid[x.p.uid];
       return {
         uid: x.p.uid, bal: x.bal, lastDelta: x.lastDelta, isGhost: x.p.isGhost,
         name: x.p.name, rank: x.rank,
@@ -1671,7 +1688,10 @@
         if (ref) {
           ref.el.style.left = lx + 'px';
           ref.el.style.top  = ly + 'px';
-          ref.balEl.innerHTML = fmtUsd(bal);
+          // Only the dollar part tweens; cents snap once at the end of
+          // the animation. Counting from 100 -> 268 is what reads as
+          // motion; ticking through 100.04 -> 100.08 just looks noisy.
+          ref.balEl.textContent = '$' + Math.round(bal);
         }
       });
       if (raw < 1) requestAnimationFrame(step);
@@ -1748,6 +1768,8 @@
 
   // Clean shape icons -- rendered as SVG so they sit centred inside
   // the round buttons without dealing with emoji baseline weirdness.
+  // Skip-to-start / end:  bar + triangle.
+  // Step back / forward:  single triangle (smaller wedge).
   const ICON_PREV  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
                    +   `<rect x="2.5" y="3" width="1.7" height="10" fill="currentColor"/>`
                    +   `<polygon points="13.5,3 13.5,13 5,8" fill="currentColor"/>`
@@ -1756,6 +1778,12 @@
                    +   `<polygon points="2.5,3 2.5,13 11,8" fill="currentColor"/>`
                    +   `<rect x="11.8" y="3" width="1.7" height="10" fill="currentColor"/>`
                    + `</svg>`;
+  const ICON_STEP_BACK = `<svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true">`
+                       +   `<polygon points="11,3 11,13 4,8" fill="currentColor"/>`
+                       + `</svg>`;
+  const ICON_STEP_FWD  = `<svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true">`
+                       +   `<polygon points="5,3 5,13 12,8" fill="currentColor"/>`
+                       + `</svg>`;
   const ICON_PLAY  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
                    +   `<polygon points="4,2.5 4,13.5 13,8" fill="currentColor"/>`
                    + `</svg>`;
@@ -1768,7 +1796,9 @@
     if (!ctrlBox) return;
     ctrlBox.innerHTML = `
       <button type="button" class="chase-ctrl-btn" id="chase-skipstart" title="Skip to start">${ICON_PREV}</button>
+      <button type="button" class="chase-ctrl-btn chase-ctrl-step" id="chase-stepback" title="Back one match">${ICON_STEP_BACK}</button>
       <button type="button" class="chase-ctrl-btn" id="chase-playbtn"   title="Play / pause">${ICON_PLAY}</button>
+      <button type="button" class="chase-ctrl-btn chase-ctrl-step" id="chase-stepfwd"  title="Forward one match">${ICON_STEP_FWD}</button>
       <button type="button" class="chase-ctrl-btn" id="chase-skipend"   title="Skip to end">${ICON_NEXT}</button>
       <input type="range" class="chase-scrubber" id="chase-scrubber"
              min="0" max="${fixtures.length - 1}" value="${currentIdx}" step="1"
@@ -1780,6 +1810,12 @@
     });
     document.getElementById('chase-skipend').addEventListener('click', () => {
       pause(); gotoMatch(fixtures.length - 1);
+    });
+    document.getElementById('chase-stepback').addEventListener('click', () => {
+      pause(); gotoMatch(currentIdx - 1);
+    });
+    document.getElementById('chase-stepfwd').addEventListener('click', () => {
+      pause(); gotoMatch(currentIdx + 1);
     });
     document.getElementById('chase-playbtn').addEventListener('click', togglePlay);
     document.getElementById('chase-scrubber').addEventListener('input', (e) => {

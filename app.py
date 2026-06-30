@@ -1084,6 +1084,7 @@ def pool_page(pool_id):
                 "result":     f.get("result"),
                 "kick_off":   f.get("kick_off"),
                 "kick_off_display": f.get("kick_off_display"),
+                "kick_off_dow":     f.get("kick_off_dow"),
                 "my_pick":    my_pick,
                 "my_bet":     my_bet,
                 "my_winnings": my_winnings,
@@ -1112,6 +1113,7 @@ def pool_page(pool_id):
             "result":     f.get("result"),
             "kick_off":   f.get("kick_off"),
             "kick_off_display": f.get("kick_off_display"),
+            "kick_off_dow":     f.get("kick_off_dow"),
             "my_pick":    pick.get("predicted_result") if pick else None,
             "my_bet":     pick.get("bet_amount") if pick else None,
         }
