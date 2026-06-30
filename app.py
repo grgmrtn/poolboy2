@@ -1572,6 +1572,14 @@ def _render_combined_stats(pool_id):
         riskiest = db.get_user_riskiest_bet(uid, pool_id)
         largest  = db.get_user_largest_win(uid, pool_id)
         pct      = round((acc["correct"] * 100 / acc["total"]), 0) if acc["total"] else None
+        # Ghost = total worth under $1 AND no open KO antes (which could
+        # still pay out). Once both go to zero the player can still pick
+        # (the all-in flow lets them spend their last cents) but they
+        # cant climb back into the active leaderboard. Renders as a
+        # separate "Out" section on the stats page.
+        free_bal  = float(dict(row).get("free_balance") or 0)
+        open_bets = float(dict(row).get("open_bets") or 0)
+        is_ghost  = (free_bal < 1.0) and (open_bets <= 0.0)
         enriched.append({
             **dict(row),
             "correct":      acc["correct"],
@@ -1581,6 +1589,7 @@ def _render_combined_stats(pool_id):
             "rare_pick":    rare,
             "riskiest_bet": riskiest,
             "largest_win":  largest,
+            "is_ghost":     is_ghost,
         })
 
     # Balance per scored match (one column per match).

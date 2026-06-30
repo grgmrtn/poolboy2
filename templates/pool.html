@@ -1915,6 +1915,22 @@
   .ko-bet-submit:disabled { opacity: 0.4; cursor: not-allowed; }
   /* "Placed" state — current input matches the stored bet, so the button
      reads as a status badge rather than an action. */
+  .ko-bet-allin {
+    /* Compact chip that sits next to the Bet button when the user has
+       less than $1. Tapping it pre-fills the input with their exact
+       remaining balance so they can spend their last cents. */
+    background: transparent;
+    color: var(--lilac);
+    border: 1px solid var(--lilac);
+    border-radius: 999px;
+    padding: 0.32rem 0.7rem;
+    font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-right: 0.4rem;
+    cursor: pointer;
+  }
+  .ko-bet-allin:hover { background: rgba(255,122,26,0.15); }
   .ko-bet-submit.is-placed {
     background: transparent;
     color: var(--accent);
@@ -3576,6 +3592,13 @@
                       <div class="ko-bet-summary" id="ko-summary-{{ f.id }}"
                            data-home-abbr="{{ home_abbr }}"
                            data-away-abbr="{{ away_abbr }}"></div>
+                      {# All-in affordance: hidden by default, shown by JS
+                         when myBalance < 1. Pre-fills the input with the
+                         users exact remaining cents so they can place a
+                         meaningful last bet instead of being stuck. #}
+                      <button type="button" class="ko-bet-allin" id="ko-allin-{{ f.id }}"
+                              style="display:none"
+                              onclick="koAllIn('{{ f.id }}')">All in</button>
                       <button class="ko-bet-submit{% if my_pick %} is-placed{% endif %}"
                               id="ko-submit-{{ f.id }}"
                               data-saved-pick="{{ my_pick or '' }}"
@@ -5854,7 +5877,35 @@
   function updateBalanceDisplay(balance) {
     const el = document.getElementById('my-balance-display');
     if (el) el.textContent = `$${balance.toFixed(2)}`;
+    // Toggle all-in chips visibility based on current balance.
+    refreshAllInChips(balance);
   }
+
+  // Show "All in" chips when the user has under $1 to bet. Hidden once
+  // theyre at $0 with no remaining balance, or back above $1 after a win.
+  function refreshAllInChips(balance) {
+    const broke   = balance > 0 && balance < 1;
+    const exact   = `$${balance.toFixed(2)}`;
+    document.querySelectorAll('[id^="ko-allin-"]').forEach(btn => {
+      btn.style.display = broke ? '' : 'none';
+      if (broke) btn.textContent = `All in ${exact}`;
+    });
+  }
+  // Pre-fill the bet input with the users full remaining balance and
+  // submit immediately. Their pick must already be selected (H or A);
+  // otherwise the existing saveKoPick guard catches it.
+  function koAllIn(fixtureId) {
+    const amt = document.getElementById('ko-amt-' + fixtureId);
+    if (!amt) return;
+    amt.value = myBalance.toFixed(2);
+    if (typeof updateKoPotential === 'function') updateKoPotential(fixtureId);
+    const submit = document.getElementById('ko-submit-' + fixtureId);
+    if (submit) submit.click();
+  }
+  // First paint: surface chips immediately on load when applicable.
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof myBalance === 'number') refreshAllInChips(myBalance);
+  });
 
   // ── Leaderboard toggle ────────────────────────────────────────────────
   function toggleLeaderboard() {
