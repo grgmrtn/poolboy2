@@ -1420,15 +1420,22 @@
     svgEl.setAttribute('height', H);
     wrap.style.height = H + 'px';
 
-    // Sine-wave parameterisation: smooth, tight. Amplitude held to
-    // ~10% of the page width so the curve reads as a visual guide
-    // rather than a giant swing -- labels then live mostly to one
-    // side of the center line. More phases = a livelier waveform.
-    const top   = 60;
-    const bot   = H - 40;
-    const cx    = W / 2;
-    const amp   = Math.max(40, Math.min(W * 0.10, 130));
-    const phases = 6;        // ~6 half-waves over the vertical span
+    // Sine-wave parameterisation: smooth, tight. The amplitude is
+    // capped so the curve never enters the left/right label columns
+    // (LBL_W on each side). Without this cap, on narrow viewports a
+    // 10%-of-width amp + a 130px offset would push labels right on
+    // top of the curve.
+    const top    = 60;
+    const bot    = H - 40;
+    const cx     = W / 2;
+    const PAD    = 10;
+    const LBL_W  = Math.min(132, Math.floor(W * 0.28));
+    const curveSpan = Math.max(40, W - 2 * (LBL_W + PAD));
+    // 40% of the available curve span max; the user asked for "tight,
+    // ~10% of the screen width" so cap there too. Floor of 16 keeps a
+    // hint of waveform even on the narrowest mobile.
+    const amp    = Math.max(16, Math.min(W * 0.10, 130, curveSpan * 0.40));
+    const phases = 6;
     const SAMPLES = 120;
     const pts = [];
     for (let i = 0; i <= SAMPLES; i++) {
@@ -1449,21 +1456,23 @@
 
     const total = pathEl.getTotalLength();
 
-    // Stage 1: compute dot + preferred label position for each player.
-    // Side determined by which half of the canvas the dot lives in.
-    // After offset, clamp the label X so the label box can never spill
-    // past the wrap edges (was the source of names hanging off-page).
-    const offset = Math.min(170, Math.max(110, W * 0.13));
-    const LBL_W  = 132;  // matches CSS max-width (8rem) + padding
-    const PAD    = 10;   // breathing room from edge
+    // Stage 1: every label snaps into one of two fixed columns
+    // (left-flush or right-flush). The column position is a function
+    // of the wrap width + LBL_W computed above -- by construction the
+    // curve cannot reach into either column, so labels can never
+    // overlap the curve. Side is chosen by which half of the canvas
+    // the dot lives in so the leader line is short.
+    const rightColX = W - LBL_W - PAD;
+    const leftColX  = LBL_W + PAD;
     const items = sorted.map(p => {
       const dist = total * p.t;
       const pt = pathEl.getPointAtLength(dist);
       const side = pt.x >= cx ? 1 : -1;
-      let lblX = pt.x + side * offset;
-      if (side > 0) lblX = Math.min(lblX, W - LBL_W - PAD);   // right labels: cap right
-      else          lblX = Math.max(lblX, LBL_W + PAD);       // left labels:  cap left
-      return { p, dotX: pt.x, dotY: pt.y, side, lblX, lblY: pt.y };
+      return {
+        p, dotX: pt.x, dotY: pt.y, side,
+        lblX: side > 0 ? rightColX : leftColX,
+        lblY: pt.y,
+      };
     });
 
     // Stage 2: deconflict labels per side by enforcing a minimum
