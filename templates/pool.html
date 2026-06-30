@@ -5335,34 +5335,41 @@
     }
     buyBtn.disabled = false;
 
-    // Reset + show the player list
+    // Reset + show the player list (only if targeted-spy section is
+    // rendered in this pool -- it can be Jinja-gated off entirely).
     const list = document.getElementById('spy-someone-list');
-    list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
+    if (list) {
+      list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-dim)">Loading…</div>';
+    }
 
     // Class-based show so we don't fight inline style state from a previous mount.
     modalEl.classList.add('open');
 
-    // Fire the spy-list fetch (no charge)
-    try {
-      const r = await fetch(`/pool/${poolId}/fixture/${fixtureId}/spy-list`);
-      const data = await r.json();
-      if (!data.ok) { list.innerHTML = `<div style="padding:1rem;color:var(--red)">${data.error}</div>`; return; }
-      const cost = data.next_spy_cost;
-      const html = data.members.map(m => {
-        const label = m.already_spied ? 'Revealed' : `$${cost.toFixed(2)}`;
-        const cls   = m.already_spied ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm';
-        return `<div class="spy-row">
-                  <div class="spy-row-name">
-                    <span class="spy-row-display">${escHtml(m.display_name)}</span>
-                    <span class="spy-row-balance">$${Math.round(m.balance)}</span>
-                  </div>
-                  <button class="${cls}" ${m.already_spied ? 'disabled' : ''}
-                          onclick="spyOnPlayerFromModal('${escHtml(m.email)}', this)">${label}</button>
-                </div>`;
-      }).join('');
-      list.innerHTML = html || '<div style="padding:0.75rem 0;color:var(--text-dim)">No other players in this pool yet.</div>';
-    } catch (e) {
-      list.innerHTML = '<div style="padding:1rem;color:var(--red)">Network error.</div>';
+    // Fire the spy-list fetch (no charge). Skip when targeted-spy is
+    // disabled for this pool -- the section that hosts the rows is
+    // hidden, so theres nowhere to render results.
+    if (list) {
+      try {
+        const r = await fetch(`/pool/${poolId}/fixture/${fixtureId}/spy-list`);
+        const data = await r.json();
+        if (!data.ok) { list.innerHTML = `<div style="padding:1rem;color:var(--red)">${data.error}</div>`; return; }
+        const cost = data.next_spy_cost;
+        const html = data.members.map(m => {
+          const label = m.already_spied ? 'Revealed' : `$${cost.toFixed(2)}`;
+          const cls   = m.already_spied ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm';
+          return `<div class="spy-row">
+                    <div class="spy-row-name">
+                      <span class="spy-row-display">${escHtml(m.display_name)}</span>
+                      <span class="spy-row-balance">$${Math.round(m.balance)}</span>
+                    </div>
+                    <button class="${cls}" ${m.already_spied ? 'disabled' : ''}
+                            onclick="spyOnPlayerFromModal('${escHtml(m.email)}', this)">${label}</button>
+                  </div>`;
+        }).join('');
+        list.innerHTML = html || '<div style="padding:0.75rem 0;color:var(--text-dim)">No other players in this pool yet.</div>';
+      } catch (e) {
+        list.innerHTML = '<div style="padding:1rem;color:var(--red)">Network error.</div>';
+      }
     }
 
     // If the user already bought field-spy, pre-fetch + render the spread
@@ -5790,7 +5797,14 @@
     if (!prediction) { alert('Select Home or Away first.'); return; }
 
     const amtEl = document.getElementById('ko-amt-' + fixtureId);
-    const bet_amount = parseFloat(amtEl ? amtEl.value : 0);
+    // Honor an explicit all-in raw value if set (set by koAllIn so
+    // float-precision rounding through toFixed/parseFloat can't trip
+    // the balance check). One-shot: cleared after consumption.
+    const rawAllIn = parseFloat(amtEl && amtEl.dataset.allInRaw || '');
+    let bet_amount = (!isNaN(rawAllIn) && rawAllIn > 0)
+      ? rawAllIn
+      : parseFloat(amtEl ? amtEl.value : 0);
+    if (amtEl) delete amtEl.dataset.allInRaw;
     if (!bet_amount || bet_amount <= 0) { alert('Enter a bet amount.'); return; }
     // The old ante is refunded server-side when a KO pick changes, so the
     // user's *available* balance for this fixture is current balance plus
@@ -5798,7 +5812,9 @@
     // back here the client falsely blocks reductions.
     const originalBet = parseFloat(amtEl.dataset.originalBet || '0');
     const available   = myBalance + originalBet;
-    if (bet_amount > available) {
+    // Tiny epsilon for sub-cent float drift so an all-in for the exact
+    // remaining balance doesn't bump up against a 1e-14 difference.
+    if (bet_amount > available + 0.005) {
       alert(`Insufficient balance. You have $${available.toFixed(2)} available (including the $${originalBet.toFixed(2)} currently wagered here).`);
       return;
     }
@@ -5894,10 +5910,15 @@
   // Pre-fill the bet input with the users full remaining balance and
   // submit immediately. Their pick must already be selected (H or A);
   // otherwise the existing saveKoPick guard catches it.
+  // The raw balance is stashed on a data attribute so saveKoPick can
+  // use the exact value -- float precision means myBalance.toFixed(2)
+  // can round UP (e.g. 0.0999... -> "0.10"), and parsing that back
+  // gives 0.1 > available which would trigger insufficient-balance.
   function koAllIn(fixtureId) {
     const amt = document.getElementById('ko-amt-' + fixtureId);
     if (!amt) return;
     amt.value = myBalance.toFixed(2);
+    amt.dataset.allInRaw = String(myBalance);
     if (typeof updateKoPotential === 'function') updateKoPotential(fixtureId);
     const submit = document.getElementById('ko-submit-' + fixtureId);
     if (submit) submit.click();
