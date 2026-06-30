@@ -608,7 +608,7 @@
               <span class="lb-empty">—</span>
             {% endif %}
           </span>
-          <span role="cell" class="lb-balance">${{ row.balance | round(0, 'ceil') | int }}</span>
+          <span role="cell" class="lb-balance">{{ row.balance | usd }}</span>
         </div>
         {% endfor %}
 

@@ -2492,7 +2492,15 @@
   'Completed': 'DONE'
 } %}
 <nav class="stage-nav" id="stage-nav">
+  {# BRK lives between Completed and the next round to match the in-page
+     position of the bracket section. The namespace flag prevents
+     duplicate emission once the loop continues past Completed. #}
+  {% set brk_ns = namespace(emitted=False) %}
   {% for stage in grouped_fixtures %}
+    {% if show_bracket and not brk_ns.emitted and stage != 'Completed' %}
+      <a class="stage-tab" href="#bracket-section" data-stage="bracket">BRK</a>
+      {% set brk_ns.emitted = True %}
+    {% endif %}
     <a class="stage-tab" href="#stage-{{ loop.index0 }}"
        data-stage="{{ loop.index0 }}">
       {{ SHORT.get(stage, stage.replace('Group ', '')) }}
@@ -2501,7 +2509,7 @@
   {% if group_standings %}
     <a class="stage-tab" href="#group-standings" data-stage="standings">TBL</a>
   {% endif %}
-  {% if show_bracket %}
+  {% if show_bracket and not brk_ns.emitted %}
     <a class="stage-tab" href="#bracket-section" data-stage="bracket">BRK</a>
   {% endif %}
   {# Odds format picker removed — site uses decimal multipliers everywhere. #}
@@ -2701,20 +2709,22 @@
   <div class="pool-stats-bar">
     <div class="ps-hero">
       <div class="ps-segs">
-        {# Same ceiling-round as the navbar — see base.html. #}
+        {# Pool top hero shows decimals with smaller cents. Real value
+           (with cents) lives on data-value so animateValue can read it
+           back; the visible inner HTML is rendered via the |usd filter. #}
         <div class="ps-seg ps-seg-avail">
-          <div class="ps-seg-value" data-nav-amt="tobet"
-               data-value="{{ my_balance | round(0, 'ceil') | int }}">${{ my_balance | round(0, 'ceil') | int }}</div>
+          <div class="ps-seg-value with-cents" data-nav-amt="tobet"
+               data-value="{{ '%.2f'|format(my_balance) }}">{{ my_balance | usd }}</div>
           <div class="ps-seg-label">AVAIL</div>
         </div>
         <div class="ps-seg ps-seg-placed">
-          <div class="ps-seg-value" data-nav-amt="placed"
-               data-value="{{ my_total_bet | round(0, 'ceil') | int }}">${{ my_total_bet | round(0, 'ceil') | int }}</div>
+          <div class="ps-seg-value with-cents" data-nav-amt="placed"
+               data-value="{{ '%.2f'|format(my_total_bet) }}">{{ my_total_bet | usd }}</div>
           <div class="ps-seg-label">PLACED</div>
         </div>
         <div class="ps-seg ps-seg-total">
-          <div class="ps-seg-value" data-nav-amt="total"
-               data-value="{{ (my_balance + my_total_bet) | round(0, 'ceil') | int }}">${{ (my_balance + my_total_bet) | round(0, 'ceil') | int }}</div>
+          <div class="ps-seg-value with-cents" data-nav-amt="total"
+               data-value="{{ '%.2f'|format(my_balance + my_total_bet) }}">{{ (my_balance + my_total_bet) | usd }}</div>
           <div class="ps-seg-label">TOTAL</div>
         </div>
         <div class="ps-seg ps-seg-rank">
@@ -5719,8 +5729,11 @@
     // what their input means (e.g. "$10.50"). Odds multiply at full
     // precision; the TO WIN displayed value rounds UP to the nearest
     // dollar so users always see what they could net, never less.
+    // Use the shared formatUsdCents helper so bet preview matches the
+    // pool top hero / leaderboard style ($X with smaller .YY when set).
     const betText = hasAmt
-      ? (Number.isInteger(amt) ? `$${amt}` : `$${amt.toFixed(2)}`)
+      ? (window.formatUsdCents ? window.formatUsdCents(amt)
+                               : (Number.isInteger(amt) ? `$${amt}` : `$${amt.toFixed(2)}`))
       : '';
     sumEl.innerHTML =
       cell('ko-sum-cell-bet', hasAmt, betText,

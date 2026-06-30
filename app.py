@@ -341,6 +341,35 @@ app.jinja_env.globals['enumerate'] = enumerate
 app.jinja_env.filters['friendly_time'] = _friendly_time
 
 
+def _usd(amount, small_class='cents-sm'):
+    """
+    Render a dollar amount as "$X" when whole, or "$X<small>.YY</small>"
+    when there are cents. Used in the leaderboard, pool-page top hero,
+    and bet preview where the user wants to see fractional balances
+    without the cents dominating the visual hierarchy.
+
+    Navbar pills, the balance chart axis, and the KO bet input itself
+    stay on whole-dollar formatting; they read from animateValue / their
+    own format paths and don't go through this filter.
+    """
+    from markupsafe import Markup, escape
+    try:
+        a = float(amount or 0)
+    except (TypeError, ValueError):
+        return Markup("$0")
+    # Truncate toward zero so $0.99 displays as "$0" + ".99", not "$1" + ".-01"
+    whole = int(a) if a >= 0 else -int(-a)
+    cents = int(round((abs(a) - abs(whole)) * 100))
+    if cents == 0:
+        return Markup(f"${whole}")
+    cls = escape(small_class)
+    sign = "-" if a < 0 else ""
+    return Markup(f"{sign}${abs(whole)}<small class=\"{cls}\">.{cents:02d}</small>")
+
+
+app.jinja_env.filters['usd'] = _usd
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def _lock_time_for_fixture(kick_off_iso):

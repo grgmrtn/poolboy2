@@ -62,6 +62,18 @@
     a:hover { text-decoration: underline; }
     button, input, select, textarea { font-family: inherit; }
 
+    /* Cents-after-dollar marker, used by the |usd Jinja filter and the
+       formatUsd() JS twin. Keeps the dollar amount as the primary read
+       and de-emphasises the .XX so it doesnt fight for attention.
+       Used in: leaderboard balance, pool top hero, bet preview. */
+    .cents-sm {
+      font-size: 0.7em;
+      font-weight: inherit;
+      opacity: 0.75;
+      margin-left: 0.05em;
+      vertical-align: baseline;
+    }
+
     /* ── Noise overlay (subtle texture on the bg) ─────────────────────── */
     body::before {
       content: '';
@@ -624,26 +636,51 @@
   <script>
   (function () {
     function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+    // Format a number as "$X" (whole) or "$X<small>.YY</small>" (cents).
+    // Mirrors the server-side |usd Jinja filter so live-updated values
+    // match the initial server render. Exposed on window so pool-page
+    // JS (bet preview) can reuse the same formatting.
+    window.formatUsdCents = formatUsdCents;
+    function formatUsdCents(n) {
+      const a = Number(n) || 0;
+      const whole = a >= 0 ? Math.floor(a) : -Math.floor(-a);
+      const cents = Math.round((Math.abs(a) - Math.abs(whole)) * 100);
+      if (cents === 0) return `$${whole}`;
+      const sign = a < 0 ? '-' : '';
+      return `${sign}$${Math.abs(whole)}<small class="cents-sm">.${String(cents).padStart(2,'0')}</small>`;
+    }
     function animateValue(el, from, to, durationMs) {
       if (!el) return;
       from = Number(from) || 0;
       to   = Number(to)   || 0;
-      // Decimal bets are allowed but the navbar always reports the
-      // headline integer, rounded UP — never below the actual amount.
-      const ceilTo = Math.ceil(to);
+      // Two render modes: with-cents (pool top hero, full decimal)
+      // vs the legacy whole-dollar ceiling (navbar pills).
+      const withCents = el.classList && el.classList.contains('with-cents');
+      const writeFinal = () => {
+        if (withCents) {
+          el.innerHTML = formatUsdCents(to);
+          el.dataset.value = (Math.round(to * 100) / 100).toFixed(2);
+        } else {
+          const ceilTo = Math.ceil(to);
+          el.textContent = `$${ceilTo}`;
+          el.dataset.value = String(ceilTo);
+        }
+      };
       if (Math.abs(from - to) < 0.5) {
-        el.textContent = `$${ceilTo}`;
+        writeFinal();
         return;
       }
       const start = performance.now();
       function step(now) {
         const t = Math.min(1, (now - start) / durationMs);
         const cur = from + (to - from) * easeOutCubic(t);
-        // In-flight frames round half-up so the digits don't jitter mid-roll;
-        // the final frame snaps to the ceiling.
-        el.textContent = t < 1 ? `$${Math.round(cur)}` : `$${ceilTo}`;
-        if (t < 1) requestAnimationFrame(step);
-        else el.dataset.value = String(ceilTo);
+        if (t < 1) {
+          if (withCents) el.innerHTML = formatUsdCents(cur);
+          else           el.textContent = `$${Math.round(cur)}`;
+          requestAnimationFrame(step);
+        } else {
+          writeFinal();
+        }
       }
       el.classList.remove('is-bumping');
       // Reflow to restart the CSS animation
