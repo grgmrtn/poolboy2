@@ -807,6 +807,18 @@
       flex: 1; display: flex; align-items: stretch;
       overflow-x: auto; -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      /* Concurrent matches are done -- one tab at a time. Spread the
+         single tab across the full bar instead of huddling it left. */
+      justify-content: center;
+    }
+    /* A single live tab gets to use the whole horizontal span so the
+       LIVE chip + scoreline + minute breathe. */
+    .ln-tabs:has(> .ln-tab:only-child) > .ln-tab {
+      flex: 1;
+      justify-content: center;
+      padding: 0 1.5rem;
+      font-size: 0.86rem;
+      gap: 0.55rem;
     }
     .ln-tabs::-webkit-scrollbar { display: none; }
     .ln-tab {
@@ -847,15 +859,8 @@
       font-size: 0.62rem; letter-spacing: 0.04em;
       color: rgba(10,10,15,0.62); font-weight: 600;
     }
-    .ln-expand-btn {
-      flex-shrink: 0;
-      background: rgba(0,0,0,0.08); border: 0; border-left: 1px solid rgba(0,0,0,0.18);
-      color: #0a0a0f; cursor: pointer;
-      width: 38px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .ln-chev { font-size: 0.85rem; transition: transform 0.2s; }
-    .live-now-banner.is-expanded .ln-chev { transform: rotate(180deg); }
+    /* .ln-expand-btn and .ln-chev rules removed -- the dedicated
+       expand button is gone; the whole bar is the toggle target. */
 
     .ln-expanded {
       display: none;
@@ -2556,9 +2561,8 @@
         </button>
       {% endfor %}
     </div>
-    <button type="button" class="ln-expand-btn" id="ln-expand-btn" onclick="toggleLiveNow()" aria-label="Expand">
-      <span class="ln-chev">▾</span>
-    </button>
+    {# Expand chevron removed -- the whole bar still toggles via the
+       outer onclick handler. #}
   </div>
 
   {# Expanded hero — one panel per live fixture, only the active tab shows #}
