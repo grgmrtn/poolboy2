@@ -153,6 +153,10 @@
     font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em;
     color: var(--text-dim); text-transform: uppercase;
   }
+  /* Hero is short on horizontal real estate (4 columns); shrink the
+     cents proportionally so a $268.50 fits in its track instead of
+     ellipsising. Dollar part stays the headline read. */
+  .ps-seg-value .cents-sm { font-size: 0.5em; opacity: 0.7; }
   .ps-seg-avail  .ps-seg-value { color: var(--accent); }
   .ps-seg-placed .ps-seg-value { color: var(--lilac); }
   .ps-seg-total  .ps-seg-value { color: #ffffff; }

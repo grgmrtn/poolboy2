@@ -1420,14 +1420,16 @@
     svgEl.setAttribute('height', H);
     wrap.style.height = H + 'px';
 
-    // Sine-wave parameterisation: smooth, no kinks. 2.25 phases over
-    // the vertical span = ~2 full S-bends.
+    // Sine-wave parameterisation: smooth, tight. Amplitude held to
+    // ~10% of the page width so the curve reads as a visual guide
+    // rather than a giant swing -- labels then live mostly to one
+    // side of the center line. More phases = a livelier waveform.
     const top   = 60;
     const bot   = H - 40;
     const cx    = W / 2;
-    const amp   = Math.min(cx - 160, 200);   // never punch through labels
-    const phases = 2.25;
-    const SAMPLES = 80;
+    const amp   = Math.max(40, Math.min(W * 0.10, 130));
+    const phases = 6;        // ~6 half-waves over the vertical span
+    const SAMPLES = 120;
     const pts = [];
     for (let i = 0; i <= SAMPLES; i++) {
       const t = i / SAMPLES;
@@ -1448,18 +1450,20 @@
     const total = pathEl.getTotalLength();
 
     // Stage 1: compute dot + preferred label position for each player.
-    // Side determined by which half of the canvas the dot lives in --
-    // label goes to that side (so it sits OUTSIDE the curve's local arc).
-    const offset = Math.min(170, Math.max(90, W * 0.11));
+    // Side determined by which half of the canvas the dot lives in.
+    // After offset, clamp the label X so the label box can never spill
+    // past the wrap edges (was the source of names hanging off-page).
+    const offset = Math.min(170, Math.max(110, W * 0.13));
+    const LBL_W  = 132;  // matches CSS max-width (8rem) + padding
+    const PAD    = 10;   // breathing room from edge
     const items = sorted.map(p => {
       const dist = total * p.t;
       const pt = pathEl.getPointAtLength(dist);
-      const side = pt.x >= cx ? 1 : -1;  // +1 right, -1 left
-      return {
-        p, dotX: pt.x, dotY: pt.y, side,
-        lblX: pt.x + side * offset,
-        lblY: pt.y,
-      };
+      const side = pt.x >= cx ? 1 : -1;
+      let lblX = pt.x + side * offset;
+      if (side > 0) lblX = Math.min(lblX, W - LBL_W - PAD);   // right labels: cap right
+      else          lblX = Math.max(lblX, LBL_W + PAD);       // left labels:  cap left
+      return { p, dotX: pt.x, dotY: pt.y, side, lblX, lblY: pt.y };
     });
 
     // Stage 2: deconflict labels per side by enforcing a minimum
