@@ -2888,13 +2888,13 @@
                                 <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
                                 <span class="bracket-abbr">{{ c.home_abbr }}</span>
                                 <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
-                                <span class="bracket-bet{% if is_h_pick and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if is_h_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                                <span class="bracket-bet{% if is_h_pick and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if is_h_pick and c.my_bet %}{% if c.result and c.result != 'H' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                               </div>
                               <div class="bracket-pill{% if is_a_pick %} is-pick{% endif %}{% if a_won %} is-won{% endif %}">
                                 <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
                                 <span class="bracket-abbr">{{ c.away_abbr }}</span>
                                 <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
-                                <span class="bracket-bet{% if is_a_pick and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if is_a_pick and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                                <span class="bracket-bet{% if is_a_pick and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if is_a_pick and c.my_bet %}{% if c.result and c.result != 'A' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                               </div>
                             </div>
                           </a>
@@ -2918,13 +2918,13 @@
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
                             <span class="bracket-abbr">{{ c.home_abbr }}</span>
                             <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
-                            <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                            <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}{% if c.result and c.result != 'H' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                           </div>
                           <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
                             <span class="bracket-abbr">{{ c.away_abbr }}</span>
                             <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
-                            <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                            <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}{% if c.result and c.result != 'A' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                           </div>
                         </div>
                       </a>
@@ -3620,13 +3620,13 @@
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
                             <span class="bracket-abbr">{{ c.home_abbr }}</span>
                             <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
-                            <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                            <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}{% if c.result and c.result != 'H' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                           </div>
                           <div class="bracket-pill{% if c.my_pick == 'A' %} is-pick{% endif %}{% if c.result == 'A' %} is-won{% endif %}">
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
                             <span class="bracket-abbr">{{ c.away_abbr }}</span>
                             <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
-                            <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
+                            <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}{% if c.result and c.result != 'A' %}-{% endif %}${{ '%.0f'|format(c.my_bet) }}{% endif %}</span>
                           </div>
                         </div>
                       </a>

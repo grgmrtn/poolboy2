@@ -233,33 +233,42 @@ def main():
         score_obj = m.get("score") or {}
         ft = score_obj.get("fullTime") or {}
         home, away = ft.get("home"), ft.get("away")
-        # Penalty shootout score (KO only). football-data exposes this as
-        # score.penalties with home/away; duration goes to PENALTY_SHOOTOUT.
-        # Defensive: some snapshots conflate pens into fullTime (a 3-3
-        # game appears as 5-4). When duration says PENALTY_SHOOTOUT but
-        # the .penalties block is absent or zero, treat the score as
-        # already-conflated and bail on penalties data rather than
-        # invent it. The fallback path below tries to recover regulation
-        # scores from the extraTime field.
-        pens = score_obj.get("penalties") or {}
-        h_pens, a_pens = pens.get("home"), pens.get("away")
         duration = score_obj.get("duration") or ""
-        if duration == "PENALTY_SHOOTOUT" and (h_pens is None or a_pens is None):
-            # API didn't surface clean pens data. Try extraTime as the
-            # regulation+ET score; if that's also missing, leave pens
-            # null and the final fullTime score takes the H/A from
-            # whoever has more.
+        h_pens = a_pens = None
+        # Penalty-shootout games need special handling. football-data's
+        # `fullTime` field conflates the shootout into the final score
+        # (a 1-1 game decided 5-4 on pens appears as fullTime 4-5).
+        # Use `regularTime` for the end-of-90 score, add `extraTime` for
+        # ET, and derive the shootout score by subtraction (the API's
+        # `penalties` field is sometimes inconsistent -- e.g. returns
+        # 4-4 for a 5-4 shootout).
+        if duration == "PENALTY_SHOOTOUT":
+            rt = score_obj.get("regularTime") or {}
             et = score_obj.get("extraTime") or {}
-            if et.get("home") is not None and et.get("away") is not None:
-                home, away = et["home"], et["away"]
-            # Mark winner via penalties so result code is correct even
-            # when we can't recover the shootout score.
-            if home is not None and away is not None and home == away:
-                winner = score_obj.get("winner") or ""
-                if winner == "HOME_TEAM":
-                    h_pens, a_pens = 1, 0  # synthetic: just marks the winner
-                elif winner == "AWAY_TEAM":
-                    h_pens, a_pens = 0, 1
+            reg_h, reg_a = rt.get("home"), rt.get("away")
+            if reg_h is not None:
+                reg_h += (et.get("home") or 0)
+            if reg_a is not None:
+                reg_a += (et.get("away") or 0)
+            if reg_h is not None and reg_a is not None:
+                # Pull shootout out of the conflated fullTime.
+                if ft.get("home") is not None and ft.get("away") is not None:
+                    h_pens = ft["home"] - reg_h
+                    a_pens = ft["away"] - reg_a
+                home, away = reg_h, reg_a
+            else:
+                # regularTime missing -- fall back to penalties block
+                # for the shootout, even if its arithmetic is suspect.
+                pens = score_obj.get("penalties") or {}
+                h_pens, a_pens = pens.get("home"), pens.get("away")
+                if h_pens == a_pens and h_pens is not None:
+                    # Tied pen count but somebody won -- use winner
+                    # field to break the tie so result code is correct.
+                    winner = score_obj.get("winner") or ""
+                    if winner == "HOME_TEAM":
+                        h_pens, a_pens = h_pens + 1, a_pens
+                    elif winner == "AWAY_TEAM":
+                        h_pens, a_pens = h_pens, a_pens + 1
 
         if status == "FINISHED":
             if existing.get("result"):
