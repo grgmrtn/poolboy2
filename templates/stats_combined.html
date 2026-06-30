@@ -598,6 +598,29 @@
     overflow: hidden; text-overflow: ellipsis;
     max-width: 100%;
   }
+  /* Rank badge in the corner of each label. Sits at the top-left for
+     right-side labels and top-right for left-side labels so it always
+     points toward the curve. */
+  .chase-label-rank {
+    position: absolute;
+    top: -9px; left: -9px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(20,20,28,0.96);
+    border: 1px solid var(--border-hi, #2a2a35);
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .chase-label.is-left .chase-label-rank { left: auto; right: -9px; }
+  .chase-label.is-me .chase-label-rank {
+    background: var(--accent);
+    color: #0a0a0f;
+    border-color: var(--accent);
+  }
   .chase-label-row {
     display: flex; align-items: center; gap: 0.35rem;
     font-variant-numeric: tabular-nums;
@@ -1504,8 +1527,22 @@
       if (p.uid === MY_UID) lc += ' is-me';
       if (p.isGhost)        lc += ' is-ghost';
       el.className = lc;
+      // Pre-create the inner structure once so the per-frame tween
+      // only has to touch text content, not rebuild DOM.
+      el.innerHTML = `
+        <div class="chase-label-rank"></div>
+        <div class="chase-label-name">${safeName(p.name)}</div>
+        <div class="chase-label-row">
+          <span class="chase-label-bal"></span>
+          <span class="chase-label-arrow"></span>
+        </div>`;
       lblBox.appendChild(el);
-      lbl[p.uid] = el;
+      lbl[p.uid] = {
+        el,
+        rankEl:  el.querySelector('.chase-label-rank'),
+        balEl:   el.querySelector('.chase-label-bal'),
+        arrowEl: el.querySelector('.chase-label-arrow'),
+      };
     });
   }
 
@@ -1532,7 +1569,10 @@
     const leader = arr[0].bal;
     const trail  = arr[arr.length - 1].bal;
     const range  = Math.max(1, leader - trail);
-    arr.forEach(x => { x.t = (leader - x.bal) / range; });
+    arr.forEach((x, i) => {
+      x.t = (leader - x.bal) / range;
+      x.rank = i + 1;
+    });
     return arr;
   }
 
@@ -1543,7 +1583,7 @@
       const side = pt.x >= cx ? 1 : -1;
       return {
         uid: x.p.uid, bal: x.bal, lastDelta: x.lastDelta, isGhost: x.p.isGhost,
-        name: x.p.name,
+        name: x.p.name, rank: x.rank,
         dotX: pt.x, dotY: pt.y, side,
         lblX: side > 0 ? rightColX : leftColX,
         lblY: pt.y,
@@ -1563,12 +1603,25 @@
     return items;
   }
 
+  // Snap-everything: rank, arrow, side, AND balance text. Used after a
+  // tween settles and on instant jumps (initial paint, scrubber drag).
   function applyContent(items) {
+    items_snapContent(items);
     items.forEach(it => {
-      const el = lbl[it.uid];
-      if (!el) return;
-      el.classList.toggle('is-left',  it.side < 0);
-      el.classList.toggle('is-right', it.side > 0);
+      const ref = lbl[it.uid];
+      if (ref) ref.balEl.innerHTML = fmtUsd(it.bal);
+    });
+  }
+  // Snap-non-balance only: rank, arrow, side. Used at the start of a
+  // tween so the dollar amount can interpolate from the previous value
+  // to the new one without first snapping.
+  function items_snapContent(items) {
+    items.forEach(it => {
+      const ref = lbl[it.uid];
+      if (!ref) return;
+      ref.el.classList.toggle('is-left',  it.side < 0);
+      ref.el.classList.toggle('is-right', it.side > 0);
+      ref.rankEl.textContent = it.rank;
       const arrowCls = it.isGhost ? 'is-flat'
                      : it.lastDelta > 0 ? 'is-up'
                      : it.lastDelta < 0 ? 'is-down'
@@ -1577,23 +1630,18 @@
                   : it.lastDelta > 0 ? '▲'
                   : it.lastDelta < 0 ? '▼'
                   : '·';
-      el.innerHTML = `
-        <div class="chase-label-name">${safeName(it.name)}</div>
-        <div class="chase-label-row">
-          <span>${fmtUsd(it.bal)}</span>
-          <span class="chase-label-arrow ${arrowCls}">${arrow}</span>
-        </div>
-      `;
+      ref.arrowEl.className = 'chase-label-arrow ' + arrowCls;
+      ref.arrowEl.textContent = arrow;
     });
   }
 
   function applyPositions(items) {
     items.forEach(it => {
-      const d = dot[it.uid], ln = line[it.uid], el = lbl[it.uid];
+      const d = dot[it.uid], ln = line[it.uid], ref = lbl[it.uid];
       if (d)  { d.setAttribute('cx', it.dotX); d.setAttribute('cy', it.dotY); }
       if (ln) { ln.setAttribute('x1', it.dotX); ln.setAttribute('y1', it.dotY);
                 ln.setAttribute('x2', it.lblX); ln.setAttribute('y2', it.lblY); }
-      if (el) { el.style.left = it.lblX + 'px'; el.style.top = it.lblY + 'px'; }
+      if (ref) { ref.el.style.left = it.lblX + 'px'; ref.el.style.top = it.lblY + 'px'; }
     });
   }
 
@@ -1615,14 +1663,19 @@
         const dy = fr.dotY + (to_.dotY - fr.dotY) * t;
         const lx = fr.lblX + (to_.lblX - fr.lblX) * t;
         const ly = fr.lblY + (to_.lblY - fr.lblY) * t;
-        const d = dot[p.uid], ln = line[p.uid], el = lbl[p.uid];
+        const bal = fr.bal + (to_.bal - fr.bal) * t;
+        const d = dot[p.uid], ln = line[p.uid], ref = lbl[p.uid];
         if (d)  { d.setAttribute('cx', dx); d.setAttribute('cy', dy); }
         if (ln) { ln.setAttribute('x1', dx); ln.setAttribute('y1', dy);
                   ln.setAttribute('x2', lx); ln.setAttribute('y2', ly); }
-        if (el) { el.style.left = lx + 'px'; el.style.top = ly + 'px'; }
+        if (ref) {
+          ref.el.style.left = lx + 'px';
+          ref.el.style.top  = ly + 'px';
+          ref.balEl.innerHTML = fmtUsd(bal);
+        }
       });
       if (raw < 1) requestAnimationFrame(step);
-      else { applyPositions(to); onDone && onDone(); }
+      else { applyPositions(to); applyContent(to); onDone && onDone(); }
     }
     requestAnimationFrame(step);
   }
@@ -1659,9 +1712,10 @@
     currentIdx = idx;
     updateLabel();
     if (fromItems && !opts.instant) {
-      // Update content (name/arrow) at the START of the tween so the
-      // values shown reflect the destination state; positions interpolate.
-      applyContent(toItems);
+      // Snap rank + arrow + side classes at the start of the tween;
+      // the bal text is left for tween() to interpolate so the dollar
+      // amount counts smoothly toward the destination value.
+      items_snapContent(toItems);
       tween(fromItems, toItems, opts.duration || TWEEN_MS);
     } else {
       applyContent(toItems);
@@ -1674,7 +1728,7 @@
     if (playing) return;
     playing = true;
     const btn = document.getElementById('chase-playbtn');
-    if (btn) btn.textContent = '⏸';
+    if (btn) btn.innerHTML = ICON_PAUSE;
     // If at the end, restart from beginning before playing.
     if (currentIdx >= fixtures.length - 1) {
       gotoMatch(0, { instant: true });
@@ -1687,17 +1741,35 @@
   function pause() {
     playing = false;
     const btn = document.getElementById('chase-playbtn');
-    if (btn) btn.textContent = '▶';
+    if (btn) btn.innerHTML = ICON_PLAY;
     if (playT) clearInterval(playT); playT = null;
   }
   function togglePlay() { playing ? pause() : play(); }
 
+  // Clean shape icons -- rendered as SVG so they sit centred inside
+  // the round buttons without dealing with emoji baseline weirdness.
+  const ICON_PREV  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
+                   +   `<rect x="2.5" y="3" width="1.7" height="10" fill="currentColor"/>`
+                   +   `<polygon points="13.5,3 13.5,13 5,8" fill="currentColor"/>`
+                   + `</svg>`;
+  const ICON_NEXT  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
+                   +   `<polygon points="2.5,3 2.5,13 11,8" fill="currentColor"/>`
+                   +   `<rect x="11.8" y="3" width="1.7" height="10" fill="currentColor"/>`
+                   + `</svg>`;
+  const ICON_PLAY  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
+                   +   `<polygon points="4,2.5 4,13.5 13,8" fill="currentColor"/>`
+                   + `</svg>`;
+  const ICON_PAUSE = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">`
+                   +   `<rect x="3.5" y="3" width="2.8" height="10" fill="currentColor"/>`
+                   +   `<rect x="9.7" y="3" width="2.8" height="10" fill="currentColor"/>`
+                   + `</svg>`;
+
   function buildControls() {
     if (!ctrlBox) return;
     ctrlBox.innerHTML = `
-      <button type="button" class="chase-ctrl-btn" id="chase-skipstart" title="Skip to start">⏮</button>
-      <button type="button" class="chase-ctrl-btn" id="chase-playbtn"   title="Play / pause">▶</button>
-      <button type="button" class="chase-ctrl-btn" id="chase-skipend"   title="Skip to end">⏭</button>
+      <button type="button" class="chase-ctrl-btn" id="chase-skipstart" title="Skip to start">${ICON_PREV}</button>
+      <button type="button" class="chase-ctrl-btn" id="chase-playbtn"   title="Play / pause">${ICON_PLAY}</button>
+      <button type="button" class="chase-ctrl-btn" id="chase-skipend"   title="Skip to end">${ICON_NEXT}</button>
       <input type="range" class="chase-scrubber" id="chase-scrubber"
              min="0" max="${fixtures.length - 1}" value="${currentIdx}" step="1"
              aria-label="Match scrubber">

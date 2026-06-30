@@ -15,6 +15,52 @@ migration, no schema change.
 
 RELEASES = [
     {
+        "date":  "2026-06-30",
+        "emoji": "🏁",
+        "title": "The Chase + animated replay",
+        "changes": [
+            "New Chase tab on /stats — every player as a dot on a tight S-curve, spaced by dollar gap from the leader (peloton effect emerges as players cluster)",
+            "Replay controls: skip / play / scrubber across every settled match. Auto-advance with eased 800ms tweens between snapshots",
+            "Dollar amounts tick smoothly through values as the dots move so you can read the shift, not just see it",
+            "Each label carries a small rank badge in the top corner; your dot + label get a lime tint",
+            "Streak chart added too — +1 right, −1 wrong per pick, cumulative line per player, share the same Balance/Streak tab toggle",
+        ],
+    },
+    {
+        "date":  "2026-06-30",
+        "emoji": "👁",
+        "title": "Field-spy reveals everything; targeted-spy hidden",
+        "changes": [
+            "Paying for the field-spy now uncovers every player's pick + bet amount on that match — same view as a live game, just earlier",
+            "Pricing: $5 flat for group stage; KO scales 20% of pot (capped $200)",
+            "Targeted-spy modal section hidden — its data + endpoint preserved for future pools",
+            "Group Stage Wrapped: 9-slide retrospective auto-pops when groups close, replayable from a chip next to How it works",
+        ],
+    },
+    {
+        "date":  "2026-06-30",
+        "emoji": "💸",
+        "title": "Decimals, ghost mode, all-in",
+        "changes": [
+            "Leaderboard, pool top hero, and bet preview now show cents in smaller type ($268.50)",
+            "Players who drop below $1 enter ghost mode — separate Out section on the leaderboard with a 💀 badge, kept on the chart, can still pick but can't win",
+            "All-in chip on KO bets when balance < $1 — one tap spends your remaining cents",
+            "Navbar pills, balance chart, KO bet input stay on whole dollars",
+        ],
+    },
+    {
+        "date":  "2026-06-29",
+        "emoji": "🏆",
+        "title": "Bracket polish",
+        "changes": [
+            "Completed games stay in the bracket (no more disappearing R32 cells)",
+            "Penalty score renders inline beside the regulation: 1-1 (3-2)",
+            "Picked side shows total payout +$48 on a win, −$10 on a loss; pending stays $10",
+            "Bracket fills the desktop full width with flexible columns; 3rd-place anchors under SF",
+            "BRK stage-nav chip moved next to DONE",
+        ],
+    },
+    {
         "date":  "2026-06-24",
         "emoji": "💬",
         "title": "Live-match chat",

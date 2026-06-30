@@ -580,27 +580,9 @@
         {% if current_user.is_admin %}
         <a href="{{ url_for('admin_page') }}" class="nav-action" title="Admin" aria-label="Admin">A</a>
         {% endif %}
-        {# Force-refresh: clears any stale build stamp + reloads with a
-           unique query string so Safari can't serve the cached HTML. #}
-        <a href="#" class="nav-action" title="Force refresh (clears stale cache)"
-           aria-label="Refresh"
-           onclick="event.preventDefault();
-                    this.classList.add('is-loading');
-                    var bar = document.getElementById('loading-bar');
-                    if (bar) { bar.classList.add('is-loading'); }
-                    try { localStorage.removeItem('wc26_app_build'); } catch(e) {}
-                    var u = new URL(window.location.href);
-                    u.searchParams.set('_r', Date.now());
-                    window.location.replace(u.toString());">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-               aria-hidden="true">
-            <polyline points="23 4 23 10 17 10"/>
-            <polyline points="1 20 1 14 7 14"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
-            <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
-          </svg>
-        </a>
+        {# Force-refresh button removed -- pull-to-refresh on mobile and
+           the standard browser reload on desktop cover the same need
+           without crowding the navbar. #}
         <a href="{{ url_for('logout') }}" class="nav-action" title="Log out" aria-label="Log out">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
