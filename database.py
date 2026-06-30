@@ -353,6 +353,8 @@ def init_db():
             # Penalty shootout score (KO only). NULL = no shootout.
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_penalties INTEGER",
             "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_penalties INTEGER",
+            # Pool-wide chat lock: when set, chat-post endpoint refuses.
+            "ALTER TABLE pools ADD COLUMN IF NOT EXISTS chat_locked INTEGER DEFAULT 0",
         ]:
             c.execute(sql)
     else:
@@ -361,6 +363,7 @@ def init_db():
             ("scoring_config", "round_type TEXT"),
             ("pools",          "entry_fee TEXT"),
             ("pools",          "payment_instructions TEXT"),
+            ("pools",          "chat_locked INTEGER DEFAULT 0"),
             ("pool_members",   "has_paid INTEGER DEFAULT 0"),
             ("pool_members",   "balance REAL DEFAULT 100"),
             ("picks",          "bet_amount REAL DEFAULT NULL"),

@@ -173,18 +173,22 @@ def derive_result(home, away, h_pens=None, a_pens=None):
     return "D"
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--apply", action="store_true",
                    help="actually write scores + score picks (default: preview)")
-    args = p.parse_args()
+    args = p.parse_args(argv)
     dry_run = not args.apply
 
     api_key = os.environ.get("FOOTBALL_DATA_API_KEY", "").strip()
     if not api_key:
-        print("ERROR: FOOTBALL_DATA_API_KEY not set"); sys.exit(1)
+        print("ERROR: FOOTBALL_DATA_API_KEY not set")
+        if argv is None: sys.exit(1)
+        return
     if not os.environ.get("DATABASE_URL", "").strip():
-        print("ERROR: DATABASE_URL not set"); sys.exit(1)
+        # SQLite path is fine for local dev runs; only block on prod.
+        if argv is None and not os.environ.get("ALLOW_SQLITE"):
+            print("ERROR: DATABASE_URL not set"); sys.exit(1)
 
     if dry_run:
         print("=== DRY-RUN (no writes). Add --apply to commit. ===\n")

@@ -1409,6 +1409,9 @@ def post_chat_message(pool_id, fixture_id):
         return jsonify({"error": "not a member"}), 403
     if db.is_user_chat_banned(user["id"]):
         return jsonify({"error": "chat banned"}), 403
+    pool = db.get_pool_by_id(pool_id)
+    if pool and pool.get("chat_locked"):
+        return jsonify({"error": "chat locked by admin"}), 403
     is_live, live_min = _fixture_live_state(fixture_id)
     if not is_live:
         return jsonify({"error": "match not live"}), 403
@@ -2074,6 +2077,143 @@ def spy_pick(pool_id):
 
 # ── Admin routes ────────────────────────────────────────────────────────────
 
+# ── Resiliency tools (admin) ───────────────────────────────────────────
+# Five one-click buttons that cover the failure modes weve actually hit:
+#   1) postgres-locks       -- list + kill idle-in-transaction connections
+#   2) auto-score           -- re-run the FINISHED-match scoring cron
+#   3) restore-r32          -- re-pull KO matchups via Odds API if FD wiped
+#   4) per-fixture pens     -- moved into the existing fixtures table form
+#   5) chat-lock            -- toggle pool-wide chat lock
+
+@app.route("/admin/postgres/locks")
+@admin_required
+def admin_pg_locks():
+    """List currently-active Postgres connections + lock waits. Read-only."""
+    if not os.environ.get("DATABASE_URL"):
+        return jsonify({"ok": True, "engine": "sqlite", "rows": []})
+    conn = db.get_db()
+    try:
+        rows = conn.execute("""
+            SELECT pid, state, wait_event_type, wait_event,
+                   substring(query, 1, 120) AS q,
+                   EXTRACT(EPOCH FROM (now() - state_change))::int AS age_seconds
+            FROM pg_stat_activity
+            WHERE datname=current_database()
+              AND pid <> pg_backend_pid()
+            ORDER BY state_change ASC
+        """).fetchall()
+        out = [dict(r) for r in rows]
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "engine": "postgres", "rows": out})
+
+
+@app.route("/admin/postgres/kill-stuck", methods=["POST"])
+@admin_required
+def admin_pg_kill_stuck():
+    """
+    Terminate every idle-in-transaction connection older than max_age_seconds
+    (default 60s). This is the manual escape hatch for the locked-row pattern
+    that took the site down twice on 2026-06-27 / 06-29 -- normally the
+    per-session idle_in_transaction_session_timeout we set in get_db handles
+    this in 60s, but if that ever fails the button is here.
+    """
+    if not os.environ.get("DATABASE_URL"):
+        return jsonify({"ok": True, "engine": "sqlite", "killed": []})
+    max_age = int((request.form.get("max_age") or "60"))
+    conn = db.get_db()
+    try:
+        rows = conn.execute("""
+            SELECT pid, EXTRACT(EPOCH FROM (now() - state_change))::int AS age_seconds,
+                   substring(query, 1, 200) AS q
+            FROM pg_stat_activity
+            WHERE datname=current_database()
+              AND state='idle in transaction'
+              AND state_change < now() - (? || ' seconds')::interval
+        """, (max_age,)).fetchall()
+        killed = []
+        for r in rows:
+            r = dict(r)
+            try:
+                conn.execute("SELECT pg_terminate_backend(?)", (int(r["pid"]),))
+                killed.append(r)
+            except Exception as e:
+                r["error"] = str(e)
+                killed.append(r)
+        conn.commit()
+    finally:
+        conn.close()
+    flash(f"Killed {len(killed)} stuck connection(s).",
+          "success" if killed else "info")
+    return redirect(url_for("admin_page") + "#resiliency")
+
+
+@app.route("/admin/cron/auto-score", methods=["POST"])
+@admin_required
+def admin_run_auto_score():
+    """
+    Manually re-run the FINISHED-match scoring pass. Hits football-data,
+    finalises any newly-finished matches, and self-heals any rows whose
+    DB score diverged from the API. Same code path the Railway cron uses.
+    """
+    try:
+        import sim.auto_score_from_api as auto
+        # Suppress the script's print calls; capture results another way.
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            auto.main(["--apply"])
+        flash("Auto-score completed. " + buf.getvalue().splitlines()[-1][:200],
+              "success")
+    except Exception as e:
+        flash(f"Auto-score failed: {e}", "error")
+    return redirect(url_for("admin_page") + "#resiliency")
+
+
+@app.route("/admin/cron/restore-r32", methods=["POST"])
+@admin_required
+def admin_run_restore_r32():
+    """
+    Manually re-populate KO team names from the Odds API. Equivalent to
+    running `python3 -m sim.restore_r32 --apply` -- protective when
+    football-data wipes KO matchups again (as it did on 2026-06-27).
+    """
+    try:
+        import sim.restore_r32 as restore
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            restore.main(["--apply"])
+        # Bubble up the final line which has the "Updated N R32 rows" summary
+        lines = [l for l in buf.getvalue().splitlines() if l.strip()]
+        last = lines[-1] if lines else "completed"
+        flash(f"Restore R32: {last[:200]}", "success")
+    except Exception as e:
+        flash(f"Restore R32 failed: {e}", "error")
+    return redirect(url_for("admin_page") + "#resiliency")
+
+
+@app.route("/pool/<pool_id>/chat-lock", methods=["POST"])
+@admin_required
+def admin_toggle_chat_lock(pool_id):
+    """Toggle a pool-wide chat lock. Posts are blocked while locked."""
+    pool = db.get_pool_by_id(pool_id)
+    if not pool:
+        flash("Pool not found.", "error")
+        return redirect(url_for("admin_page"))
+    new_val = 0 if pool.get("chat_locked") else 1
+    conn = db.get_db()
+    try:
+        conn.execute("UPDATE pools SET chat_locked=? WHERE id=?",
+                     (new_val, pool_id))
+        conn.commit()
+    finally:
+        conn.close()
+    flash(f"Chat {'locked' if new_val else 'unlocked'} for {pool['name']}.",
+          "success")
+    return redirect(url_for("admin_page") + "#resiliency")
+
+
 @app.route("/admin")
 @admin_required
 def admin_page():
@@ -2443,7 +2583,10 @@ def admin_seed_euro2024():
 @app.route("/admin/fixture/<fixture_id>/result", methods=["POST"])
 @admin_required
 def set_fixture_result(fixture_id):
-    """Record a match result and trigger economy payouts for all picks."""
+    """Record a match result and trigger economy payouts for all picks.
+    Optional penalty inputs (home_penalties, away_penalties) override the
+    result-code derivation when set -- used to fix KO matches where the
+    API misreported the shootout winner."""
     try:
         home_score = int(request.form["home_score"])
         away_score = int(request.form["away_score"])
@@ -2451,9 +2594,23 @@ def set_fixture_result(fixture_id):
         flash("Please enter valid scores.", "error")
         return redirect(url_for("admin_page"))
 
-    result    = db.update_fixture_result(fixture_id, home_score, away_score)
+    def _opt_int(name):
+        v = (request.form.get(name) or "").strip()
+        if not v:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+    h_pens = _opt_int("home_penalties")
+    a_pens = _opt_int("away_penalties")
+
+    result    = db.update_fixture_result(fixture_id, home_score, away_score,
+                                          h_pens, a_pens)
     processed = db.process_fixture_result(fixture_id)
-    flash(f"Result saved ({result}). Processed {processed} picks.", "success")
+    pen_str = f" (pens {h_pens}-{a_pens})" if h_pens is not None and a_pens is not None else ""
+    flash(f"Result saved ({result}{pen_str}). Processed {processed} picks.",
+          "success")
     return redirect(url_for("admin_page"))
 
 

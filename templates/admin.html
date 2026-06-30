@@ -91,6 +91,69 @@
     {% endif %}
   {% endwith %}
 
+  <!-- ── Resiliency tools ───────────────────────────────────────────── -->
+  <div class="admin-section" id="resiliency">
+    <h2>🚨 Resiliency tools</h2>
+    <div class="card" style="max-width:760px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem">
+        <form method="POST" action="{{ url_for('admin_pg_kill_stuck') }}"
+              onsubmit="return confirm('Terminate all idle-in-transaction connections older than 60s? Safe -- those connections were already dead.');">
+          <button type="submit" class="btn btn-primary btn-sm" style="width:100%">
+            🔌 Kill stuck Postgres connections
+          </button>
+          <p style="margin:0.4rem 0 0;font-size:0.7rem;color:var(--text-muted);line-height:1.4">
+            Lists + terminates idle-in-transaction PIDs &gt; 60s old. Use when the
+            site hangs on init_db or any ALTER TABLE migration.
+            <a href="{{ url_for('admin_pg_locks') }}" target="_blank"
+               style="color:var(--text-dim)">View current locks →</a>
+          </p>
+        </form>
+
+        <form method="POST" action="{{ url_for('admin_run_auto_score') }}"
+              onsubmit="return confirm('Force-run the auto-score cron now? Finalises any FINISHED matches + heals score corrections. Safe to repeat.');">
+          <button type="submit" class="btn btn-primary btn-sm" style="width:100%">
+            🔄 Run auto-score cron now
+          </button>
+          <p style="margin:0.4rem 0 0;font-size:0.7rem;color:var(--text-muted);line-height:1.4">
+            Manually re-run football-data scoring. Use if a cron run was missed
+            and a finished match isnt settled. process_fixture_result is
+            idempotent so duplicate runs are harmless.
+          </p>
+        </form>
+
+        <form method="POST" action="{{ url_for('admin_run_restore_r32') }}"
+              onsubmit="return confirm('Re-populate KO matchups via the Odds API? Only fills slots where data is missing -- existing real team names are preserved by the upsert ratchet.');">
+          <button type="submit" class="btn btn-primary btn-sm" style="width:100%">
+            🎯 Restore KO matchups (Pinnacle)
+          </button>
+          <p style="margin:0.4rem 0 0;font-size:0.7rem;color:var(--text-muted);line-height:1.4">
+            Wraps sim/restore_r32 --apply. Use if football-data wipes KO team
+            names again. Uses The Odds API to backfill from Pinnacle.
+          </p>
+        </form>
+
+        <div>
+          <strong style="font-size:0.78rem">Chat lock per pool:</strong>
+          <div style="margin-top:0.4rem;display:flex;flex-direction:column;gap:0.3rem">
+            {% for pool in all_pools %}
+              <form method="POST" action="{{ url_for('admin_toggle_chat_lock', pool_id=pool.id) }}"
+                    style="display:flex;align-items:center;gap:0.5rem">
+                <span style="flex:1;font-size:0.78rem">{{ pool.name }}</span>
+                <button type="submit" class="btn btn-sm
+                  {% if pool.chat_locked %}btn-primary{% else %}btn-ghost{% endif %}">
+                  {% if pool.chat_locked %}🔒 Unlock{% else %}🔓 Lock{% endif %}
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+          <p style="margin:0.4rem 0 0;font-size:0.7rem;color:var(--text-muted);line-height:1.4">
+            Blocks chat POST when locked. Reads still work.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Spy activity ticker ─────────────────────────────────────────── -->
   <div class="admin-section">
     <h2>Spy activity — last 14 days</h2>
@@ -401,6 +464,20 @@
                   <input class="form-input" type="number" name="away_score" min="0" max="99"
                     placeholder="A" value="{{ f.away_score if f.away_score is not none else '' }}">
                   <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+                </div>
+                {# Penalty shootout inputs -- when both are set, the result
+                   code is derived from the shootout instead of the regulation
+                   score. Used to manually fix the Morocco/NL class of bug
+                   where football-data reports the wrong winner. #}
+                <div class="score-inputs" style="margin-top:0.2rem;font-size:0.7rem">
+                  <span style="color:var(--text-dim)">pens</span>
+                  <input class="form-input" type="number" name="home_penalties" min="0" max="20"
+                    placeholder="H" value="{{ f.home_penalties if f.home_penalties is not none else '' }}"
+                    style="width:2.5rem">
+                  <span style="color:var(--text-dim)">–</span>
+                  <input class="form-input" type="number" name="away_penalties" min="0" max="20"
+                    placeholder="A" value="{{ f.away_penalties if f.away_penalties is not none else '' }}"
+                    style="width:2.5rem">
                 </div>
               </form>
               {% if f.result %}
