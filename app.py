@@ -715,6 +715,10 @@ def pool_page(pool_id):
     scoring_config   = db.get_active_scoring_config()
     spy_set          = db.get_spy_set_for_user_in_pool(user["id"], pool_id)
     spy_count        = db.get_spy_count_for_user_in_pool(user["id"], pool_id)
+    # Loaded up here (rather than later) because the per-pick visibility
+    # loop below now grants "see-all" to any fixture the viewer has
+    # bought field-spy on.
+    aggregate_spy_set = db.get_aggregate_spy_fixture_set(user["id"], pool_id)
 
     conn = db.get_db()
 
@@ -760,11 +764,19 @@ def pool_page(pool_id):
         # ambiguous "Greg"s.
         shorts = _disambiguate_short_names(picks)
 
+        # If the viewer bought field-spy on this fixture, EVERY pick on
+        # the fixture is visible to them — name + bet amount, mirroring
+        # what shows under a live game. Previously the field-spy only
+        # bought the H/D/A vote count; now it buys the whole field.
+        bought_field = fid in aggregate_spy_set
+
         enriched = []
         for p in picks:
             if p["email"] == user["email"]:
                 visible = True
             elif completed or locked:
+                visible = True
+            elif bought_field:
                 visible = True
             elif (fid, p["user_id"]) in spy_set:
                 visible = True
@@ -781,9 +793,8 @@ def pool_page(pool_id):
     leaderboard     = db.get_pool_leaderboard(pool_id)
     now_iso         = now.isoformat()
 
-    # Aggregate-spy fixture set: which fixtures the user has revealed the
-    # field for, so the row can render the spread instead of the buy button.
-    aggregate_spy_set = db.get_aggregate_spy_fixture_set(user["id"], pool_id)
+    # aggregate_spy_set is loaded up top (before the per-pick visibility
+    # loop). The reveal row reads it from there.
 
     # For each LOCKED-or-COMPLETED fixture (everyone gets the spread free),
     # OR each fixture the user has bought field-spy on, precompute the totals

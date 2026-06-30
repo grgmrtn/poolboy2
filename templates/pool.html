@@ -2059,6 +2059,44 @@
   }
   .spy-field-spread b { color: var(--accent); }
   .spy-field-spread .dim { color: var(--text-dim); }
+
+  /* Sample preview shown in the spy modal -- mirrors the live game
+     reveal grid layout so users know exactly what they'll get. JS
+     hides this once the user actually purchases. */
+  .spy-sample-wrap {
+    margin-top: 0.7rem;
+    padding: 0.6rem 0.75rem 0.75rem;
+    background: rgba(255,255,255,0.03);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    opacity: 0.92;
+  }
+  .spy-sample-label {
+    font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+  .spy-sample-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .spy-sample-col-h {
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+  .spy-sample-name {
+    font-size: 0.78rem; color: var(--text-muted);
+    padding: 0.18rem 0;
+    display: flex; align-items: baseline; gap: 0.4rem;
+    line-height: 1.2;
+  }
+  .spy-sample-bet {
+    color: var(--lilac); font-weight: 800;
+    font-variant-numeric: tabular-nums; font-size: 0.74rem;
+    margin-left: auto;
+  }
   .player-pill.player-hidden { display: none; }
   .player-pill.is-me { border-color: rgba(200,255,87,0.20); color: var(--text); }
   .player-pill.is-me.pick-H { border-color: var(--home-color, var(--blue));   color: var(--home-color, var(--blue)); }
@@ -3731,7 +3769,7 @@
 
     <!-- Section 1: Spy the Field -->
     <div class="spy-modal-section">
-      <h4>📊 Spy the Field</h4>
+      <h4>👁 Reveal the Field</h4>
       <div class="spy-field-row">
         <div class="spy-field-explain">
           {# Two parallel explanation lines; JS toggles which is visible
@@ -3740,9 +3778,11 @@
              permanently in the DOM — it must never be innerHTML-replaced,
              or subsequent openSpyModal calls null-ref on it. #}
           <span id="spy-field-explain-buy">
-            See how many players picked each side — counts only, no names.
+            Unmask <strong>every pick and bet</strong> on this match — names,
+            sides, dollar amounts. Same view that appears under a live game,
+            just earlier.
             Costs <strong id="spy-field-cost">$2</strong><span id="spy-field-cost-note" style="display:none"> <span style="color:var(--text-dim);font-size:0.78rem">(KO matches scale with the pot — <strong>max($5, 10% of total wagered)</strong>, no cap)</span></span>
-            the first time; after that, re-check the live spread any time until kick-off, free.
+            the first time; after that, re-check the live picks any time until kick-off, free.
           </span>
           <span id="spy-field-explain-bought" style="display:none">
             You've already revealed the field for this match — re-check it any time, free.
@@ -3752,6 +3792,25 @@
                 onclick="confirmFieldSpy()">Reveal Field</button>
       </div>
       <div class="spy-field-spread" id="spy-field-spread" style="display:none"></div>
+
+      {# Sample preview of the reveal layout. Hidden once the user buys
+         (the real reveal-grid takes over on the pool page after reload). #}
+      <div class="spy-sample-wrap" id="spy-sample-wrap">
+        <div class="spy-sample-label">Preview · what you'll see</div>
+        <div class="spy-sample-grid">
+          <div class="spy-sample-col">
+            <div class="spy-sample-col-h">HOME · 3</div>
+            <div class="spy-sample-name">Greg M <span class="spy-sample-bet">$25</span></div>
+            <div class="spy-sample-name">Justin <span class="spy-sample-bet">$15</span></div>
+            <div class="spy-sample-name">Mackjartin <span class="spy-sample-bet">$5</span></div>
+          </div>
+          <div class="spy-sample-col">
+            <div class="spy-sample-col-h">AWAY · 2</div>
+            <div class="spy-sample-name">David M <span class="spy-sample-bet">$50</span></div>
+            <div class="spy-sample-name">Lrrr <span class="spy-sample-bet">$10</span></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Section 2: Spy on a specific player — hidden on KO matches
@@ -5221,6 +5280,7 @@
     if (costNote) costNote.style.display = isKo ? '' : 'none';
     spreadEl.style.display = 'none';
     spreadEl.innerHTML = '';
+    const sample = document.getElementById('spy-sample-wrap');
     if (_spyFieldBought) {
       // Field already bought — show the "already revealed" line.
       if (buyText)   buyText.style.display   = 'none';
@@ -5228,12 +5288,14 @@
       buyBtn.textContent = 'Refresh';
       buyBtn.classList.remove('btn-primary');
       buyBtn.classList.add('btn-ghost');
+      if (sample) sample.style.display = 'none';
     } else {
       if (buyText)   buyText.style.display   = '';
       if (boughtTxt) boughtTxt.style.display = 'none';
       buyBtn.textContent = 'Reveal Field';
       buyBtn.classList.remove('btn-ghost');
       buyBtn.classList.add('btn-primary');
+      if (sample) sample.style.display = '';
     }
     buyBtn.disabled = false;
 
@@ -5324,6 +5386,10 @@
       const _boughtTxt = document.getElementById('spy-field-explain-bought');
       if (_buyText)   _buyText.style.display   = 'none';
       if (_boughtTxt) _boughtTxt.style.display = '';
+      // The sample preview is irrelevant once the real grid is visible
+      // on the underlying pool page — hide it.
+      const _sample = document.getElementById('spy-sample-wrap');
+      if (_sample) _sample.style.display = 'none';
 
       // On a fresh purchase (not a silent re-check), reload the page so the
       // .reveal-grid under the match pill populates from server-rendered HTML
