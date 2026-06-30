@@ -1596,12 +1596,25 @@ def _render_combined_stats(pool_id):
                 break
     balance_timeline["players"] = chart_players
 
+    streak_timeline = db.get_pool_streak_per_match(pool_id, max_players=10_000)
+    # Same self-include guarantee as the balance chart: keep the
+    # current user on the streak chart even if they fall outside the
+    # top-20 slice.
+    streak_players = streak_timeline["players"][:20]
+    if not any(p["user_id"] == my_uid for p in streak_players):
+        for p in streak_timeline["players"]:
+            if p["user_id"] == my_uid:
+                streak_players = streak_players + [p]
+                break
+    streak_timeline["players"] = streak_players
+
     return render_template("stats_combined.html",
         pool=pool,
         leaderboard=enriched,
         my_balance=db.get_member_balance(user["id"], pool_id),
         my_user_id=my_uid,
         timeline=balance_timeline,
+        streak=streak_timeline,
         TEAM_ABBR=TEAM_ABBR,
     )
 

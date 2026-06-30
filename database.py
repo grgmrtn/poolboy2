@@ -2711,6 +2711,143 @@ def get_pool_balance_per_match(pool_id, max_players=20):
     }
 
 
+def get_pool_streak_per_match(pool_id, max_players=10_000):
+    """
+    Per-match cumulative pick-streak per player. +1 for a correct pick,
+    -1 for a wrong pick, 0 if the user didn't pick that match. Same
+    shape as get_pool_balance_per_match so the stats chart renderer
+    can swap data sources with no other code change.
+
+    Tooltip details[i] carries {label, pick, result, delta} for that
+    column so the chart can show "Brazil v Japan: picked H, result A,
+    -1". The "Start" column is always 0.
+    """
+    from collections import defaultdict
+    conn = get_db()
+
+    fix_rows = conn.execute("""
+        SELECT DISTINCT f.id, f.kick_off, f.home_team, f.away_team,
+                        f.stage, f.home_score, f.away_score, f.result
+          FROM picks p
+          JOIN fixtures f ON f.id = p.fixture_id
+         WHERE p.pool_id = ?
+           AND f.result IS NOT NULL AND f.result <> ''
+         ORDER BY f.kick_off, f.id
+    """, (pool_id,)).fetchall()
+
+    member_rows = conn.execute("""
+        SELECT pm.user_id, u.display_name, u.team_name, u.email
+        FROM pool_members pm JOIN users u ON u.id = pm.user_id
+        WHERE pm.pool_id = ?
+    """, (pool_id,)).fetchall()
+
+    pick_rows = conn.execute("""
+        SELECT user_id, fixture_id, predicted_result
+        FROM picks
+        WHERE pool_id = ?
+    """, (pool_id,)).fetchall()
+    conn.close()
+
+    if not fix_rows or not member_rows:
+        return {"fixtures": [{"id": None, "label": "Start"}],
+                "players": [], "total_players": len(member_rows),
+                "starting_balance": 0}
+
+    picks_by_uf = {(r["user_id"], r["fixture_id"]): r["predicted_result"]
+                   for r in pick_rows}
+
+    # Same date / round labelling as the balance chart so the x-axes
+    # align visually for users flipping between the two.
+    _SHORT_ROUND = {
+        "Round of 32":    "R32",
+        "Round of 16":    "R16",
+        "Quarter-Finals": "QF",
+        "Semi-Finals":    "SF",
+        "Third Place":    "3rd",
+        "Final":          "Final",
+    }
+    _group_buckets = defaultdict(list)
+    round_by_fid = {}
+    for r in fix_rows:
+        stage = r["stage"] or ""
+        if stage.startswith("Group "):
+            _group_buckets[stage].append(r)
+        else:
+            round_by_fid[r["id"]] = _SHORT_ROUND.get(stage, stage)
+    for fxs in _group_buckets.values():
+        fxs.sort(key=lambda f: f["kick_off"] or "")
+        for i, fix in enumerate(fxs):
+            round_by_fid[fix["id"]] = f"MD{i // 2 + 1}"
+
+    fixtures_out = [{"id": None, "label": "Start", "date_label": "", "stage": "",
+                     "round": "", "home_score": None, "away_score": None}]
+    for r in fix_rows:
+        ko = r["kick_off"] or ""
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(ko[:10])
+            date_label = f"{dt.day} {dt.strftime('%b')}"
+        except Exception:
+            date_label = ko[:10]
+        ha = (r["home_team"] or "")[:3].upper()
+        aa = (r["away_team"] or "")[:3].upper()
+        fixtures_out.append({
+            "id":         r["id"],
+            "label":      f"{ha} v {aa}",
+            "date_label": date_label,
+            "stage":      r["stage"] or "",
+            "round":      round_by_fid.get(r["id"], ""),
+            "home_score": r["home_score"],
+            "away_score": r["away_score"],
+        })
+
+    n_cols = len(fix_rows) + 1
+    players = []
+    for m in member_rows:
+        uid = m["user_id"]
+        running = 0
+        cum = [0]
+        details = [None]
+        for c in range(1, n_cols):
+            f = fix_rows[c - 1]
+            pick = picks_by_uf.get((uid, f["id"]))
+            if pick is None:
+                delta = 0
+            elif pick == f["result"]:
+                delta = 1
+            else:
+                delta = -1
+            running += delta
+            cum.append(running)
+            details.append({
+                "label":      f"{(f['home_team'] or '?')[:3].upper()} v {(f['away_team'] or '?')[:3].upper()}",
+                "home":       f["home_team"], "away": f["away_team"],
+                "home_score": f["home_score"], "away_score": f["away_score"],
+                "result":     f["result"],
+                "pick":       pick,
+                "bet":        None,
+                "delta":      delta,
+            })
+        players.append({
+            "user_id":      uid,
+            "display_name": m["display_name"],
+            "team_name":    m["team_name"],
+            "email":        m["email"],
+            "cumulative":   cum,
+            "details":      details,
+            "final_score":  running,
+        })
+    players.sort(key=lambda p: (p["final_score"], p["display_name"] or ""),
+                 reverse=False)
+    players.reverse()  # high to low
+    return {
+        "fixtures":         fixtures_out,
+        "players":          players[:max_players],
+        "total_players":    len(players),
+        "starting_balance": 0,
+    }
+
+
 def get_pool_balance_timeline(pool_id, max_players=20):
     """
     Return per-player event series for the stats chart.
