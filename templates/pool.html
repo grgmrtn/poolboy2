@@ -2355,14 +2355,9 @@
     background: rgba(255,255,255,0.04);
     border-color: rgba(255,255,255,0.18);
   }
-  /* Tiny ✓/✗ marker next to the user-picked team's name when settled. */
-  .bracket-pick-mark {
-    font-weight: 800; font-size: 0.62rem;
-    margin-left: 0.18rem;
-    line-height: 1;
-  }
-  .bracket-pick-mark.is-right { color: #d3ff67; }
-  .bracket-pick-mark.is-wrong { color: #ff5577; }
+  /* Pick-mark CSS removed -- the green / red card colour carries
+     enough signal on its own, and the inline glyph was crowding the
+     team abbr into an ellipsis. */
   /* Penalty score sits right after the regulation score in lighter,
      smaller type so the eye reads "2-2 (5-4 pens)". */
   .bracket-pens {
@@ -2803,8 +2798,8 @@
                onclick="jumpToFixture(event, '{{ b.fixture_id }}')"
                title="Jump to {{ b.home_abbr }} vs {{ b.away_abbr }}">
               <span role="cell" class="psp-when">
-                <span class="psp-when-day">{{ when_day }}/{{ when_mo }}</span>
-                <span class="psp-when-time">{{ when_t }}</span>
+                <span class="psp-when-day" data-utc="{{ b.kick_off }}" data-tz-fmt="date">{{ when_day }}/{{ when_mo }}</span>
+                <span class="psp-when-time" data-utc="{{ b.kick_off }}" data-tz-fmt="time">{{ when_t }}</span>
               </span>
               {# Home / vs / Away mirror the Completed-table format exactly:
                  home cell is text-then-flag, right-aligned; away cell is
@@ -2985,7 +2980,7 @@
                              href="#fixture-{{ c.id }}"
                              onclick="jumpToFixture(event, '{{ c.id }}')"
                              title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
-                            <div class="bracket-when">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
+                            <div class="bracket-when" data-utc="{{ c.kick_off }}" data-tz-fmt="datetime">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
                             {% set is_h_pick = c.my_pick == 'H' %}
                             {% set is_a_pick = c.my_pick == 'A' %}
                             {% set h_won = c.result == 'H' %}
@@ -2993,13 +2988,13 @@
                             <div class="bracket-cell-card{% if c.result %} is-final{% endif %}{% if c.result and c.my_pick and c.my_bet %}{% if c.result == c.my_pick %} is-bet-win{% elif c.my_pick %} is-bet-loss{% endif %}{% endif %}">
                               <div class="bracket-pill{% if h_won %} is-winner{% endif %}">
                                 <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                                <span class="bracket-abbr">{{ c.home_abbr }}{% if c.result and c.my_pick == 'H' %}<span class="bracket-pick-mark {% if c.result == 'H' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'H' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                                <span class="bracket-abbr">{{ c.home_abbr }}</span>
                                 <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
                                 <span class="bracket-bet{% if is_h_pick and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if is_h_pick and c.my_bet %}{% if c.result == 'H' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'H' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                               </div>
                               <div class="bracket-pill{% if a_won %} is-winner{% endif %}">
                                 <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                                <span class="bracket-abbr">{{ c.away_abbr }}{% if c.result and c.my_pick == 'A' %}<span class="bracket-pick-mark {% if c.result == 'A' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'A' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                                <span class="bracket-abbr">{{ c.away_abbr }}</span>
                                 <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
                                 <span class="bracket-bet{% if is_a_pick and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if is_a_pick and c.my_bet %}{% if c.result == 'A' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'A' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                               </div>
@@ -3018,17 +3013,17 @@
                         <a class="bracket-cell" href="#fixture-{{ c.id }}"
                            onclick="jumpToFixture(event, '{{ c.id }}')"
                            title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
-                          <div class="bracket-when">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
+                          <div class="bracket-when" data-utc="{{ c.kick_off }}" data-tz-fmt="datetime">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
                           <div class="bracket-cell-card{% if c.result %} is-final{% endif %}{% if c.result and c.my_pick and c.my_bet %}{% if c.result == c.my_pick %} is-bet-win{% elif c.my_pick %} is-bet-loss{% endif %}{% endif %}">
                             <div class="bracket-pill{% if c.result == 'H' %} is-winner{% endif %}">
                               <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                              <span class="bracket-abbr">{{ c.home_abbr }}{% if c.result and c.my_pick == 'H' %}<span class="bracket-pick-mark {% if c.result == 'H' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'H' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                              <span class="bracket-abbr">{{ c.home_abbr }}</span>
                               <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
                               <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}{% if c.result == 'H' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'H' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                             </div>
                             <div class="bracket-pill{% if c.result == 'A' %} is-winner{% endif %}">
                               <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                              <span class="bracket-abbr">{{ c.away_abbr }}{% if c.result and c.my_pick == 'A' %}<span class="bracket-pick-mark {% if c.result == 'A' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'A' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                              <span class="bracket-abbr">{{ c.away_abbr }}</span>
                               <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
                               <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}{% if c.result == 'A' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'A' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                             </div>
@@ -3146,11 +3141,11 @@
                      data-round="{{ f.round|e }}"
                      data-home-flag="{{ f.home_flag_code or 'un' }}"
                      data-away-flag="{{ f.away_flag_code or 'un' }}">
-                  <span role="cell" class="ct-date ct-desk">{{ ct_dy }}/{{ ct_mo }}</span>
-                  <span role="cell" class="ct-time ct-desk">{{ ct_time }}</span>
+                  <span role="cell" class="ct-date ct-desk" data-utc="{{ f.kick_off }}" data-tz-fmt="date">{{ ct_dy }}/{{ ct_mo }}</span>
+                  <span role="cell" class="ct-time ct-desk" data-utc="{{ f.kick_off }}" data-tz-fmt="time">{{ ct_time }}</span>
                   <span role="cell" class="ct-when ct-mob">
-                    <span class="ct-when-date">{{ ct_dy }}/{{ ct_mo }}</span>
-                    <span class="ct-when-time">{{ ct_time }}</span>
+                    <span class="ct-when-date" data-utc="{{ f.kick_off }}" data-tz-fmt="date">{{ ct_dy }}/{{ ct_mo }}</span>
+                    <span class="ct-when-time" data-utc="{{ f.kick_off }}" data-tz-fmt="time">{{ ct_time }}</span>
                   </span>
                   <span role="cell" class="ct-grp">{{ ct_group }}</span>
                   <span role="cell" class="ct-team ct-team-home ct-desk {% if f.result == 'H' %}ct-team-win{% endif %}{% if ct_h_pickers %} has-tip{% endif %}">
@@ -3284,7 +3279,7 @@
                       <div class="meta-dow">{{ f.kick_off_dow }}</div>
                     {% endif %}
                     <div class="meta-date">{{ dy }} {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo] }}</div>
-                    <div class="meta-time">{{ ko_time }}</div>
+                    <div class="meta-time" data-utc="{{ f.kick_off }}" data-tz-fmt="time">{{ ko_time }}</div>
                   {% else %}
                     <div class="meta-date" style="color:var(--text-dim)">TBC</div>
                   {% endif %}
@@ -3728,17 +3723,17 @@
                       <a class="bracket-cell" href="#fixture-{{ c.id }}"
                          onclick="jumpToFixture(event, '{{ c.id }}')"
                          title="{{ c.home_team }} vs {{ c.away_team }} — tap to bet">
-                        <div class="bracket-when">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
+                        <div class="bracket-when" data-utc="{{ c.kick_off }}" data-tz-fmt="datetime">{% if c.kick_off_dow %}{{ c.kick_off_dow }} {% endif %}{{ when_day }} · {{ when_t }}</div>
                         <div class="bracket-cell-card{% if c.result %} is-final{% endif %}{% if c.result and c.my_pick and c.my_bet %}{% if c.result == c.my_pick %} is-bet-win{% elif c.my_pick %} is-bet-loss{% endif %}{% endif %}">
                           <div class="bracket-pill{% if c.result == 'H' %} is-winner{% endif %}">
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.home_flag }}.svg" alt="" loading="lazy">
-                            <span class="bracket-abbr">{{ c.home_abbr }}{% if c.result and c.my_pick == 'H' %}<span class="bracket-pick-mark {% if c.result == 'H' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'H' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                            <span class="bracket-abbr">{{ c.home_abbr }}</span>
                             <span class="bracket-odds">{% if c.home_score is not none %}<span class="bracket-score">{{ c.home_score }}</span>{% if c.home_pens is not none %}<span class="bracket-pens">({{ c.home_pens }})</span>{% endif %}{% elif c.home_odds %}{{ '%g'|format(c.home_odds) }}×{% endif %}</span>
                             <span class="bracket-bet{% if c.my_pick == 'H' and c.result %} is-{{ 'win' if c.result == 'H' else 'loss' }}{% endif %}">{% if c.my_pick == 'H' and c.my_bet %}{% if c.result == 'H' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'H' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                           </div>
                           <div class="bracket-pill{% if c.result == 'A' %} is-winner{% endif %}">
                             <img class="bracket-flag" src="https://flagcdn.com/{{ c.away_flag }}.svg" alt="" loading="lazy">
-                            <span class="bracket-abbr">{{ c.away_abbr }}{% if c.result and c.my_pick == 'A' %}<span class="bracket-pick-mark {% if c.result == 'A' %}is-right{% else %}is-wrong{% endif %}">{% if c.result == 'A' %}✓{% else %}✗{% endif %}</span>{% endif %}</span>
+                            <span class="bracket-abbr">{{ c.away_abbr }}</span>
                             <span class="bracket-odds">{% if c.away_score is not none %}<span class="bracket-score">{{ c.away_score }}</span>{% if c.away_pens is not none %}<span class="bracket-pens">({{ c.away_pens }})</span>{% endif %}{% elif c.away_odds %}{{ '%g'|format(c.away_odds) }}×{% endif %}</span>
                             <span class="bracket-bet{% if c.my_pick == 'A' and c.result %} is-{{ 'win' if c.result == 'A' else 'loss' }}{% endif %}">{% if c.my_pick == 'A' and c.my_bet %}{% if c.result == 'A' and c.my_winnings %}+${{ '%.0f'|format(c.my_winnings) }}{% elif c.result and c.result != 'A' %}-${{ '%.0f'|format(c.my_bet) }}{% else %}${{ '%.0f'|format(c.my_bet) }}{% endif %}{% endif %}</span>
                           </div>

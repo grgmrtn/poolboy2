@@ -671,6 +671,51 @@
       el.classList.add('is-bumping');
       requestAnimationFrame(step);
     }
+    // ── Local-timezone reformatter ─────────────────────────────────
+    // Server renders kick-off times in the configured DISPLAY_TZ
+    // (default America/New_York) as a fallback. For every element that
+    // carries a data-utc attribute with an ISO timestamp, swap the
+    // text for the same instant rendered in the BROWSERS local zone.
+    // Side benefit: a user traveling abroad reads times in their
+    // current locale without flipping any account setting.
+    //
+    // Format codes (data-tz-fmt):
+    //   "time"     -> "1pm" or "1:30pm" (default)
+    //   "datetime" -> "Mon 28/06 · 1pm"
+    //   "date"     -> "Mon 28/06"
+    function fmtLocalTime(d) {
+      const h24 = d.getHours();
+      const m   = d.getMinutes();
+      if (h24 === 12 && m === 0) return 'noon';
+      if (h24 === 0  && m === 0) return 'midnight';
+      const suf = h24 < 12 ? 'am' : 'pm';
+      const h12 = (h24 % 12) || 12;
+      return m === 0 ? `${h12}${suf}` : `${h12}:${String(m).padStart(2,'0')}${suf}`;
+    }
+    function fmtLocalDate(d) {
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      return `${dow} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    function localizeTimeElements(root) {
+      (root || document).querySelectorAll('[data-utc]').forEach(el => {
+        const iso = el.dataset.utc;
+        if (!iso) return;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        const fmt = el.dataset.tzFmt || 'time';
+        if (fmt === 'date')          el.textContent = fmtLocalDate(d);
+        else if (fmt === 'datetime') el.textContent = `${fmtLocalDate(d)} · ${fmtLocalTime(d)}`;
+        else                         el.textContent = fmtLocalTime(d);
+      });
+    }
+    window.localizeTimeElements = localizeTimeElements;
+    // Initial pass on first paint.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => localizeTimeElements());
+    } else {
+      localizeTimeElements();
+    }
+
     window.bumpNavAmounts = function (next) {
       if (!next) return;
       ['tobet', 'placed', 'total'].forEach(key => {

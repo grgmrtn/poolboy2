@@ -241,7 +241,7 @@
       <div class="group-fx-row" id="fixture-{{ f.id }}" data-fixture-id="{{ f.id }}">
         <div class="group-fx-meta">
           <div class="meta-date">{{ dy }} {{ MONTHS[mo] }}</div>
-          <div class="meta-time">{{ tm }}</div>
+          <div class="meta-time" data-utc="{{ f.kick_off }}" data-tz-fmt="time">{{ tm }}</div>
           {% if is_completed %}
             <div class="meta-status is-final">FINAL</div>
           {% elif is_started %}

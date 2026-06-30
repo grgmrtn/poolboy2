@@ -442,7 +442,9 @@
             <td style="color:var(--text-muted);white-space:nowrap">
               {% set _ko = f.kick_off_display or f.kick_off or '' %}
               {% if _ko %}
-                {{ _ko[:10] }} · {{ _ko[11:16] | friendly_time }}
+                <span data-utc="{{ f.kick_off }}" data-tz-fmt="datetime">
+                  {{ _ko[:10] }} · {{ _ko[11:16] | friendly_time }}
+                </span>
               {% else %}TBC{% endif %}
             </td>
             <td>

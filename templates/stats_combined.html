@@ -481,15 +481,34 @@
     margin-top: 1rem;
   }
   .chase-header { margin-bottom: 1rem; }
-  /* Replay controls: play / scrubber / current-match label. */
-  .chase-controls {
-    display: flex; align-items: center; gap: 0.55rem;
-    padding: 0.55rem 0.7rem;
-    background: rgba(255,255,255,0.025);
+  /* Sticky top strip: "The Chase" title + the replay control row.
+     Pins to the top of the viewport as the user scrolls through the
+     curve so the controls stay accessible. */
+  .chase-stickybar {
+    position: sticky;
+    top: calc(56px + env(safe-area-inset-top, 0));
+    z-index: 6;
+    background: rgba(20,20,28,0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--border);
     border-radius: 8px;
-    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    margin: -0.6rem -0.6rem 1rem;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .chase-title {
+    text-align: center;
+  }
+  /* Replay controls: play / scrubber / current-match label. */
+  .chase-controls {
+    display: flex; align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
     flex-wrap: wrap;
+    width: 100%;
   }
   .chase-ctrl-btn {
     background: transparent;
@@ -903,10 +922,13 @@
     </div>
   {% else %}
     <div class="chase-card">
-      <div class="chase-header">
-        <div class="chart-title">The Chase — proportional gap from the leader</div>
+      {# Sticky header pinned to the top of the scrollable card:
+         "The Chase" title + the replay controls together. The wrap
+         underneath can scroll freely without losing the controls. #}
+      <div class="chase-stickybar">
+        <div class="chart-title chase-title">The Chase</div>
+        <div class="chase-controls" id="chase-controls"></div>
       </div>
-      <div class="chase-controls" id="chase-controls"></div>
       <div class="chase-wrap" id="chase-wrap">
         <svg class="chase-svg" id="chase-svg" aria-hidden="true"
              preserveAspectRatio="xMidYMin meet"></svg>
