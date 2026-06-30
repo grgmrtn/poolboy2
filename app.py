@@ -1592,30 +1592,14 @@ def _render_combined_stats(pool_id):
             "is_ghost":     is_ghost,
         })
 
-    # Balance per scored match (one column per match).
+    # Balance per scored match (one column per match). All members are
+    # included on the chart -- ghosts (busted to $0) still need to see
+    # their line and what theyve been picking, even if the active
+    # leaderboard separates them out.
     balance_timeline = db.get_pool_balance_per_match(pool_id, max_players=10_000)
-    # If user not in top of leaderboard's first 20 chart slice, ensure their
-    # series is appended so they always see themselves on the chart.
     my_uid = user["id"]
-    chart_players = balance_timeline["players"][:20]
-    if not any(p["user_id"] == my_uid for p in chart_players):
-        for p in balance_timeline["players"]:
-            if p["user_id"] == my_uid:
-                chart_players = chart_players + [p]
-                break
-    balance_timeline["players"] = chart_players
 
     streak_timeline = db.get_pool_streak_per_match(pool_id, max_players=10_000)
-    # Same self-include guarantee as the balance chart: keep the
-    # current user on the streak chart even if they fall outside the
-    # top-20 slice.
-    streak_players = streak_timeline["players"][:20]
-    if not any(p["user_id"] == my_uid for p in streak_players):
-        for p in streak_timeline["players"]:
-            if p["user_id"] == my_uid:
-                streak_players = streak_players + [p]
-                break
-    streak_timeline["players"] = streak_players
 
     return render_template("stats_combined.html",
         pool=pool,

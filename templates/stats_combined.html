@@ -1,361 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ pool.name }} — Stats{% if streak and streak.fixtures|length > 1 %}
-<script>
-(function () {
-  const MY_UID   = {{ my_user_id      | tojson }};
-  const POOL_ID  = {{ pool.id         | tojson }};
-  const fixtures = {{ streak.fixtures | tojson }};
-  const players  = {{ streak.players  | tojson }};
-
-  // localStorage key for the per-pool, per-browser "which players are
-  // hidden in the chart" preference. Stores user IDs (not legend indices)
-  // so the choice survives roster changes between visits.
-  const HIDDEN_KEY = `wc26_streak_hidden_${POOL_ID}`;
-  function loadHiddenUids() {
-    try {
-      const arr = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
-      return new Set(Array.isArray(arr) ? arr : []);
-    } catch (e) { return new Set(); }
-  }
-  function saveHiddenUids(hiddenSet, datasets) {
-    const uids = [];
-    hiddenSet.forEach(i => {
-      const ds = datasets[i];
-      if (ds && ds._uid) uids.push(ds._uid);
-    });
-    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(uids)); } catch (e) {}
-  }
-
-  if (!fixtures || fixtures.length <= 1 || !players.length) return;
-
-  Chart.defaults.font.family = "'JetBrains Mono', Menlo, Consolas, monospace";
-  Chart.defaults.font.size   = 11;
-  Chart.defaults.color       = "#a0a0c0";
-
-  const PALETTE = [
-    "#57b3ff","#c8ff57","#ff7c57","#c557ff","#57ffd8",
-    "#ffdd57","#ff5792","#57d8ff","#a0ff57","#ff9657",
-    "#9b57ff","#57ffae","#ff5757","#57c8ff","#f0ff57",
-    "#ff57c8","#57ffff","#ff8c57","#7c57ff","#57ff7c",
-  ];
-
-  // X axis: bare match numbers (0 = Start, 1..N = each match in order).
-  // Paging keeps these full arrays as the source-of-truth; the chart shows a
-  // sliced view of them.
-  const allLabels = fixtures.map((_, i) => i === 0 ? "0" : String(i));
-  const allRounds = fixtures.map(f => f && f.round ? f.round : "");
-
-  // Plugin: draw faint grey vertical dividers wherever the round changes
-  // between consecutive visible fixtures (MD1→MD2, group→R32, R32→R16, …),
-  // and stamp each round's short label just to the right of its boundary
-  // line — the line itself marks the start of the new phase. The line
-  // against the y-axis (Start → first round) is suppressed so the left
-  // edge stays clean, but the label still renders.
-  const roundDividers = {
-    id: "roundDividers",
-    afterDatasetsDraw(chart) {
-      const rounds = chart.$rounds || [];
-      if (rounds.length < 2) return;
-      const xs = chart.scales.x;
-      const ys = chart.scales.y;
-      const labels = chart.data.labels;
-      const c = chart.ctx;
-      c.save();
-      c.lineWidth = 1;
-      c.setLineDash([4, 4]);
-      c.strokeStyle = "rgba(160,160,192,0.30)";
-      c.fillStyle   = "#a0a0c0";
-      c.font = "10px 'JetBrains Mono', Menlo, Consolas, monospace";
-      c.textBaseline = "top";
-      c.textAlign = "left";
-      for (let i = 1; i < rounds.length; i++) {
-        const cur = rounds[i];
-        const prev = rounds[i - 1];
-        if (!cur || cur === prev) continue;
-        const x = xs.getPixelForValue(labels[i]);
-        if (prev) {
-          c.beginPath();
-          c.moveTo(x, ys.top);
-          c.lineTo(x, ys.bottom);
-          c.stroke();
-        }
-        c.fillText(cur, x + 3, ys.top + 2);
-      }
-      c.restore();
-    },
-  };
-
-  const datasets = players.map((p, i) => {
-    const isMe  = p.user_id === MY_UID;
-    const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
-    return {
-      label:           p.team_name || p.display_name,
-      data:            p.cumulative.slice(),
-      borderColor:     color,
-      backgroundColor: color + "18",
-      borderWidth:     isMe ? 2.5 : 1.3,
-      // Bigger point hit-area so mobile taps land reliably
-      pointRadius:     isMe ? 3 : 2,
-      pointHoverRadius: 7,
-      pointHitRadius:  18,
-      tension:         0.2,
-      fill:            false,
-      _uid:            p.user_id,
-      _final:          p.final_score,
-      _all:            p.cumulative,    // full series, never mutated
-      _allDetails:     p.details || [], // full per-match detail, never mutated
-      _details:        (p.details || []).slice(),
-      _team_name:      p.team_name || null,
-      _real_name:      p.display_name || '',
-    };
-  });
-
-  const ctx = document.getElementById("streakChart").getContext("2d");
-  const chart = new Chart(ctx, {
-    type: "line",
-    plugins: [roundDividers],
-    data: { labels: allLabels.slice(), datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      // Single-player tooltip on tap/hover. mode:"nearest" + intersect:true
-      // means the tooltip only appears when the cursor is actually on a
-      // point — and only shows that one point.
-      interaction: { mode: "nearest", intersect: true },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "rgba(10,10,15,0.94)",
-          borderColor: "#2a2a35",
-          borderWidth: 1,
-          titleColor: "#e0e0e8",
-          bodyColor: "#c0c0d0",
-          padding: 11,
-          // Keep only the first item — protects against the rare case
-          // where two players' points overlap exactly at the same (x,y)
-          // and Chart.js considers them equally near.
-          filter: (item, index) => index === 0,
-          callbacks: {
-            title(items) {
-              if (!items.length) return "";
-              const ds = items[0].dataset;
-              // Team name is the primary identity; if there is none, the
-              // team_name slot already holds the real name. Real name
-              // shown as a muted second line when distinct.
-              return ds._team_name || ds._real_name || ds.label;
-            },
-            beforeBody(items) {
-              if (!items.length) return [];
-              const ds = items[0].dataset;
-              if (ds._team_name && ds._real_name && ds._team_name !== ds._real_name) {
-                return [`(${ds._real_name})`];
-              }
-              return [];
-            },
-            label(item) {
-              const idx = item.dataIndex;
-              const ds  = item.dataset;
-              const det = (ds._details || [])[idx];
-              const lines = [];
-              const bal = `(item.parsed.y >= 0 ? "+" : "") + Math.round(item.parsed.y)`;
-              if (idx === 0 || !det) {
-                lines.push(`  Streak: ${bal}`);
-                return lines;
-              }
-              const home = det.home || '?';
-              const away = det.away || '?';
-              if (det.home_score != null && det.away_score != null) {
-                lines.push(` ${home} ${det.home_score}–${det.away_score} ${away}`);
-              } else {
-                lines.push(` ${home} vs ${away}`);
-              }
-              if (det.pick) {
-                const side = det.pick === 'H' ? home : det.pick === 'A' ? away : 'Draw';
-                const won  = det.pick === det.result;
-                const cue  = won ? '✓ won' : '✗ lost';
-                if (det.bet) {
-                  lines.push(` Bet $${Math.round(det.bet)} on ${side} (${cue})`);
-                } else {
-                  lines.push(` Picked ${side} (${cue})`);
-                }
-              } else {
-                lines.push(` No pick`);
-              }
-              const dPart = det.delta > 0 ? '+1'
-                          : det.delta < 0 ? '-1'
-                          : '0';
-              lines.push(` ${dPart}  →  streak ${bal}`);
-              return lines;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: "category",
-          ticks: {
-            color: "#606070",
-            maxRotation: 0,
-            autoSkip: true,
-            maxTicksLimit: 12,
-            // Four-line tick at the 10-match page size: match number, home
-            // abbr, score, away abbr — stacked so the tick is narrow enough
-            // for mobile. Wider windows fall back to just the match number.
-            // 11 visible labels = baseline + 10 matches.
-            //
-            // NB: Chart.js v4 category scale passes the tick INDEX (not the
-            // label string) as `value`. We resolve the actual label via
-            // getLabelForValue so paging/sizing surface the correct match.
-            callback(value) {
-              const label = (this.getLabelForValue
-                ? this.getLabelForValue(value)
-                : value);
-              const i = Number(label);
-              const f = fixtures[i];
-              if (!f || i === 0) return label;
-              const visible = (this.chart && this.chart.data.labels)
-                ? this.chart.data.labels.length : 0;
-              if (visible <= 11 && f.home_score != null && f.away_score != null) {
-                const parts = (f.label || "").split(" v ");
-                return [
-                  String(i),
-                  parts[0] || "",
-                  `${f.home_score}-${f.away_score}`,
-                  parts[1] || "",
-                ];
-              }
-              return String(i);
-            },
-          },
-          grid: { color: "#1e1e28" },
-        },
-        y: {
-          ticks: {
-            color: "#606070",
-            callback(v) { return (v > 0 ? "+" : "") + Math.round(v); },
-          },
-          grid:  { color: "#1e1e28" },
-        },
-      },
-    },
-  });
-
-  // ── Paging: show `curPageSize` matches at a time. Pages overlap by one so
-  // the last visible match of page N is the first visible point on page N+1,
-  // giving the line a continuous look when flipping. The page label shows
-  // the match-number range owned by this page (e.g. "81–90"), independent of
-  // the overlap point.
-  const totalMatches = allLabels.length - 1;  // label 0 is the "Start" point
-  let curPageSize = 10;
-  let totalPages  = Math.max(1, Math.ceil(totalMatches / curPageSize));
-  // Default to the most recent page — that's where the live action is.
-  let curPage = totalPages - 1;
-
-  const controlsEl = document.getElementById("streak-controls");
-  const prevBtn    = document.getElementById("streak-prev");
-  const nextBtn    = document.getElementById("streak-next");
-  const pageLabel  = document.getElementById("streak-page-label");
-  const sizeBtns   = document.querySelectorAll("#streak-section .chart-size [data-size]");
-
-  function applyPage(p) {
-    curPage = Math.max(0, Math.min(totalPages - 1, p));
-    const start = curPage * curPageSize;
-    const end   = Math.min(start + curPageSize + 1, allLabels.length);
-    chart.data.labels = allLabels.slice(start, end);
-    chart.data.datasets.forEach(ds => {
-      ds.data     = ds._all.slice(start, end);
-      ds._details = ds._allDetails.slice(start, end);
-    });
-    chart.$rounds = allRounds.slice(start, end);
-    chart.update();
-    const first = curPage * curPageSize + 1;
-    const last  = Math.min((curPage + 1) * curPageSize, totalMatches);
-    pageLabel.textContent = first === last ? `${first}` : `${first}–${last}`;
-    prevBtn.disabled = curPage === 0;
-    nextBtn.disabled = curPage === totalPages - 1;
-  }
-
-  // Initial render: round-dividers use the full series; applyPage() below
-  // will overwrite this with a slice when paging is active.
-  chart.$rounds = allRounds.slice();
-  chart.update();
-
-  function setSize(key) {
-    // Preserve the rightmost match across resizes so the user keeps their place.
-    const prevLastMatch = Math.min((curPage + 1) * curPageSize, totalMatches);
-    curPageSize = key === "all" ? totalMatches : parseInt(key, 10);
-    totalPages  = Math.max(1, Math.ceil(totalMatches / curPageSize));
-    curPage = Math.max(0, Math.min(totalPages - 1,
-                                   Math.floor((prevLastMatch - 1) / curPageSize)));
-    applyPage(curPage);
-    sizeBtns.forEach(b => b.classList.toggle("active", b.dataset.size === key));
-  }
-
-  if (totalMatches > 10) {
-    controlsEl.hidden = false;
-    prevBtn.addEventListener("click", () => applyPage(curPage - 1));
-    nextBtn.addEventListener("click", () => applyPage(curPage + 1));
-    sizeBtns.forEach(b => b.addEventListener("click", () => setSize(b.dataset.size)));
-    applyPage(curPage);
-  }
-
-  // ── Legend: one checkbox per player; bulk show/hide buttons above.
-  const legendEl = document.getElementById("streak-legend");
-  const hidden   = new Set();
-
-  // Restore the user's previous per-pool show/hide choices from
-  // localStorage. Datasets are matched by user_id (not index) so a player
-  // joining/leaving the pool between visits doesn't shuffle the hides.
-  const _storedHiddenUids = loadHiddenUids();
-  datasets.forEach((ds, i) => {
-    if (ds._uid && _storedHiddenUids.has(ds._uid)) {
-      hidden.add(i);
-      chart.hide(i);
-    }
-  });
-
-  function setVisible(i, visible) {
-    if (visible) { hidden.delete(i); chart.show(i); }
-    else         { hidden.add(i);    chart.hide(i); }
-    saveHiddenUids(hidden, datasets);
-  }
-
-  function rebuildLegend() {
-    legendEl.innerHTML = "";
-    datasets.forEach((ds, i) => {
-      const isMe     = ds._uid === MY_UID;
-      const isShown  = !hidden.has(i);
-      const item = document.createElement("label");
-      item.className = `legend-item${isMe ? " is-me" : ""}${isShown ? "" : " dimmed"}`;
-      item.innerHTML = `
-        <input type="checkbox" class="legend-check" ${isShown ? "checked" : ""}>
-        <span class="legend-swatch" style="background:${ds.borderColor}"></span>
-        <span class="legend-name">${ds.label}</span>
-        <span class="legend-score">$${Math.round(ds._final)}</span>
-      `;
-      const check = item.querySelector("input");
-      check.addEventListener("change", () => {
-        setVisible(i, check.checked);
-        item.classList.toggle("dimmed", !check.checked);
-      });
-      legendEl.appendChild(item);
-    });
-  }
-  rebuildLegend();
-
-  document.getElementById("streak-legend-show-all").addEventListener("click", () => {
-    datasets.forEach((_, i) => setVisible(i, true));
-    rebuildLegend();
-  });
-  document.getElementById("streak-legend-hide-all").addEventListener("click", () => {
-    datasets.forEach((_, i) => setVisible(i, false));
-    rebuildLegend();
-  });
-})();
-</script>
-{% endif %}
-{% endblock %}
+{% block title %}{{ pool.name }} — Stats{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -675,6 +319,29 @@
     display: flex; align-items: center; gap: 0.75rem;
     margin-bottom: 1rem;
   }
+  /* Balance vs Streak tab strip at the top of the chart card. Both
+     modes share the same chart instance, controls, and legend below. */
+  .chart-mode-tabs {
+    display: flex; gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  .chart-mode-tab {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.95rem;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .chart-mode-tab:hover { color: var(--text); border-color: var(--border-hi); }
+  .chart-mode-tab.active {
+    color: var(--accent); border-color: var(--accent);
+    background: rgba(200,255,87,0.08);
+  }
   .chart-title {
     font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
     color: var(--text-dim); margin: 0;
@@ -824,8 +491,6 @@
             onclick="scrollSc(this)">Leader</button>
     <button type="button" class="sc-tab" data-target="chart-section"
             onclick="scrollSc(this)">Chart</button>
-    <button type="button" class="sc-tab" data-target="streak-section"
-            onclick="scrollSc(this)">Streak</button>
   </div>
 
   {# Macro for the 2-line matchup cell used by Rarest / Riskiest / Largest
@@ -1019,8 +684,12 @@
     </div>
   {% else %}
     <div class="chart-card">
+      <div class="chart-mode-tabs">
+        <button type="button" class="chart-mode-tab active" data-mode="balance">Balance</button>
+        <button type="button" class="chart-mode-tab" data-mode="streak">Streak</button>
+      </div>
       <div class="chart-header">
-        <div class="chart-title">Balance over matches — each player</div>
+        <div class="chart-title" id="chart-mode-title">Balance over matches — each player</div>
         <div class="chart-controls" id="chart-controls" hidden>
           <div class="chart-size" role="group" aria-label="Matches per page">
             <button type="button" data-size="10" class="active">10</button>
@@ -1045,39 +714,6 @@
   {% endif %}
   </div><!-- /#chart-section -->
 
-  <!-- ── Streak over matches chart ───────────────────────────────────── -->
-  <div id="streak-section" style="margin-top:2rem">
-  {% if streak.fixtures|length <= 1 %}
-    <div class="empty-state">
-      Streak chart will appear once matches start being scored.
-    </div>
-  {% else %}
-    <div class="chart-card">
-      <div class="chart-header">
-        <div class="chart-title">Streak — +1 for correct, &minus;1 for wrong</div>
-        <div class="chart-controls" id="streak-controls" hidden>
-          <div class="chart-size" role="group" aria-label="Matches per page">
-            <button type="button" data-size="10" class="active">10</button>
-            <button type="button" data-size="20">20</button>
-            <button type="button" data-size="40">40</button>
-            <button type="button" data-size="all">All</button>
-          </div>
-          <div class="chart-paging">
-            <button type="button" class="chart-page-btn" id="streak-prev" aria-label="Previous matches">←</button>
-            <span class="chart-page-label" id="streak-page-label">1–10</span>
-            <button type="button" class="chart-page-btn" id="streak-next" aria-label="Next matches">→</button>
-          </div>
-        </div>
-      </div>
-      <div class="chart-wrap"><canvas id="streakChart"></canvas></div>
-      <div class="legend-bulk">
-        <button type="button" class="legend-bulk-btn" id="streak-legend-show-all">Show all</button>
-        <button type="button" class="legend-bulk-btn" id="streak-legend-hide-all">Hide all</button>
-      </div>
-      <div class="legend-grid" id="streak-legend"></div>
-    </div>
-  {% endif %}
-  </div><!-- /#streak-section -->
 </div>
 
 <script>
@@ -1140,7 +776,7 @@
   }
   // Scroll-spy — highlight active tab as user scrolls between sections
   document.addEventListener('DOMContentLoaded', () => {
-    const sections = ['lb-section', 'chart-section', 'streak-section']
+    const sections = ['lb-section', 'chart-section']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     if (!sections.length) return;
@@ -1161,8 +797,34 @@
 (function () {
   const MY_UID   = {{ my_user_id      | tojson }};
   const POOL_ID  = {{ pool.id         | tojson }};
-  const fixtures = {{ timeline.fixtures | tojson }};
-  const players  = {{ timeline.players  | tojson }};
+  // Two data sources behind a single chart. Switching tabs swaps the
+  // dataset, re-derives the axis formatter, and rebuilds the legend.
+  // Same paging + show/hide state carries across both.
+  const MODES = {
+    balance: {
+      fixtures: {{ timeline.fixtures | tojson }},
+      players:  {{ timeline.players  | tojson }},
+      label:    'Balance',
+      title:    'Balance over matches — each player',
+      yFormat:  (v) => '$' + Math.round(v),
+      deltaFmt: (d) => d > 0 ? `+$${Math.round(d)}`
+                     : d < 0 ? `-$${Math.abs(Math.round(d))}`
+                     : '$0',
+      finalFmt: (v) => '$' + Math.round(v),
+    },
+    streak: {
+      fixtures: {{ streak.fixtures | tojson }},
+      players:  {{ streak.players  | tojson }},
+      label:    'Streak',
+      title:    'Streak over matches — +1 right, −1 wrong',
+      yFormat:  (v) => (v > 0 ? '+' : '') + Math.round(v),
+      deltaFmt: (d) => d > 0 ? '+1' : d < 0 ? '−1' : '0',
+      finalFmt: (v) => (v >= 0 ? '+' : '') + v,
+    },
+  };
+  let currentMode = 'balance';
+  let fixtures = MODES[currentMode].fixtures;
+  let players  = MODES[currentMode].players;
 
   // localStorage key for the per-pool, per-browser "which players are
   // hidden in the chart" preference. Stores user IDs (not legend indices)
@@ -1242,12 +904,31 @@
     },
   };
 
+  // Build dataset rows from the BALANCE players (deterministic ordering)
+  // but stash both modes' series so we can swap on tab click without
+  // tearing down the chart. _all / _allDetails / _final always reflect
+  // the active mode -- setMode() copies from _modes[mode].
+  const streakByUid = {};
+  MODES.streak.players.forEach(sp => { streakByUid[sp.user_id] = sp; });
   const datasets = players.map((p, i) => {
     const isMe  = p.user_id === MY_UID;
     const color = isMe ? "#ffffff" : PALETTE[i % PALETTE.length];
+    const sp = streakByUid[p.user_id] || {};
+    const _modes = {
+      balance: {
+        _all:        p.cumulative,
+        _allDetails: p.details || [],
+        _final:      p.final_score,
+      },
+      streak: {
+        _all:        sp.cumulative || new Array(p.cumulative.length).fill(0),
+        _allDetails: sp.details || (p.details || []).map(() => null),
+        _final:      sp.final_score || 0,
+      },
+    };
     return {
       label:           p.team_name || p.display_name,
-      data:            p.cumulative.slice(),
+      data:            _modes.balance._all.slice(),
       borderColor:     color,
       backgroundColor: color + "18",
       borderWidth:     isMe ? 2.5 : 1.3,
@@ -1258,10 +939,11 @@
       tension:         0.2,
       fill:            false,
       _uid:            p.user_id,
-      _final:          p.final_score,
-      _all:            p.cumulative,    // full series, never mutated
-      _allDetails:     p.details || [], // full per-match detail, never mutated
-      _details:        (p.details || []).slice(),
+      _modes,
+      _final:          _modes.balance._final,
+      _all:            _modes.balance._all,
+      _allDetails:     _modes.balance._allDetails,
+      _details:        _modes.balance._allDetails.slice(),
       _team_name:      p.team_name || null,
       _real_name:      p.display_name || '',
     };
@@ -1315,9 +997,10 @@
               const ds  = item.dataset;
               const det = (ds._details || [])[idx];
               const lines = [];
-              const bal = `$${Math.round(item.parsed.y)}`;
+              const M    = MODES[currentMode];
+              const cum  = M.yFormat(item.parsed.y);
               if (idx === 0 || !det) {
-                lines.push(` Balance: ${bal}`);
+                lines.push(` ${M.label}: ${cum}`);
                 return lines;
               }
               const home = det.home || '?';
@@ -1339,10 +1022,7 @@
               } else {
                 lines.push(` No pick`);
               }
-              const dPart = det.delta > 0 ? `+$${Math.round(det.delta)}`
-                          : det.delta < 0 ? `-$${Math.abs(Math.round(det.delta))}`
-                          : '$0';
-              lines.push(` ${dPart}  →  balance ${bal}`);
+              lines.push(` ${M.deltaFmt(det.delta)}  →  ${M.label.toLowerCase()} ${cum}`);
               return lines;
             },
           },
@@ -1390,7 +1070,7 @@
         y: {
           ticks: {
             color: "#606070",
-            callback(v) { return "$" + Math.round(v); },
+            callback(v) { return MODES[currentMode].yFormat(v); },
           },
           grid:  { color: "#1e1e28" },
         },
@@ -1489,7 +1169,7 @@
         <input type="checkbox" class="legend-check" ${isShown ? "checked" : ""}>
         <span class="legend-swatch" style="background:${ds.borderColor}"></span>
         <span class="legend-name">${ds.label}</span>
-        <span class="legend-score">$${Math.round(ds._final)}</span>
+        <span class="legend-score">${MODES[currentMode].finalFmt(ds._final)}</span>
       `;
       const check = item.querySelector("input");
       check.addEventListener("change", () => {
@@ -1500,6 +1180,34 @@
     });
   }
   rebuildLegend();
+
+  // ── Mode tabs: swap balance <-> streak without rebuilding chart.
+  // Each dataset keeps both modes precomputed in ds._modes; we just
+  // point _all / _allDetails / _final at the active one and re-page.
+  function setMode(mode) {
+    if (!MODES[mode] || mode === currentMode) return;
+    currentMode = mode;
+    fixtures = MODES[mode].fixtures;
+    players  = MODES[mode].players;
+    datasets.forEach(ds => {
+      const m = ds._modes && ds._modes[mode];
+      if (!m) return;
+      ds._all        = m._all;
+      ds._allDetails = m._allDetails;
+      ds._final      = m._final;
+    });
+    applyPage(curPage);
+    rebuildLegend();
+    const titleEl = document.getElementById('chart-mode-title');
+    if (titleEl) titleEl.textContent = MODES[mode].title;
+    document.querySelectorAll('.chart-mode-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.mode === mode);
+    });
+    chart.update();
+  }
+  document.querySelectorAll('.chart-mode-tab').forEach(t => {
+    t.addEventListener('click', () => setMode(t.dataset.mode));
+  });
 
   document.getElementById("legend-show-all").addEventListener("click", () => {
     datasets.forEach((_, i) => setVisible(i, true));
