@@ -1007,6 +1007,11 @@ def pool_page(pool_id):
         except (TypeError, ValueError):
             return (1, fid)
 
+    # Per-pool fallback multiplier when a fixture has no specific odds
+    # (e.g. R16+ before the odds cron has filled them in). Pulled once
+    # outside the loop so each bracket cell can compute a winnings value.
+    _ko_flat_mult = float(scoring_config.get("knockout_flat_payout_multiplier", 2.0))
+
     bracket_columns = []
     for stage_name, col_key in _BRACKET_ROUNDS:
         # IMPORTANT: read from the *raw* grouped fixtures, not the
@@ -1020,6 +1025,19 @@ def pool_page(pool_id):
             home_abbr = TEAM_ABBR.get(f.get("home_team") or "") or (f.get("home_team") or "TBD")[:3].upper()
             away_abbr = TEAM_ABBR.get(f.get("away_team") or "") or (f.get("away_team") or "TBD")[:3].upper()
             pick = existing_picks.get(f["id"])
+            my_pick = pick.get("predicted_result") if pick else None
+            my_bet  = pick.get("bet_amount") if pick else None
+            # Total return (ante + profit) if the pick ends up being a
+            # winner. Computed here so the bracket template just
+            # renders a number on win. For draw picks we never pay out
+            # in KO; my_winnings = 0.
+            my_winnings = None
+            if my_pick == "H" and my_bet:
+                m = f.get("home_odds") or _ko_flat_mult
+                my_winnings = round(float(my_bet) * float(m), 2)
+            elif my_pick == "A" and my_bet:
+                m = f.get("away_odds") or _ko_flat_mult
+                my_winnings = round(float(my_bet) * float(m), 2)
             cells.append({
                 "id":         f["id"],
                 "home_team":  f.get("home_team") or "TBD",
@@ -1037,8 +1055,9 @@ def pool_page(pool_id):
                 "result":     f.get("result"),
                 "kick_off":   f.get("kick_off"),
                 "kick_off_display": f.get("kick_off_display"),
-                "my_pick":    pick.get("predicted_result") if pick else None,
-                "my_bet":     pick.get("bet_amount") if pick else None,
+                "my_pick":    my_pick,
+                "my_bet":     my_bet,
+                "my_winnings": my_winnings,
             })
         bracket_columns.append({"stage": stage_name, "key": col_key, "cells": cells})
     # 3rd-place hangs off the bracket separately (not connected by lines).
@@ -1067,6 +1086,15 @@ def pool_page(pool_id):
             "my_pick":    pick.get("predicted_result") if pick else None,
             "my_bet":     pick.get("bet_amount") if pick else None,
         }
+        # Same winnings calc as the main cells above so the 3rd-place
+        # pill can render its "+$X" / "-$X" consistently.
+        _mp = bracket_third["my_pick"]; _mb = bracket_third["my_bet"]
+        _mw = None
+        if _mp == "H" and _mb:
+            _mw = round(float(_mb) * float(f.get("home_odds") or _ko_flat_mult), 2)
+        elif _mp == "A" and _mb:
+            _mw = round(float(_mb) * float(f.get("away_odds") or _ko_flat_mult), 2)
+        bracket_third["my_winnings"] = _mw
     show_bracket = any(c["cells"] for c in bracket_columns)
 
     live_now_data = _build_live_now_data(
